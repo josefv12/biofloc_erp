@@ -1,0 +1,55 @@
+# ============================================================
+# BIOFLOC ERP V1 — .gitignore
+# ============================================================
+
+# --- Credenciales y variables de entorno (NUNCA versionar) ---
+.env
+.env.local
+.env.*.local
+
+# --- Entorno virtual Python ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Bytecode Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# --- Distribución / empaquetado ---
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# --- Testing y cobertura ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.coveragerc
+
+# --- Editores ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Archivos temporales ---
+*.tmp
+*.bak

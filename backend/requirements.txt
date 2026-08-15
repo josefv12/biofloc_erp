@@ -1,0 +1,21 @@
+# Biofloc ERP V1 - Backend Dependencies
+
+# Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# ORM & Database
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+
+# Environment variables
+python-dotenv==1.0.1
+
+# Data validation (incluido en FastAPI, versión explícita para reproducibilidad)
+pydantic==2.10.1
+pydantic-settings==2.6.1
+
+# Authentication
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
+PyJWT==2.13.0
