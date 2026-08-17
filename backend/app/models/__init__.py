@@ -27,6 +27,13 @@ from app.models.detalle_compra import DetalleCompra
 from app.models.categoria_gasto import CategoriaGasto
 from app.models.gasto import Gasto
 from app.models.venta import Venta, DetalleVenta
+# Equipos + Mantenimientos + Fallas + Energía (Fase 10)
+from app.models.equipo import TipoEquipo, EstadoEquipo, Equipo
+from app.models.mantenimiento import TipoMantenimiento, Mantenimiento
+from app.models.falla import Falla
+from app.models.evento_energia import EventoEnergia
+# Sistema general de alarmas (Fase 11)
+from app.models.alarma import TipoAlarma, NivelAlarma, EstadoAlarma, Alarma
 __all__ = [
     "Rol", "Usuario", "Auditoria",
     "EstadoEstanque", "Estanque",
@@ -41,4 +48,10 @@ __all__ = [
     "Compra", "DetalleCompra",
     # Finanzas
     "CategoriaGasto", "Gasto", "Venta", "DetalleVenta",
+    # Equipos / Mantenimientos / Fallas / Energía
+    "TipoEquipo", "EstadoEquipo", "Equipo",
+    "TipoMantenimiento", "Mantenimiento",
+    "Falla", "EventoEnergia",
+    # Alarmas generales
+    "TipoAlarma", "NivelAlarma", "EstadoAlarma", "Alarma",
 ]

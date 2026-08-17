@@ -49,7 +49,7 @@ T = {
     "cat_gasto_id": None,      # categoría creada en esta suite
     "gastos_ids": [],          # gastos creados
     "lote_real": None,         # lotes id real (se resuelve por API)
-    "cat_gasto_real_OTROS": 7, # semilla existente id=7 OTROS
+    "cat_gasto_real_OTROS": None,  # semilla OTROS resuelta por API
     "admin_user_id": 1,
 }
 
@@ -128,6 +128,20 @@ def t05b_resolver_lote_real(admin_tok):
         f"status={r.status_code} n={len(r.json()) if r.status_code==200 else '?'}")
 
 
+def t05c_resolver_cat_otros(admin_tok):
+    """Resolver categoría semilla OTROS por API (no hardcodear id)."""
+    r = requests.get(f"{BASE}/api/v1/categorias-gasto/", headers=h(admin_tok))
+    ok = r.status_code == 200 and isinstance(r.json(), list)
+    if ok:
+        for c in r.json():
+            if c.get("nombre") == "OTROS":
+                T["cat_gasto_real_OTROS"] = c["id"]
+                break
+        ok = T["cat_gasto_real_OTROS"] is not None
+    log("5c", f"Resuelto cat OTROS id={T['cat_gasto_real_OTROS']}", ok,
+        f"status={r.status_code}")
+
+
 # ============================= BLOQUE II CATALOGO ============================
 def t06_crear_categoria_gasto_adm(admin_tok):
     r = requests.post(f"{BASE}/api/v1/categorias-gasto/", headers=h(admin_tok),
@@ -202,7 +216,8 @@ def t12_crear_gasto_valido_adm(admin_tok):
              f"cat={data['categoria_id']} lote={data['lote_id']} prov={data['proveedor']}")
         ok = (Decimal(str(data["valor"])) == Decimal("150000.50") and
               data["categoria_id"] == T["cat_gasto_id"] and
-              data["lote_id"] == T["lote_real"])
+              data["lote_id"] == T["lote_real"] and
+              data["fecha"] == date.today().isoformat())
     log(12, "POST gasto válido ADMIN 201", ok, d)
 
 
@@ -256,12 +271,12 @@ def t16_valor_invalido_422(admin_tok):
         "valor": "0.00",
     }
     r = requests.post(f"{BASE}/api/v1/gastos/", headers=h(admin_tok), json=body)
-    ok = r.status_code in (422, 400, 500)
+    ok = r.status_code == 422
     # decimales negativos
     body2 = {**body, "valor": "-100.00"}
     r2 = requests.post(f"{BASE}/api/v1/gastos/", headers=h(admin_tok), json=body2)
-    ok = ok and r2.status_code in (422, 400, 500)
-    log(16, "POST gasto valor<=0 => 422/400", ok,
+    ok = ok and r2.status_code == 422
+    log(16, "POST gasto valor<=0 => 422", ok,
         f"s_cero={r.status_code} s_neg={r2.status_code}")
 
 
@@ -273,8 +288,8 @@ def t17_descripcion_vacia_422(admin_tok):
         "valor": "1000.00",
     }
     r = requests.post(f"{BASE}/api/v1/gastos/", headers=h(admin_tok), json=body)
-    ok = r.status_code in (422, 400, 500)
-    log(17, "POST gasto descripción vacía => 422/400", ok, f"status={r.status_code}")
+    ok = r.status_code == 422
+    log(17, "POST gasto descripción vacía => 422", ok, f"status={r.status_code}")
 
 
 def t18_listar_gastos_filtros(admin_tok):
@@ -284,6 +299,45 @@ def t18_listar_gastos_filtros(admin_tok):
     ok = r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 2
     log(18, "GET gastos filtros (proveedor) 200", ok,
         f"status={r.status_code} len={len(r.json()) if r.status_code==200 else '?'}")
+
+
+def t18b_filtro_fecha(admin_tok):
+    hoy = date.today().isoformat()
+    r_desde = requests.get(f"{BASE}/api/v1/gastos/?fecha_desde={hoy}&proveedor={PREF}", headers=h(admin_tok))
+    r_hasta = requests.get(
+        f"{BASE}/api/v1/gastos/?fecha_hasta={(date.today() - timedelta(days=1)).isoformat()}&proveedor={PREF}",
+        headers=h(admin_tok),
+    )
+    ok_desde = r_desde.status_code == 200 and len(r_desde.json()) >= 1
+    ok_hasta = r_hasta.status_code == 200 and len(r_hasta.json()) >= 1
+    if ok_desde:
+        ok_desde = all(g["fecha"] >= hoy for g in r_desde.json())
+    if ok_hasta:
+        lim = (date.today() - timedelta(days=1)).isoformat()
+        ok_hasta = all(g["fecha"] <= lim for g in r_hasta.json())
+    ok = ok_desde and ok_hasta
+    log("18b", "GET gastos filtros fecha_desde/fecha_hasta", ok,
+        f"desde={r_desde.status_code}/{len(r_desde.json()) if r_desde.status_code==200 else '?'} "
+        f"hasta={r_hasta.status_code}/{len(r_hasta.json()) if r_hasta.status_code==200 else '?'}")
+
+
+def t18c_filtro_categoria_y_lote(admin_tok):
+    r_cat = requests.get(
+        f"{BASE}/api/v1/gastos/?categoria_id={T['cat_gasto_id']}", headers=h(admin_tok),
+    )
+    r_lote = requests.get(
+        f"{BASE}/api/v1/gastos/?lote_id={T['lote_real']}", headers=h(admin_tok),
+    )
+    ok_cat = r_cat.status_code == 200 and len(r_cat.json()) >= 1
+    ok_lote = r_lote.status_code == 200 and len(r_lote.json()) >= 1
+    if ok_cat:
+        ok_cat = all(g["categoria_id"] == T["cat_gasto_id"] for g in r_cat.json())
+    if ok_lote:
+        ok_lote = all(g["lote_id"] == T["lote_real"] for g in r_lote.json())
+    ok = ok_cat and ok_lote
+    log("18c", "GET gastos filtros categoria_id + lote_id", ok,
+        f"cat={r_cat.status_code}/{len(r_cat.json()) if r_cat.status_code==200 else '?'} "
+        f"lote={r_lote.status_code}/{len(r_lote.json()) if r_lote.status_code==200 else '?'}")
 
 
 def t19_get_gasto_detalle_200(tec_tok):
@@ -351,8 +405,9 @@ def main():
     tok_o = t04_login_operario()
     t05_sin_jwt_403()
     t05b_resolver_lote_real(tok_a)
-    if not (tok_a and tok_t and tok_o and T["lote_real"]):
-        print(" ABORT: credenciales inválidas o sin lotes reales"); return 1
+    t05c_resolver_cat_otros(tok_a)
+    if not (tok_a and tok_t and tok_o and T["lote_real"] and T["cat_gasto_real_OTROS"]):
+        print(" ABORT: credenciales inválidas, sin lotes reales o sin categoría OTROS"); return 1
     t06_crear_categoria_gasto_adm(tok_a)
     t07_duplicar_categoria_conflicto(tok_a)
     t08_listar_categorias_operario(tok_o)
@@ -366,6 +421,8 @@ def main():
     t16_valor_invalido_422(tok_a)
     t17_descripcion_vacia_422(tok_a)
     t18_listar_gastos_filtros(tok_a)
+    t18b_filtro_fecha(tok_a)
+    t18c_filtro_categoria_y_lote(tok_a)
     t19_get_gasto_detalle_200(tok_t)
     t20_get_gasto_no_existe_404(tok_o)
     t21_rbac_operario_crear_gasto(tok_o)

@@ -33,7 +33,10 @@ def crear_categoria_gasto(db: Session, data: CategoriaGastoCreate, usuario_id: i
     existente = db.query(CategoriaGasto).filter(CategoriaGasto.nombre == data.nombre).first()
     if existente:
         raise HTTPException(status_code=409, detail=f"Ya existe una categoría de gasto con el nombre '{data.nombre}'")
-    nuevo = CategoriaGasto(**data.model_dump())
+    payload = data.model_dump()
+    if payload.get("activo") is None:
+        payload["activo"] = True
+    nuevo = CategoriaGasto(**payload)
     db.add(nuevo)
     try:
         db.flush()

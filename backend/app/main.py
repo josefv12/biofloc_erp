@@ -32,6 +32,19 @@ from app.routers import (
     categorias_gasto,
     gastos,
     ventas,
+    tipos_equipo,
+    estados_equipo,
+    equipos,
+    tipos_mantenimiento,
+    mantenimientos,
+    fallas,
+    eventos_energia,
+    tipos_alarma,
+    niveles_alarma,
+    estados_alarma,
+    alarmas,
+    dashboard,
+    reportes,
 )
 
 settings = get_settings()
@@ -68,6 +81,19 @@ app.include_router(alertas.router, prefix="/api/v1/alertas", tags=["Alarmas Inve
 app.include_router(categorias_gasto.router, prefix="/api/v1/categorias-gasto", tags=["Categorías Gasto"])
 app.include_router(gastos.router, prefix="/api/v1/gastos", tags=["Gastos"])
 app.include_router(ventas.router, prefix="/api/v1/ventas", tags=["Ventas"])
+app.include_router(tipos_equipo.router, prefix="/api/v1/tipos-equipo", tags=["Tipos Equipo"])
+app.include_router(estados_equipo.router, prefix="/api/v1/estados-equipo", tags=["Estados Equipo"])
+app.include_router(equipos.router, prefix="/api/v1/equipos", tags=["Equipos"])
+app.include_router(tipos_mantenimiento.router, prefix="/api/v1/tipos-mantenimiento", tags=["Tipos Mantenimiento"])
+app.include_router(mantenimientos.router, prefix="/api/v1/mantenimientos", tags=["Mantenimientos"])
+app.include_router(fallas.router, prefix="/api/v1/fallas", tags=["Fallas"])
+app.include_router(eventos_energia.router, prefix="/api/v1/eventos-energia", tags=["Eventos Energía"])
+app.include_router(tipos_alarma.router, prefix="/api/v1/tipos-alarma", tags=["Tipos Alarma"])
+app.include_router(niveles_alarma.router, prefix="/api/v1/niveles-alarma", tags=["Niveles Alarma"])
+app.include_router(estados_alarma.router, prefix="/api/v1/estados-alarma", tags=["Estados Alarma"])
+app.include_router(alarmas.router, prefix="/api/v1/alarmas", tags=["Alarmas"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["Reportes"])
 
 
 # ---------------------------------------------------------------------------

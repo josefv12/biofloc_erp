@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from app.models.venta import Venta, DetalleVenta
 from app.models.auditoria import Auditoria
 from app.models.lote import Lote
-from app.schemas.venta import VentaCreate, DetalleVentaCreate
+from app.schemas.venta import VentaCreate
 
 
 def _norm(v, prec=2):
@@ -49,10 +49,13 @@ def listar_ventas(db: Session,
         q = q.filter(Venta.cliente.ilike(f"%{cliente}%"))
     if registrado_por is not None:
         q = q.filter(Venta.registrado_por == registrado_por)
-    rows = q.order_by(Venta.fecha.desc(), Venta.id.desc()).all()
     if lote_id is not None:
-        rows = [r for r in rows if any(d.lote_id == lote_id for d in r.detalles)]
-    return rows
+        q = q.filter(
+            Venta.id.in_(
+                db.query(DetalleVenta.venta_id).filter(DetalleVenta.lote_id == lote_id)
+            )
+        )
+    return q.order_by(Venta.fecha.desc(), Venta.id.desc()).all()
 
 
 def obtener_venta(db: Session, venta_id: int) -> Venta:
@@ -67,18 +70,18 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
     if not data.detalles:
         raise HTTPException(status_code=422, detail="venta debe tener al menos 1 detalle")
 
-    # Validar lotes existan y colectar
+    # Validar lotes existan y colectar (fail-fast, sin escrituras)
     lotes_cache = {}
-    for d in data.detalles:
+    for idx, d in enumerate(data.detalles, start=1):
         if Decimal(d.cantidad) <= 0:
-            raise HTTPException(status_code=422, detail="cantidad debe ser mayor que 0")
+            raise HTTPException(status_code=422, detail=f"cantidad debe ser mayor que 0 (detalle #{idx})")
         if Decimal(d.precio_unitario) < 0:
-            raise HTTPException(status_code=422, detail="precio_unitario debe ser >= 0")
+            raise HTTPException(status_code=422, detail=f"precio_unitario debe ser >= 0 (detalle #{idx})")
         if d.lote_id in lotes_cache:
             continue
         lo = db.query(Lote).filter(Lote.id == d.lote_id).first()
         if not lo:
-            raise HTTPException(status_code=404, detail=f"Lote {d.lote_id} no existe")
+            raise HTTPException(status_code=404, detail=f"Lote {d.lote_id} no existe (detalle #{idx})")
         lotes_cache[d.lote_id] = lo
 
     try:
@@ -99,9 +102,9 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
 
         venta = Venta(
             fecha=data.fecha,
-            cliente=data.cliente,
+            cliente=(data.cliente.strip() if data.cliente else None),
             total=total,
-            observaciones=data.observaciones,
+            observaciones=(data.observaciones.strip() if data.observaciones else None),
             registrado_por=usuario_id,
             detalles=detalles_obj,
         )
@@ -129,10 +132,6 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
             })
 
         db.commit()
-        db.refresh(venta)
-        # recargar detalles para joinedload
-        venta = obtener_venta(db, venta.id)
-        return venta
 
     except HTTPException:
         db.rollback()
@@ -142,4 +141,6 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
         raise HTTPException(status_code=400, detail=f"Error de integridad creando venta: {e}")
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creando venta: {e}")
+        raise HTTPException(status_code=400, detail=f"Error creando venta: {e}")
+
+    return obtener_venta(db, venta.id)

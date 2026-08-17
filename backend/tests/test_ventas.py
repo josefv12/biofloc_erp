@@ -201,8 +201,8 @@ def t06_subtotal_y_total_son_servidor(admin_tok):
 def t07_sin_detalles_422(admin_tok):
     body = {"fecha": date.today().isoformat(), "cliente": f"{PREF} C1", "detalles": []}
     r = requests.post(f"{BASE}/api/v1/ventas/", headers=h(admin_tok), json=body)
-    ok = r.status_code in (422, 400)
-    log(7, "POST venta sin detalles => 422/400", ok, f"status={r.status_code}")
+    ok = r.status_code == 422
+    log(7, "POST venta sin detalles => 422", ok, f"status={r.status_code}")
 
 
 def t08_cantidad_negativa_422(admin_tok):
@@ -212,8 +212,19 @@ def t08_cantidad_negativa_422(admin_tok):
         "detalles": [{"lote_id": T["lote_real"], "cantidad": "-1.000", "precio_unitario": "100.00"}],
     }
     r = requests.post(f"{BASE}/api/v1/ventas/", headers=h(admin_tok), json=body)
-    ok = r.status_code in (422, 400)
+    ok = r.status_code == 422
     log(8, "POST venta cantidad<0 => 422", ok, f"status={r.status_code}")
+
+
+def t08b_cantidad_cero_422(admin_tok):
+    body = {
+        "fecha": date.today().isoformat(),
+        "cliente": f"{PREF} badcant0",
+        "detalles": [{"lote_id": T["lote_real"], "cantidad": "0.000", "precio_unitario": "100.00"}],
+    }
+    r = requests.post(f"{BASE}/api/v1/ventas/", headers=h(admin_tok), json=body)
+    ok = r.status_code == 422
+    log("8b", "POST venta cantidad=0 => 422", ok, f"status={r.status_code}")
 
 
 def t09_precio_negativo_422(admin_tok):
@@ -223,7 +234,7 @@ def t09_precio_negativo_422(admin_tok):
         "detalles": [{"lote_id": T["lote_real"], "cantidad": "1.000", "precio_unitario": "-5.00"}],
     }
     r = requests.post(f"{BASE}/api/v1/ventas/", headers=h(admin_tok), json=body)
-    ok = r.status_code in (422, 400)
+    ok = r.status_code == 422
     log(9, "POST venta p_unit<0 => 422", ok, f"status={r.status_code}")
 
 
@@ -282,6 +293,29 @@ def t12_listar_ventas_filtros(tec_tok):
     ok = r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 3
     log(12, "GET ventas filtro cliente TECNICO", ok,
         f"status={r.status_code} len={len(r.json()) if r.status_code==200 else '?'}")
+
+
+def t12b_filtro_fecha_y_lote(tec_tok):
+    hoy = date.today().isoformat()
+    r_fecha = requests.get(
+        f"{BASE}/api/v1/ventas/?cliente={PREF}&fecha_desde={hoy}", headers=h(tec_tok),
+    )
+    r_lote = requests.get(
+        f"{BASE}/api/v1/ventas/?lote_id={T['lote_real']}&cliente={PREF}", headers=h(tec_tok),
+    )
+    ok_fecha = r_fecha.status_code == 200 and len(r_fecha.json()) >= 1
+    if ok_fecha:
+        ok_fecha = all(v["fecha"] >= hoy for v in r_fecha.json())
+    ok_lote = r_lote.status_code == 200 and len(r_lote.json()) >= 3
+    if ok_lote:
+        ok_lote = all(
+            any(d["lote_id"] == T["lote_real"] for d in v["detalles"])
+            for v in r_lote.json()
+        )
+    ok = ok_fecha and ok_lote
+    log("12b", "GET ventas filtros fecha_desde + lote_id", ok,
+        f"fecha={r_fecha.status_code}/{len(r_fecha.json()) if r_fecha.status_code==200 else '?'} "
+        f"lote={r_lote.status_code}/{len(r_lote.json()) if r_lote.status_code==200 else '?'}")
 
 
 def t13_get_detalle_venta_y_monto(admin_tok):
@@ -372,10 +406,12 @@ def main():
     t06_subtotal_y_total_son_servidor(tok_a)
     t07_sin_detalles_422(tok_a)
     t08_cantidad_negativa_422(tok_a)
+    t08b_cantidad_cero_422(tok_a)
     t09_precio_negativo_422(tok_a)
     t10_lote_inexistente_404(tok_a)
     t11_rollback_atomico_lote_inexistente_detalle_2(tok_a)
     t12_listar_ventas_filtros(tok_t)
+    t12b_filtro_fecha_y_lote(tok_t)
     t13_get_detalle_venta_y_monto(tok_a)
     t14_get_venta_no_existe(tok_o)
     t15_operario_crear_venta(tok_o)

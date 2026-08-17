@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,5 +21,5 @@ class GastoCreate(GastoBase):
 class GastoOut(GastoBase):
     id: int
     registrado_por: int
-    created_at: object
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)

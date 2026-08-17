@@ -1,5 +1,5 @@
 """Gastos INMUTABLES (POST + GET lista + GET detalle). Auditoría INSERT."""
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
@@ -57,7 +57,6 @@ def obtener_gasto(db: Session, gasto_id: int) -> Gasto:
 
 
 def crear_gasto(db: Session, data: GastoCreate, usuario_id: int) -> Gasto:
-    # categoria exista
     cat = db.query(CategoriaGasto).filter(CategoriaGasto.id == data.categoria_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail=f"Categoría de gasto {data.categoria_id} no existe")
@@ -65,37 +64,47 @@ def crear_gasto(db: Session, data: GastoCreate, usuario_id: int) -> Gasto:
         lo = db.query(Lote).filter(Lote.id == data.lote_id).first()
         if not lo:
             raise HTTPException(status_code=404, detail=f"Lote {data.lote_id} no existe")
-    if Decimal(data.valor) <= 0:
+    valor = Decimal(data.valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if valor <= 0:
         raise HTTPException(status_code=422, detail="valor debe ser mayor que 0")
     if not data.descripcion or not data.descripcion.strip():
         raise HTTPException(status_code=422, detail="descripción requerida")
 
-    nuevo = Gasto(
-        fecha=data.fecha,
-        categoria_id=data.categoria_id,
-        lote_id=data.lote_id,
-        descripcion=data.descripcion.strip(),
-        valor=Decimal(data.valor),
-        proveedor=data.proveedor,
-        observaciones=data.observaciones,
-        registrado_por=usuario_id,
-    )
-    db.add(nuevo)
+    proveedor = data.proveedor.strip() if data.proveedor else None
+    observaciones = data.observaciones.strip() if data.observaciones else None
+
     try:
+        nuevo = Gasto(
+            fecha=data.fecha,
+            categoria_id=data.categoria_id,
+            lote_id=data.lote_id,
+            descripcion=data.descripcion.strip(),
+            valor=valor,
+            proveedor=proveedor,
+            observaciones=observaciones,
+            registrado_por=usuario_id,
+        )
+        db.add(nuevo)
         db.flush()
+        _audit(db, usuario_id, "INSERT", nuevo.id, {
+            "fecha": nuevo.fecha,
+            "categoria_id": nuevo.categoria_id,
+            "lote_id": nuevo.lote_id,
+            "descripcion": nuevo.descripcion,
+            "valor": Decimal(nuevo.valor),
+            "proveedor": nuevo.proveedor,
+            "observaciones": nuevo.observaciones,
+        })
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except IntegrityError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error de integridad creando gasto: {e}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creando gasto: {e}")
 
-    _audit(db, usuario_id, "INSERT", nuevo.id, {
-        "fecha": nuevo.fecha,
-        "categoria_id": nuevo.categoria_id,
-        "lote_id": nuevo.lote_id,
-        "descripcion": nuevo.descripcion,
-        "valor": Decimal(nuevo.valor),
-        "proveedor": nuevo.proveedor,
-        "observaciones": nuevo.observaciones,
-    })
-    db.commit()
     db.refresh(nuevo)
     return nuevo

@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,13 +28,13 @@ class VentaBase(BaseModel):
 
 
 class VentaCreate(VentaBase):
-    detalles: List[DetalleVentaCreate]
+    detalles: List[DetalleVentaCreate] = Field(..., min_length=1)
 
 
 class VentaOut(VentaBase):
     id: int
     total: Decimal = Field(..., max_digits=14, decimal_places=2)
     registrado_por: int
-    created_at: object
+    created_at: datetime
     detalles: List[DetalleVentaOut]
     model_config = ConfigDict(from_attributes=True)
