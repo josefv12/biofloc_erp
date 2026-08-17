@@ -17,19 +17,13 @@ from datetime import datetime, date, timedelta, timezone
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
-
-# Credenciales de prueba existentes
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-TECNICO_USER = "tecnico_test@biofloc.com"
-TECNICO_PASS = "Tecnico1234!"
-
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
 
 audit_results = []
 created_resources = {
@@ -41,7 +35,6 @@ created_resources = {
     "estanques": []
 }
 
-
 def log_test(num, category, name, ok, detail=""):
     icon = "[OK]" if ok else "[FAIL]"
     num_str = f"{num:02d}"
@@ -50,7 +43,6 @@ def log_test(num, category, name, ok, detail=""):
         msg += f"\n       -> {detail}"
     print(msg)
     audit_results.append((num, category, name, ok, detail))
-
 
 def get_token(correo, password):
     try:
@@ -61,10 +53,8 @@ def get_token(correo, password):
         print(f"Error login: {e}")
     return None
 
-
 def auth_header(token):
     return {"Authorization": f"Bearer {token}"}
-
 
 # ---------------------------------------------------------------------------
 # 1. SALUD DE API Y BASE DE DATOS
@@ -73,7 +63,6 @@ def audit_health():
     r = requests.get(f"{BASE}/health")
     ok = r.status_code == 200 and r.json().get("api") == "ok" and r.json().get("database") == "ok"
     log_test(1, "HEALTH", "GET /health", ok, str(r.json()))
-
 
 # ---------------------------------------------------------------------------
 # 2. AUTENTICACIÓN Y SEGURIDAD (JWT Y ROLES)
@@ -97,7 +86,6 @@ def audit_security():
     log_test(3, "SEGURIDAD", "Acceso sin JWT denegado (403) en los 6 módulos", all_403)
 
     return token_admin, token_operario, token_tecnico
-
 
 # ---------------------------------------------------------------------------
 # 3. FLUJO PRODUCTIVO INTEGRAL Y AUDITORÍA
@@ -232,7 +220,6 @@ def audit_flujo_productivo(token_admin):
     ok_pobl = r_mort_exc.status_code == 422
     log_test(11, "POBLACION", "Validación Mortalidad acumulada <= cantidad_sembrada (422)", ok_pobl, f"status={r_mort_exc.status_code}")
 
-
 # ---------------------------------------------------------------------------
 # 6. VERIFICACIÓN DE AUDITORÍA EN POSTGRESQL
 # ---------------------------------------------------------------------------
@@ -257,7 +244,6 @@ def audit_postgresql_audit():
     except Exception as e:
         log_test(12, "AUDITORIA", "Error consultando auditoría", False, str(e))
 
-
 # ---------------------------------------------------------------------------
 # 7. ESTRUCTURA Y SCHEMAS EN POSTGRESQL
 # ---------------------------------------------------------------------------
@@ -276,7 +262,6 @@ def audit_postgresql_structure():
         log_test(13, "POSTGRESQL", f"Conteo exacto (42 BASE TABLE + 4 VIEW = 46 Total)", ok, f"BASE TABLE: {base_tables}, VIEW: {views}")
     except Exception as e:
         log_test(13, "POSTGRESQL", "Error consultando estructura", False, str(e))
-
 
 # ---------------------------------------------------------------------------
 # 8. LIMPIEZA DE DATOS TEMPORALES
@@ -317,7 +302,6 @@ def audit_cleanup():
         log_test(14, "LIMPIEZA", "Eliminación completa de datos de prueba temporales", True, f"Recursos limpiados: {created_resources}")
     except Exception as e:
         log_test(14, "LIMPIEZA", "Error durante la limpieza de datos", False, str(e))
-
 
 def main():
     print("=" * 75)

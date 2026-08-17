@@ -15,12 +15,13 @@ from datetime import datetime, timezone, timedelta
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
-ADMIN_USER, ADMIN_PASS = "admin@biofloc.com", "AdminBiofloc2026!"
-TECNICO_USER, TECNICO_PASS = "tecnico_test@biofloc.com", "Tecnico1234!"
-OPERARIO_USER, OPERARIO_PASS = "operario_test@biofloc.com", "Operario1234!"
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp", user="postgres", password="admin")
 PREF = "[TEST_ALARMA_GENERAL]"
 DDL_SHA = "b35db89dc83fad95c10fc88fece04e031e680b3b921b12b5a584bfb4047bd2e3"
 T = {
@@ -39,7 +40,6 @@ T = {
 }
 R = []
 
-
 def log(n, name, ok, d=""):
     icon = "[OK]" if ok else "[FAIL]"
     n_str = f"{n:02d}" if isinstance(n, int) else str(n)
@@ -49,19 +49,15 @@ def log(n, name, ok, d=""):
     print(m)
     R.append((n, name, ok, d))
 
-
 def login(c, p):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": c, "password": p})
     return r.json().get("access_token") if r.status_code == 200 else None
 
-
 def h(tok):
     return {**HEADERS_JSON, "Authorization": f"Bearer {tok}"}
 
-
 def pg():
     return psycopg2.connect(**DB_CONF)
-
 
 def pre_cleanup():
     conn = pg()
@@ -81,7 +77,6 @@ def pre_cleanup():
     conn.commit()
     cur.close()
     conn.close()
-
 
 def main():
     print(f"\n{PREF} INICIO suite test_alarmas.py\n")
@@ -411,6 +406,25 @@ def main():
     r = requests.delete(f"{BASE}/api/v1/alarmas/{aid}", headers=h(tok_a))
     log(42, "DELETE alarma no existe (405/404)", r.status_code in (404, 405), f"status={r.status_code}")
 
+    for n, nombre in [(47, "PENDIENTE"), (48, "ATENDIDA"), (49, "CERRADA")]:
+        eid = T["estado_seed"][nombre]
+        r = requests.put(
+            f"{BASE}/api/v1/estados-alarma/{eid}",
+            headers=h(tok_a),
+            json={"nombre": f"{nombre}_RENOMBRADO"},
+        )
+        still = requests.get(f"{BASE}/api/v1/estados-alarma/{eid}", headers=h(tok_a))
+        still_ok = still.status_code == 200 and still.json().get("nombre") == nombre
+        log(n, f"PUT no puede renombrar estado semilla {nombre}",
+            r.status_code == 422 and still_ok,
+            f"put={r.status_code} nombre={still.json().get('nombre') if still.status_code == 200 else '?'}")
+
+    r = requests.get(f"{BASE}/api/v1/estados-alarma/", headers=h(tok_a))
+    nombres_est2 = [e["nombre"] for e in r.json()] if r.status_code == 200 else []
+    log(50, "GET estados-alarma sigue PENDIENTE/ATENDIDA/CERRADA",
+        r.status_code == 200 and {"PENDIENTE", "ATENDIDA", "CERRADA"}.issubset(set(nombres_est2)),
+        f"nombres={nombres_est2}")
+
     conn = pg()
     cur = conn.cursor()
     cur.execute("""
@@ -486,7 +500,6 @@ def main():
     passed = sum(1 for _, _, ok, _ in R if ok)
     print(f"\n{PREF} RESUMEN: {passed}/{len(R)} pasadas.")
     return 0 if passed == len(R) else 2
-
 
 if __name__ == "__main__":
     import os

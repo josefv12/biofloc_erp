@@ -35,18 +35,14 @@ from decimal import Decimal
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-TECNICO_USER = "tecnico_test@biofloc.com"
-TECNICO_PASS = "Tecnico1234!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
 SCH = "biofloc"
 
 PREF = "[TEST_VENTA]"
@@ -60,7 +56,6 @@ PASS_ICON = "[OK]"
 FAIL_ICON = "[FAIL]"
 R = []
 
-
 def log(n, name, ok, d=""):
     icon = PASS_ICON if ok else FAIL_ICON
     if isinstance(n, int):
@@ -73,26 +68,21 @@ def log(n, name, ok, d=""):
     print(m)
     R.append((n, name, ok, d))
 
-
 def login(c, p):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": c, "password": p})
     return r.json().get("access_token") if r.status_code == 200 else None
 
-
 def h(tok):
     return {**HEADERS_JSON, "Authorization": f"Bearer {tok}"}
 
-
 def pg():
     return psycopg2.connect(**DB_CONF)
-
 
 # =========================== BLOQUE I INFRA ==================================
 def t01_health():
     r = requests.get(f"{BASE}/health")
     ok = r.status_code == 200 and r.json().get("api") == r.json().get("database") == "ok"
     log(1, "GET /health ok", ok, str(r.json()))
-
 
 def t02_login_roles():
     toks = {}
@@ -105,12 +95,10 @@ def t02_login_roles():
     log(2, "Login 3 roles JWT", ok, "todos con token" if ok else str(toks))
     return toks["adm"], toks["tec"], toks["op"]
 
-
 def t03_sin_jwt():
     r = requests.get(f"{BASE}/api/v1/ventas/")
     ok = r.status_code == 403
     log(3, "GET ventas sin JWT 403", ok, f"status={r.status_code}")
-
 
 def t03b_resolver_lote_real(admin_tok):
     r = requests.get(f"{BASE}/api/v1/lotes/", headers=h(admin_tok))
@@ -119,7 +107,6 @@ def t03b_resolver_lote_real(admin_tok):
         T["lote_real"] = r.json()[0]["id"]
     log("3b", f"Resuelto lote_real id={T['lote_real']}", ok,
         f"status={r.status_code} len={len(r.json()) if r.status_code==200 else '?'}")
-
 
 # =========================== BLOQUE II VENTAS VÁLIDAS ========================
 def t04_venta_1_detalle(admin_tok):
@@ -147,7 +134,6 @@ def t04_venta_1_detalle(admin_tok):
              f"esp_sub={subtotal_esp} cliente={data['cliente']}")
     log(4, "POST venta 1 detalle (server-side subtotal/total)", ok, d)
 
-
 def t05_venta_multiples_detalles(admin_tok):
     L = T["lote_real"]
     body = {
@@ -172,7 +158,6 @@ def t05_venta_multiples_detalles(admin_tok):
         d = f"id={data['id']} total={data['total']} esp={tot_esp} n={len(data['detalles'])}"
     log(5, "POST venta 3 detalles total Σ subtotales", ok, d)
 
-
 def t06_subtotal_y_total_son_servidor(admin_tok):
     """Cliente NO envía subtotal ni total en body (solo cant + p_unit) pero los recibe calculados."""
     body = {
@@ -196,14 +181,12 @@ def t06_subtotal_y_total_son_servidor(admin_tok):
     log(6, "Server-side subtotal/total (cliente no envía)", ok,
         f"status={r.status_code} total={r.json().get('total') if r.status_code==201 else ''}")
 
-
 # =========================== BLOQUE III VALIDACIONES =========================
 def t07_sin_detalles_422(admin_tok):
     body = {"fecha": date.today().isoformat(), "cliente": f"{PREF} C1", "detalles": []}
     r = requests.post(f"{BASE}/api/v1/ventas/", headers=h(admin_tok), json=body)
     ok = r.status_code == 422
     log(7, "POST venta sin detalles => 422", ok, f"status={r.status_code}")
-
 
 def t08_cantidad_negativa_422(admin_tok):
     body = {
@@ -215,7 +198,6 @@ def t08_cantidad_negativa_422(admin_tok):
     ok = r.status_code == 422
     log(8, "POST venta cantidad<0 => 422", ok, f"status={r.status_code}")
 
-
 def t08b_cantidad_cero_422(admin_tok):
     body = {
         "fecha": date.today().isoformat(),
@@ -225,7 +207,6 @@ def t08b_cantidad_cero_422(admin_tok):
     r = requests.post(f"{BASE}/api/v1/ventas/", headers=h(admin_tok), json=body)
     ok = r.status_code == 422
     log("8b", "POST venta cantidad=0 => 422", ok, f"status={r.status_code}")
-
 
 def t09_precio_negativo_422(admin_tok):
     body = {
@@ -237,7 +218,6 @@ def t09_precio_negativo_422(admin_tok):
     ok = r.status_code == 422
     log(9, "POST venta p_unit<0 => 422", ok, f"status={r.status_code}")
 
-
 def t10_lote_inexistente_404(admin_tok):
     body = {
         "fecha": date.today().isoformat(),
@@ -247,7 +227,6 @@ def t10_lote_inexistente_404(admin_tok):
     r = requests.post(f"{BASE}/api/v1/ventas/", headers=h(admin_tok), json=body)
     ok = r.status_code == 404
     log(10, "POST venta lote no existe => 404", ok, f"status={r.status_code}")
-
 
 def t11_rollback_atomico_lote_inexistente_detalle_2(admin_tok):
     """
@@ -285,7 +264,6 @@ def t11_rollback_atomico_lote_inexistente_detalle_2(admin_tok):
     log(11, "ROLLBACK atómico detalle #2 inválido = 0 huellas", ok,
         f"s={r.status_code} pre/post: V{pre['ventas']}/{post_v} D{pre['detalles']}/{post_d} A{pre['audit']}/{post_a}")
 
-
 # =========================== BLOQUE IV GET LISTA + DETALLE ===================
 def t12_listar_ventas_filtros(tec_tok):
     url = (f"{BASE}/api/v1/ventas/?cliente={PREF}")
@@ -293,7 +271,6 @@ def t12_listar_ventas_filtros(tec_tok):
     ok = r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 3
     log(12, "GET ventas filtro cliente TECNICO", ok,
         f"status={r.status_code} len={len(r.json()) if r.status_code==200 else '?'}")
-
 
 def t12b_filtro_fecha_y_lote(tec_tok):
     hoy = date.today().isoformat()
@@ -317,7 +294,6 @@ def t12b_filtro_fecha_y_lote(tec_tok):
         f"fecha={r_fecha.status_code}/{len(r_fecha.json()) if r_fecha.status_code==200 else '?'} "
         f"lote={r_lote.status_code}/{len(r_lote.json()) if r_lote.status_code==200 else '?'}")
 
-
 def t13_get_detalle_venta_y_monto(admin_tok):
     v_id = T["ventas_ids"][0]
     r = requests.get(f"{BASE}/api/v1/ventas/{v_id}", headers=h(admin_tok))
@@ -332,12 +308,10 @@ def t13_get_detalle_venta_y_monto(admin_tok):
     log(13, "GET ventas/{id} (total + nested detalles)", ok,
         f"status={r.status_code} id={v_id} body={r.text[:300]}")
 
-
 def t14_get_venta_no_existe(op_tok):
     r = requests.get(f"{BASE}/api/v1/ventas/999999999", headers=h(op_tok))
     ok = r.status_code == 404
     log(14, "GET ventas/NOEXISTE => 404", ok, f"status={r.status_code}")
-
 
 # =========================== BLOQUE V RBAC ===================================
 def t15_operario_crear_venta(op_tok):
@@ -352,7 +326,6 @@ def t15_operario_crear_venta(op_tok):
         T["ventas_ids"].append(r.json()["id"])
     log(15, "POST venta OPERARIO 201 RBAC", ok,
         f"status={r.status_code} id={r.json().get('id') if r.status_code==201 else ''}")
-
 
 # =========================== BLOQUE VI AUDITORÍA ============================
 def t16_auditoria_ventas_y_detalles():
@@ -369,7 +342,6 @@ def t16_auditoria_ventas_y_detalles():
     log(16, f"Auditoría ventas INSERT={n_v}>=4 y detalles_venta INSERT={n_d}>=6",
         ok_ventas and ok_detalles, f"n_v={n_v} n_d={n_d}")
 
-
 # =========================== BLOQUE VII NO HAY MOVIMIENTOS ===================
 def t17_no_hay_movimientos_inventario_generados():
     conn = pg(); cur = conn.cursor()
@@ -380,7 +352,6 @@ def t17_no_hay_movimientos_inventario_generados():
     ok = n == 0
     log(17, "0 movimientos_inventario creados en Ventas (decisión OPCIÓN 3)", ok, f"n={n}")
 
-
 # =========================== BLOQUE VIII OPENAPI (inmutable) =================
 def t18_openapi_sin_mutaciones_ventas():
     r = requests.get(f"{BASE}/openapi.json")
@@ -389,7 +360,6 @@ def t18_openapi_sin_mutaciones_ventas():
     mal = [(p, m) for p, m in ops.items() if any(x in [x2.lower() for x2 in m] for x in ["put", "delete", "patch"])]
     ok = len(mal) == 0 and len(ops) >= 2
     log(18, "OpenAPI ventas: SOLO GET+POST (inmutable)", ok, f"ops={ops}")
-
 
 def main():
     print(f"\n{PREF} INICIO suite test_ventas.py\n")
@@ -448,7 +418,6 @@ def main():
     total = len(R)
     print(f"\n{PREF} RESUMEN: {passed}/{total} pasadas.")
     return 0 if passed == total else 2
-
 
 if __name__ == "__main__":
     import os

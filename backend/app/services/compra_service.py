@@ -2,22 +2,42 @@
 Servicio para Compras + DetallesCompra + integración atómica con Inventario.
 """
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime, date
-from sqlalchemy.orm import Session
+from datetime import datetime, date, timezone
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.compra import Compra
 from app.models.detalle_compra import DetalleCompra
 from app.models.producto import Producto
+from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
 from app.models.auditoria import Auditoria
 from app.schemas.compra import CompraCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
 from app.services.movimiento_inventario_service import crear_movimiento_inventario
 
 
-TIPO_MOV_ENTRADA_ID = 1
+NOMBRE_TIPO_ENTRADA = "ENTRADA"
 REFERENCIA_TIPO_DETALLE_COMPRA = "DETALLE_COMPRA"
+
+
+def _tipo_movimiento_entrada(db: Session) -> TipoMovimientoInventario:
+    tipo = (
+        db.query(TipoMovimientoInventario)
+        .filter(TipoMovimientoInventario.nombre == NOMBRE_TIPO_ENTRADA)
+        .first()
+    )
+    if not tipo:
+        raise HTTPException(
+            status_code=500,
+            detail="Catálogo tipos_movimiento_inventario no contiene ENTRADA",
+        )
+    if int(tipo.afecta_stock) != 1:
+        raise HTTPException(
+            status_code=500,
+            detail="El tipo ENTRADA debe tener afecta_stock=1",
+        )
+    return tipo
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, tabla: str, accion: str, registro_id: int, detalle: dict):
@@ -78,6 +98,7 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
         })
 
     # 2. Transacción atómica
+    tipo_entrada = _tipo_movimiento_entrada(db)
     try:
         compra = Compra(
             fecha=payload.fecha,
@@ -104,9 +125,9 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
 
             mov_create = MovimientoInventarioCreate(
                 producto_id=dp["producto_id"],
-                tipo_movimiento_id=TIPO_MOV_ENTRADA_ID,
+                tipo_movimiento_id=tipo_entrada.id,
                 cantidad=dp["cantidad"],
-                fecha_hora=datetime.utcnow(),
+                fecha_hora=datetime.now(timezone.utc),
                 referencia_tipo=REFERENCIA_TIPO_DETALLE_COMPRA,
                 referencia_id=detalle.id,
                 observaciones=f"Compra #{compra.id} generada",
@@ -170,7 +191,7 @@ def listar_compras(
     producto_id: int | None = None,
     registrado_por: int | None = None,
 ) -> list[Compra]:
-    q = db.query(Compra)
+    q = db.query(Compra).options(joinedload(Compra.detalles))
 
     if producto_id is not None:
         q = q.filter(
@@ -188,16 +209,18 @@ def listar_compras(
         q = q.filter(Compra.registrado_por == registrado_por)
 
     compras = q.order_by(Compra.fecha.desc(), Compra.id.desc()).all()
-    for c in compras:
-        _ = c.detalles
     return compras
 
 
 def obtener_compra(db: Session, compra_id: int) -> Compra:
-    c = db.query(Compra).filter(Compra.id == compra_id).first()
+    c = (
+        db.query(Compra)
+        .options(joinedload(Compra.detalles))
+        .filter(Compra.id == compra_id)
+        .first()
+    )
     if not c:
         raise HTTPException(status_code=404, detail=f"Compra id={compra_id} no existe")
-    _ = c.detalles
     return c
 
 

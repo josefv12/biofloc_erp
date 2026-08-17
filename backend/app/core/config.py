@@ -4,6 +4,8 @@ Todas las variables de entorno se leen desde aquí.
 """
 
 import os
+from typing import Optional
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -16,6 +18,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     app_env: str = "development"
     app_debug: bool = False
+    # None = docs según APP_ENV (off en production). True/False fuerza ENABLE_DOCS.
+    enable_docs: Optional[bool] = None
 
     # --- Base de datos ---
     postgres_host: str = "localhost"
@@ -25,9 +29,25 @@ class Settings(BaseSettings):
     postgres_password: str = ""
 
     # --- JWT Authentication ---
-    jwt_secret_key: str = ""
+    jwt_secret_key: str = Field(...)
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
+
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def jwt_secret_no_vacio(cls, v: str) -> str:
+        if v is None or not str(v).strip():
+            raise ValueError(
+                "JWT_SECRET_KEY es obligatorio y no puede estar vacío. "
+                "Defínalo en el entorno o en .env."
+            )
+        return v
+
+    @property
+    def docs_enabled(self) -> bool:
+        if self.enable_docs is not None:
+            return bool(self.enable_docs)
+        return self.app_env.strip().lower() != "production"
 
     @property
     def database_url(self) -> str:

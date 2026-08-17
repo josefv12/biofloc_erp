@@ -28,20 +28,18 @@ from datetime import datetime, timezone
 # Forzar utf-8 stdout para Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
 # ---------------------------------------------------------------------------
 # Credenciales de prueba
 # ---------------------------------------------------------------------------
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-
 # DB directa para validaciones
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
 DB_SCHEMA = "biofloc"
 
 TEST_MORTALIDAD_IDS = []
@@ -49,7 +47,6 @@ TEST_MORTALIDAD_IDS = []
 PASS_ICON = "[OK]"
 FAIL_ICON = "[FAIL]"
 results = []
-
 
 def log(num, name, ok, detail=""):
     icon = PASS_ICON if ok else FAIL_ICON
@@ -60,17 +57,14 @@ def log(num, name, ok, detail=""):
     print(msg)
     results.append((num, name, ok, detail))
 
-
 def get_token(correo, password):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": correo, "password": password})
     if r.status_code == 200:
         return r.json()["access_token"]
     return None
 
-
 def auth_header(token):
     return {"Authorization": f"Bearer {token}"}
-
 
 # ---------------------------------------------------------------------------
 # PRE-REQUISITO: obtener un lote_id válido de la BD
@@ -89,12 +83,10 @@ def obtener_lote_valido():
         print(f"  [WARN] No se pudo conectar a PostgreSQL: {e}")
         return None
 
-
 def test_health():
     r = requests.get(f"{BASE}/health")
     ok = r.status_code == 200 and r.json().get("api") == "ok"
     log(13, "GET /health", ok, str(r.json()))
-
 
 def test_login():
     token = get_token(ADMIN_USER, ADMIN_PASS)
@@ -102,12 +94,10 @@ def test_login():
     log(1, f"Login ADMINISTRADOR ({ADMIN_USER})", ok, f"token={'...'+token[-12:] if token else 'NONE'}")
     return token
 
-
 def test_sin_jwt():
     r = requests.get(f"{BASE}/api/v1/mortalidades/")
     ok = r.status_code == 403
     log(9, "GET /mortalidades sin JWT -> 403", ok, f"status={r.status_code}")
-
 
 def test_datos_invalidos_cantidad(token, lote_id):
     payload = {
@@ -120,7 +110,6 @@ def test_datos_invalidos_cantidad(token, lote_id):
     ok = r.status_code == 422
     log(7, "POST mortalidad con cantidad=0 -> 422", ok, f"status={r.status_code}")
 
-
 def test_lote_inexistente(token):
     payload = {
         "lote_id": 999999,
@@ -131,7 +120,6 @@ def test_lote_inexistente(token):
     r = requests.post(f"{BASE}/api/v1/mortalidades/", json=payload, headers=auth_header(token))
     ok = r.status_code == 404
     log(8, "POST mortalidad con lote_id=999999 -> 404", ok, f"status={r.status_code} | {r.text[:80]}")
-
 
 def test_crear_mortalidad(token, lote_id):
     fecha_hora = datetime.now(timezone.utc).isoformat()
@@ -155,7 +143,6 @@ def test_crear_mortalidad(token, lote_id):
     log(2, "POST mortalidad valida -> 201", ok, detail)
     return m_id
 
-
 def test_get_by_id(token, m_id):
     r = requests.get(f"{BASE}/api/v1/mortalidades/{m_id}", headers=auth_header(token))
     ok = r.status_code == 200
@@ -166,12 +153,10 @@ def test_get_by_id(token, m_id):
         detail = f"status={r.status_code} | {r.text[:80]}"
     log(3, f"GET /mortalidades/{m_id}", ok, detail)
 
-
 def test_listar(token):
     r = requests.get(f"{BASE}/api/v1/mortalidades/", headers=auth_header(token))
     ok = r.status_code == 200 and isinstance(r.json(), list)
     log(4, "GET /mortalidades/ (listado completo)", ok, f"registros={len(r.json()) if ok else 'ERROR'}")
-
 
 def test_listar_filtrado(token, lote_id):
     r = requests.get(f"{BASE}/api/v1/mortalidades/?lote_id={lote_id}", headers=auth_header(token))
@@ -183,7 +168,6 @@ def test_listar_filtrado(token, lote_id):
     else:
         detail = f"status={r.status_code}"
     log(5, f"GET /mortalidades/?lote_id={lote_id} (filtrado)", ok, detail)
-
 
 def test_asociacion_lote(m_id, lote_id):
     try:
@@ -201,7 +185,6 @@ def test_asociacion_lote(m_id, lote_id):
         ok = False
         detail = str(e)
     log(6, "Asociacion mortalidad↔lote en PostgreSQL", ok, detail)
-
 
 def test_rol_operario(lote_id):
     token = get_token(OPERARIO_USER, OPERARIO_PASS)
@@ -224,7 +207,6 @@ def test_rol_operario(lote_id):
         detail = f"status={r.status_code} | {r.text[:80]}"
     log(10, "Rol OPERARIO POST /mortalidades -> 201", ok, detail)
 
-
 def test_auditoria(m_id):
     try:
         conn = psycopg2.connect(**DB_CONF)
@@ -244,7 +226,6 @@ def test_auditoria(m_id):
         detail = str(e)
     log(11, "Auditoria INSERT en biofloc.auditoria", ok, detail)
 
-
 def test_regla_poblacion(token, lote_id, cantidad_sembrada):
     # Intentar registrar una mortalidad mayor a la cantidad sembrada
     fecha_hora = datetime.now(timezone.utc).isoformat()
@@ -257,7 +238,6 @@ def test_regla_poblacion(token, lote_id, cantidad_sembrada):
     r = requests.post(f"{BASE}/api/v1/mortalidades/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
     log(14, "POST mortalidad acumulada > sembrada -> 422", ok, f"status={r.status_code} | {r.text[:80]}")
-
 
 def test_postgresql_integridad():
     try:
@@ -298,7 +278,6 @@ def test_postgresql_integridad():
         detail = str(e)
     log(12, "PostgreSQL: no se crearon tablas extra", ok, detail)
 
-
 def limpiar_datos_prueba():
     if not TEST_MORTALIDAD_IDS:
         print("\n  [INFO] No hay registros de prueba para eliminar.")
@@ -320,7 +299,6 @@ def limpiar_datos_prueba():
         print(f"\n  [CLEAN] Limpieza: eliminadas {len(TEST_MORTALIDAD_IDS)} mortalidad(es) de prueba: {TEST_MORTALIDAD_IDS}")
     except Exception as e:
         print(f"  [WARN] Error durante limpieza: {e}")
-
 
 if __name__ == "__main__":
     print("\n" + "="*60)

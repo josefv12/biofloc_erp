@@ -1,6 +1,7 @@
 from sqlalchemy import BigInteger, String, Numeric, Text, DateTime, ForeignKey, Index, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
+from decimal import Decimal
 from app.core.database import Base
 
 
@@ -17,7 +18,7 @@ class Falla(Base):
     descripcion: Mapped[str] = mapped_column(String(250), nullable=False)
     impacto: Mapped[str | None] = mapped_column(String(100), nullable=True)
     solucion: Mapped[str | None] = mapped_column(Text, nullable=True)
-    costo: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, server_default=text("0"))
+    costo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default=text("0"))
     registrada_por: Mapped[int] = mapped_column(BigInteger, ForeignKey("usuarios.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 

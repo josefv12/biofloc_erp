@@ -13,12 +13,16 @@ import psycopg2
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 PREF = "[TEST_ALARMA]"
 
 log_ok = 0
 log_fail = 0
-
 
 def log(n, name, ok, detail=""):
     global log_ok, log_fail
@@ -30,22 +34,14 @@ def log(n, name, ok, detail=""):
         tag = "FAIL"
     print(f"{PREF} [{n:02d}] {tag} {name:<62} {str(detail)[:240]}")
 
-
 def login(correo, clave):
     r = requests.post(BASE + "/api/v1/auth/login", json={"correo": correo, "password": clave}, timeout=30)
     if r.status_code != 200:
         raise AssertionError(f"login fallo {r.status_code}: {r.text[:300]}")
     return "Bearer " + r.json()["access_token"]
 
-
-ADM_CRED = ("admin@biofloc.com", "AdminBiofloc2026!")
-TEC_CRED = ("tecnico_test@biofloc.com", "Tecnico1234!")
-OPE_CRED = ("operario_test@biofloc.com", "Operario1234!")
-
-
 def hdr(tok):
     return {"Authorization": tok, "Content-Type": "application/json"}
-
 
 # ---------------------------------------------------------------------------
 # BLOQUE I — Infraestructura 1-3
@@ -53,7 +49,6 @@ def hdr(tok):
 def bloque1():
     r = requests.get(BASE + "/health", timeout=20)
     log(1, "Health check", r.status_code == 200, r.status_code)
-
 
 def bloque2():
     try:
@@ -66,17 +61,14 @@ def bloque2():
         log(2, "Login 3 tokens", False, str(e)[:200])
         raise
 
-
 def bloque3():
     r = requests.get(BASE + "/api/v1/alertas/stock-bajo", timeout=20)
     log(3, "Sin JWT -> 403", r.status_code == 403, r.status_code)
-
 
 # ---------------------------------------------------------------------------
 # BLOQUE II — Semilla
 # ---------------------------------------------------------------------------
 SEED = {}
-
 
 def semilla(tok):
     r = requests.post(
@@ -135,7 +127,6 @@ def semilla(tok):
             if rm.status_code not in (200, 201):
                 raise AssertionError(f"mov entrada {suf} {rm.status_code}: {rm.text[:300]}")
     SEED["prods"] = prods
-
 
 # ---------------------------------------------------------------------------
 # Pruebas 4-22
@@ -249,7 +240,7 @@ def pruebas_resto(tok, tok_tec, tok_ope):
         f"antes={len(antes.json())} despues={len(despues.json())}")
 
     # 20: GET no inserta auditoria -> consultas GET /stock-bajo N veces no añaden filas
-    DB = dict(host="localhost", port=5432, dbname="biofloc_erp", user="postgres", password="admin")
+    DB = dict(DB_CONF)
     conn = psycopg2.connect(**DB); cur = conn.cursor()
     cur.execute("SET search_path TO biofloc")
     cur.execute("SELECT count(*) FROM auditoria WHERE tabla = 'alertas' OR tabla LIKE '%alarma%'")
@@ -283,7 +274,6 @@ def pruebas_resto(tok, tok_tec, tok_ope):
     log(22, "Stock proviene de vista_stock: B +10 = 19 NORMAL", ok22,
         f"sa={bj3['stock_actual']} diff={bj3['diferencia']} clas={bj3['clasificacion']}")
 
-
 # ---------------------------------------------------------------------------
 # Limpieza SQL
 # ---------------------------------------------------------------------------
@@ -293,7 +283,7 @@ def limpieza():
     pids = [p["id"] for p in (SEED.get("prods") or {}).values()]
     if not pids:
         return
-    DB = dict(host="localhost", port=5432, dbname="biofloc_erp", user="postgres", password="admin")
+    DB = dict(DB_CONF)
     conn = psycopg2.connect(**DB); cur = conn.cursor()
     cur.execute("SET search_path TO biofloc")
     try:
@@ -313,7 +303,6 @@ def limpieza():
         conn.commit()
     finally:
         cur.close(); conn.close()
-
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":

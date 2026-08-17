@@ -12,19 +12,19 @@ from decimal import Decimal
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
-ADMIN_USER, ADMIN_PASS = "admin@biofloc.com", "AdminBiofloc2026!"
-TECNICO_USER, TECNICO_PASS = "tecnico_test@biofloc.com", "Tecnico1234!"
-OPERARIO_USER, OPERARIO_PASS = "operario_test@biofloc.com", "Operario1234!"
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp", user="postgres", password="admin")
 PREF = "[TEST_REPORTE]"
 DDL_SHA = "b35db89dc83fad95c10fc88fece04e031e680b3b921b12b5a584bfb4047bd2e3"
 FECHA = date(2099, 7, 20)
 FECHA_VACIA = date(2099, 9, 1)
 T = {}
 R = []
-
 
 def log(n, name, ok, d=""):
     icon = "[OK]" if ok else "[FAIL]"
@@ -35,23 +35,18 @@ def log(n, name, ok, d=""):
     print(m)
     R.append((n, name, ok, d))
 
-
 def login(c, p):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": c, "password": p})
     return r.json().get("access_token") if r.status_code == 200 else None
 
-
 def h(tok):
     return {**HEADERS_JSON, "Authorization": f"Bearer {tok}"}
-
 
 def pg():
     return psycopg2.connect(**DB_CONF)
 
-
 def D(v):
     return Decimal(str(v))
-
 
 def counts():
     conn = pg()
@@ -64,7 +59,6 @@ def counts():
     cur.close()
     conn.close()
     return out
-
 
 def pre_cleanup():
     conn = pg()
@@ -128,7 +122,6 @@ def pre_cleanup():
     cur.close()
     conn.close()
 
-
 def q(path, tok, d1=None, d2=None, **extra):
     params = dict(extra)
     if d1:
@@ -136,7 +129,6 @@ def q(path, tok, d1=None, d2=None, **extra):
     if d2:
         params["fecha_hasta"] = d2.isoformat()
     return requests.get(f"{BASE}/api/v1/reportes/{path}", headers=h(tok), params=params)
-
 
 def main():
     print(f"\n{PREF} INICIO suite test_reportes.py\n")
@@ -441,7 +433,6 @@ def main():
     passed = sum(1 for _, _, ok, _ in R if ok)
     print(f"\n{PREF} RESUMEN: {passed}/{len(R)} pasadas.")
     return 0 if passed == len(R) else 2
-
 
 if __name__ == "__main__":
     import os

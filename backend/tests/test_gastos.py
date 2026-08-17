@@ -30,18 +30,14 @@ from decimal import Decimal
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-TECNICO_USER = "tecnico_test@biofloc.com"
-TECNICO_PASS = "Tecnico1234!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
 SCH = "biofloc"
 PREF = "[TEST_GASTO]"
 
@@ -57,7 +53,6 @@ PASS_ICON = "[OK]"
 FAIL_ICON = "[FAIL]"
 R = []
 
-
 def log(n, name, ok, d=""):
     icon = PASS_ICON if ok else FAIL_ICON
     if isinstance(n, int):
@@ -70,19 +65,15 @@ def log(n, name, ok, d=""):
     print(m)
     R.append((n, name, ok, d))
 
-
 def login(c, p):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": c, "password": p})
     return r.json().get("access_token") if r.status_code == 200 else None
 
-
 def h(tok):
     return {**HEADERS_JSON, "Authorization": f"Bearer {tok}"}
 
-
 def pg():
     return psycopg2.connect(**DB_CONF)
-
 
 # ============================= BLOQUE I INFRA =================================
 def t01_health():
@@ -90,13 +81,11 @@ def t01_health():
     ok = r.status_code == 200 and r.json().get("api") == r.json().get("database") == "ok"
     log(1, "GET /health (api+db=ok)", ok, str(r.json()))
 
-
 def t02_login_admin():
     tok = login(ADMIN_USER, ADMIN_PASS)
     ok = tok is not None
     log(2, "Login ADMIN JWT", ok, ("..." + tok[-12:]) if tok else "None")
     return tok
-
 
 def t03_login_tecnico():
     tok = login(TECNICO_USER, TECNICO_PASS)
@@ -104,19 +93,16 @@ def t03_login_tecnico():
     log(3, "Login TÉCNICO JWT", ok, ("..." + tok[-12:]) if tok else "None")
     return tok
 
-
 def t04_login_operario():
     tok = login(OPERARIO_USER, OPERARIO_PASS)
     ok = tok is not None
     log(4, "Login OPERARIO JWT", ok, ("..." + tok[-12:]) if tok else "None")
     return tok
 
-
 def t05_sin_jwt_403():
     r = requests.get(f"{BASE}/api/v1/gastos/")
     ok = r.status_code == 403
     log(5, "GET gastos sin JWT -> 403", ok, f"status={r.status_code}")
-
 
 def t05b_resolver_lote_real(admin_tok):
     """Obtener lote existente por API y guardar su id."""
@@ -126,7 +112,6 @@ def t05b_resolver_lote_real(admin_tok):
         T["lote_real"] = r.json()[0]["id"]
     log("5b", f"Resuelto lote_real id={T['lote_real']}", ok,
         f"status={r.status_code} n={len(r.json()) if r.status_code==200 else '?'}")
-
 
 def t05c_resolver_cat_otros(admin_tok):
     """Resolver categoría semilla OTROS por API (no hardcodear id)."""
@@ -141,7 +126,6 @@ def t05c_resolver_cat_otros(admin_tok):
     log("5c", f"Resuelto cat OTROS id={T['cat_gasto_real_OTROS']}", ok,
         f"status={r.status_code}")
 
-
 # ============================= BLOQUE II CATALOGO ============================
 def t06_crear_categoria_gasto_adm(admin_tok):
     r = requests.post(f"{BASE}/api/v1/categorias-gasto/", headers=h(admin_tok),
@@ -153,13 +137,11 @@ def t06_crear_categoria_gasto_adm(admin_tok):
     log(6, "POST categoría gasto ADMIN 201", ok,
         (f"status={r.status_code} id={r.json().get('id')}") if r.status_code in (201, 409) else r.text[:300])
 
-
 def t07_duplicar_categoria_conflicto(admin_tok):
     r = requests.post(f"{BASE}/api/v1/categorias-gasto/", headers=h(admin_tok),
                       json={"nombre": f"{PREF} PRUEBA", "activo": True})
     ok = r.status_code == 409
     log(7, "POST categoría duplicada => 409", ok, f"status={r.status_code}")
-
 
 def t08_listar_categorias_operario(op_tok):
     r = requests.get(f"{BASE}/api/v1/categorias-gasto/?solo_activos=true", headers=h(op_tok))
@@ -167,13 +149,11 @@ def t08_listar_categorias_operario(op_tok):
     log(8, "GET categorias-gasto (solo_activos) OPERARIO 200", ok,
         f"status={r.status_code} len={len(r.json()) if r.status_code==200 else '?'}")
 
-
 def t09_get_categoria_detalle_adm(admin_tok):
     r = requests.get(f"{BASE}/api/v1/categorias-gasto/{T['cat_gasto_id']}", headers=h(admin_tok))
     ok = r.status_code == 200 and r.json()["nombre"] == f"{PREF} PRUEBA"
     log(9, "GET /categorias-gasto/{id} ADMIN", ok,
         f"status={r.status_code} body={r.text[:200]}")
-
 
 def t10_put_categoria_activo_tecnico(tec_tok):
     body = {"activo": False, "descripcion": f"{PREF} Actualizada"}
@@ -187,13 +167,11 @@ def t10_put_categoria_activo_tecnico(tec_tok):
     log(10, "PUT categoría gasto TÉCNICO 200 (toggle activo)", ok,
         f"status={r.status_code} body={r.text[:250]}")
 
-
 def t11_rbac_operario_no_crea_cat(op_tok):
     r = requests.post(f"{BASE}/api/v1/categorias-gasto/", headers=h(op_tok),
                       json={"nombre": f"{PREF} NO DEBE CREARSE"})
     ok = r.status_code == 403
     log(11, "POST categoría OPERARIO => 403", ok, f"status={r.status_code}")
-
 
 # ============================= BLOQUE III GASTOS =============================
 def t12_crear_gasto_valido_adm(admin_tok):
@@ -220,7 +198,6 @@ def t12_crear_gasto_valido_adm(admin_tok):
               data["fecha"] == date.today().isoformat())
     log(12, "POST gasto válido ADMIN 201", ok, d)
 
-
 def t13_crear_gasto_sin_lote(admin_tok):
     body = {
         "fecha": (date.today() - timedelta(days=3)).isoformat(),
@@ -237,7 +214,6 @@ def t13_crear_gasto_sin_lote(admin_tok):
         ok = data["lote_id"] is None and Decimal(str(data["valor"])) == Decimal("75000.00")
     log(13, "POST gasto sin lote_id 201", ok, f"status={r.status_code} body={r.text[:250]}")
 
-
 def t14_categoria_inexistente_404(admin_tok):
     body = {
         "fecha": date.today().isoformat(),
@@ -248,7 +224,6 @@ def t14_categoria_inexistente_404(admin_tok):
     r = requests.post(f"{BASE}/api/v1/gastos/", headers=h(admin_tok), json=body)
     ok = r.status_code == 404
     log(14, "POST gasto categoría inexistente => 404", ok, f"status={r.status_code}")
-
 
 def t15_lote_inexistente_404(admin_tok):
     body = {
@@ -261,7 +236,6 @@ def t15_lote_inexistente_404(admin_tok):
     r = requests.post(f"{BASE}/api/v1/gastos/", headers=h(admin_tok), json=body)
     ok = r.status_code == 404
     log(15, "POST gasto lote inexistente => 404", ok, f"status={r.status_code}")
-
 
 def t16_valor_invalido_422(admin_tok):
     body = {
@@ -279,7 +253,6 @@ def t16_valor_invalido_422(admin_tok):
     log(16, "POST gasto valor<=0 => 422", ok,
         f"s_cero={r.status_code} s_neg={r2.status_code}")
 
-
 def t17_descripcion_vacia_422(admin_tok):
     body = {
         "fecha": date.today().isoformat(),
@@ -291,7 +264,6 @@ def t17_descripcion_vacia_422(admin_tok):
     ok = r.status_code == 422
     log(17, "POST gasto descripción vacía => 422", ok, f"status={r.status_code}")
 
-
 def t18_listar_gastos_filtros(admin_tok):
     # filtro por proveedor LIKE (cat es opcional)
     url = (f"{BASE}/api/v1/gastos/?proveedor={PREF}")
@@ -299,7 +271,6 @@ def t18_listar_gastos_filtros(admin_tok):
     ok = r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 2
     log(18, "GET gastos filtros (proveedor) 200", ok,
         f"status={r.status_code} len={len(r.json()) if r.status_code==200 else '?'}")
-
 
 def t18b_filtro_fecha(admin_tok):
     hoy = date.today().isoformat()
@@ -320,7 +291,6 @@ def t18b_filtro_fecha(admin_tok):
         f"desde={r_desde.status_code}/{len(r_desde.json()) if r_desde.status_code==200 else '?'} "
         f"hasta={r_hasta.status_code}/{len(r_hasta.json()) if r_hasta.status_code==200 else '?'}")
 
-
 def t18c_filtro_categoria_y_lote(admin_tok):
     r_cat = requests.get(
         f"{BASE}/api/v1/gastos/?categoria_id={T['cat_gasto_id']}", headers=h(admin_tok),
@@ -339,19 +309,16 @@ def t18c_filtro_categoria_y_lote(admin_tok):
         f"cat={r_cat.status_code}/{len(r_cat.json()) if r_cat.status_code==200 else '?'} "
         f"lote={r_lote.status_code}/{len(r_lote.json()) if r_lote.status_code==200 else '?'}")
 
-
 def t19_get_gasto_detalle_200(tec_tok):
     gid = T["gastos_ids"][0]
     r = requests.get(f"{BASE}/api/v1/gastos/{gid}", headers=h(tec_tok))
     ok = r.status_code == 200 and r.json()["id"] == gid and Decimal(str(r.json()["valor"])) == Decimal("150000.50")
     log(19, "GET gasto/{id} TÉCNICO 200", ok, f"status={r.status_code} body={r.text[:250]}")
 
-
 def t20_get_gasto_no_existe_404(op_tok):
     r = requests.get(f"{BASE}/api/v1/gastos/99999999", headers=h(op_tok))
     ok = r.status_code == 404
     log(20, "GET gasto/NOEXISTE => 404", ok, f"status={r.status_code}")
-
 
 def t21_rbac_operario_crear_gasto(op_tok):
     body = {
@@ -368,7 +335,6 @@ def t21_rbac_operario_crear_gasto(op_tok):
     log(21, "POST gasto OPERARIO 201 (RBAC permitir)", ok,
         f"status={r.status_code} id={r.json().get('id') if r.status_code==201 else ''}")
 
-
 # =========================== BLOQUE IV AUDITORÍA =============================
 def t22_auditoria_insert_gasto_y_categoria():
     conn = pg(); cur = conn.cursor()
@@ -384,7 +350,6 @@ def t22_auditoria_insert_gasto_y_categoria():
     ok = n_audit >= 5
     log(22, f"Auditoría (gastos + categorias_gasto) count={n_audit} >= 5", ok, f"n={n_audit}")
 
-
 # =========================== BLOQUE V OPENAPI (gasto inmutable) ==============
 def t23_openapi_sin_mutacion_gastos():
     r = requests.get(f"{BASE}/openapi.json")
@@ -395,7 +360,6 @@ def t23_openapi_sin_mutacion_gastos():
     ok = len(mal) == 0 and len(ops_gastos) >= 2
     log(23, "OpenAPI gastos: SOLO GET+POST (sin PUT/PATCH/DELETE)", ok,
         f"ops={ops_gastos}")
-
 
 def main():
     print(f"\n{PREF} INICIO suite test_gastos.py\n")
@@ -469,7 +433,6 @@ def main():
     total = len(R)
     print(f"\n{PREF} RESUMEN: {passed}/{total} pasadas.")
     return 0 if passed == total else 2
-
 
 if __name__ == "__main__":
     import os; os.chdir(os.path.dirname(os.path.abspath(__file__)) + os.sep + "..")

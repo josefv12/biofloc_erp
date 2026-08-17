@@ -51,6 +51,7 @@ def listar(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    _require_roles(current_user, db, {"ADMINISTRADOR", "TECNICO", "OPERARIO"})
     return svc.listar_mortalidades(db, lote_id=lote_id)
 
 
@@ -68,6 +69,7 @@ def obtener(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    _require_roles(current_user, db, {"ADMINISTRADOR", "TECNICO", "OPERARIO"})
     return svc.obtener_mortalidad(db, mortalidad_id)
 
 

@@ -11,18 +11,15 @@ from datetime import datetime, date, timedelta, timezone
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
 # Credenciales de prueba
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
-
 created_med_biofloc_ids = []
 created_temp_lote_ids = []
 created_temp_estanque_ids = []

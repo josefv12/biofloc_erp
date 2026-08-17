@@ -1,6 +1,7 @@
 from sqlalchemy import BigInteger, String, Numeric, DateTime, Text, ForeignKey, Index, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
+from decimal import Decimal
 from app.core.database import Base
 
 
@@ -25,14 +26,14 @@ class MovimientoInventario(Base):
     tipo_movimiento_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("tipos_movimiento_inventario.id"), nullable=False
     )
-    cantidad: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    cantidad: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     referencia_tipo: Mapped[str | None] = mapped_column(String(40), nullable=True)
     referencia_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     observaciones: Mapped[str | None] = mapped_column(Text, nullable=True)
     registrado_por: Mapped[int] = mapped_column(BigInteger, ForeignKey("usuarios.id"), nullable=False)
-    costo_unitario: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
-    costo_total: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    costo_unitario: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    costo_total: Mapped[Decimal | None] = mapped_column(Numeric(16, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
     producto = relationship("Producto")

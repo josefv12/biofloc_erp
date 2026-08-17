@@ -12,16 +12,16 @@ from datetime import datetime, timezone, timedelta
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
-ADMIN_USER, ADMIN_PASS = "admin@biofloc.com", "AdminBiofloc2026!"
-TECNICO_USER, TECNICO_PASS = "tecnico_test@biofloc.com", "Tecnico1234!"
-OPERARIO_USER, OPERARIO_PASS = "operario_test@biofloc.com", "Operario1234!"
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp", user="postgres", password="admin")
 PREF = "[TEST_ENERGIA]"
 T = {"equipo_id": None, "evento_ids": []}
 R = []
-
 
 def log(n, name, ok, d=""):
     icon = "[OK]" if ok else "[FAIL]"
@@ -32,19 +32,15 @@ def log(n, name, ok, d=""):
     print(m)
     R.append((n, name, ok, d))
 
-
 def login(c, p):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": c, "password": p})
     return r.json().get("access_token") if r.status_code == 200 else None
 
-
 def h(tok):
     return {**HEADERS_JSON, "Authorization": f"Bearer {tok}"}
 
-
 def pg():
     return psycopg2.connect(**DB_CONF)
-
 
 def main():
     print(f"\n{PREF} INICIO suite test_eventos_energia.py\n")
@@ -192,7 +188,6 @@ def main():
     passed = sum(1 for _, _, ok, _ in R if ok)
     print(f"\n{PREF} RESUMEN: {passed}/{len(R)} pasadas.")
     return 0 if passed == len(R) else 2
-
 
 if __name__ == "__main__":
     import os

@@ -8,6 +8,7 @@ Servidor levantado en :8000
 """
 import sys
 import io
+import pathlib
 import requests
 import psycopg2
 from datetime import datetime, date, timedelta, timezone
@@ -15,18 +16,14 @@ from decimal import Decimal
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-TECNICO_USER = "tecnico_test@biofloc.com"
-TECNICO_PASS = "Tecnico1234!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
 SCH = "biofloc"
 
 PREF = "[TEST_COMP]"
@@ -45,7 +42,6 @@ PASS_ICON = "[OK]"
 FAIL_ICON = "[FAIL]"
 R = []
 
-
 def log(n, name, ok, d=""):
     icon = PASS_ICON if ok else FAIL_ICON
     n_str = f"{n:02d}" if isinstance(n, int) else str(n)
@@ -55,19 +51,15 @@ def log(n, name, ok, d=""):
     print(m)
     R.append((n, name, ok, d))
 
-
 def login(c, p):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": c, "password": p})
     return r.json().get("access_token") if r.status_code == 200 else None
 
-
 def h(tok):
     return {**HEADERS_JSON, "Authorization": f"Bearer {tok}"}
 
-
 def pg():
     return psycopg2.connect(**DB_CONF)
-
 
 # ========================================================================
 # BLOQUE I: INFRAESTRUCTURA + AUTENTICACIÓN (1-5)
@@ -77,13 +69,11 @@ def t01_health():
     ok = r.status_code == 200 and r.json().get("api") == r.json().get("database") == "ok"
     log(1, "GET /health (api+db=ok)", ok, str(r.json()))
 
-
 def t02_login_admin():
     t = login(ADMIN_USER, ADMIN_PASS)
     ok = t is not None
     log(2, "Login ADMIN", ok, ("..." + t[-12:]) if t else "None")
     return t
-
 
 def t03_login_tecnico():
     t = login(TECNICO_USER, TECNICO_PASS)
@@ -91,19 +81,16 @@ def t03_login_tecnico():
     log(3, "Login TÉCNICO", ok, ("..." + t[-12:]) if t else "None")
     return t
 
-
 def t04_login_operario():
     t = login(OPERARIO_USER, OPERARIO_PASS)
     ok = t is not None
     log(4, "Login OPERARIO", ok, ("..." + t[-12:]) if t else "None")
     return t
 
-
 def t05_sin_jwt():
     r = requests.get(f"{BASE}/api/v1/compras/")
     ok = r.status_code == 403
     log(5, "GET compras sin JWT -> 403", ok, f"status={r.status_code}")
-
 
 # ========================================================================
 # BLOQUE II: PRE-REQUISITOS (cat, unidad, 3 productos — usados en la compra)
@@ -166,7 +153,6 @@ def _asegurar_semilla_inventario(admin_tok):
     assert len(T["prods"]) == 3, f"falló semilla 3 prods, solo {len(T['prods'])} => {T['prods']}"
     return True
 
-
 # ========================================================================
 # BLOQUE III — COMPRAS VÁLIDAS (6-13)
 # ========================================================================
@@ -198,7 +184,6 @@ def t06_compra_1_detalle(admin_tok):
                          f"detalles_n={len(data['detalles'])} detalle_subtotal={data['detalles'][0]['subtotal']}")
     log(6, "POST compra 1 detalle (subtotal/total servidor)", ok, detalle_extra)
 
-
 def t07_compra_multiples_detalles(admin_tok):
     p1, p2, p3 = T["prods"]
     c = (date.today() - timedelta(days=1)).isoformat()
@@ -225,7 +210,6 @@ def t07_compra_multiples_detalles(admin_tok):
         d = f"compra_id={data['id']} total={data['total']} esperado={t_esp} n_det={len(data['detalles'])}"
     log(7, "POST compra 3 detalles (total = Σ subtotales)", ok, d)
 
-
 def t08_movimientos_generados_exactos(admin_tok):
     compra_id = T["compras"][0]
     conn = pg(); cur = conn.cursor()
@@ -245,11 +229,20 @@ def t08_movimientos_generados_exactos(admin_tok):
         (compra_id,),
     )
     tipo_ids = [r[0] for r in cur.fetchall()]
+    cur.execute(
+        "SELECT id FROM biofloc.tipos_movimiento_inventario "
+        "WHERE nombre='ENTRADA' AND afecta_stock=1"
+    )
+    row_entrada = cur.fetchone()
+    entrada_id = row_entrada[0] if row_entrada else None
     cur.close(); conn.close()
-    ok = n_det == n_mov and n_mov == 1 and tipo_ids == [1]
-    log(8, "1 detalle = 1 mov ENTRADA (id=1)", ok,
-        f"n_det={n_det} n_mov={n_mov} tipos={tipo_ids}")
-
+    ok = (
+        n_det == n_mov and n_mov == 1
+        and entrada_id is not None
+        and tipo_ids == [entrada_id]
+    )
+    log(8, "1 detalle = 1 mov tipo ENTRADA (catálogo por nombre)", ok,
+        f"n_det={n_det} n_mov={n_mov} tipos={tipo_ids} entrada_id={entrada_id}")
 
 def t09_referencia_detalle_compra_trazabilidad(admin_tok):
     compra_id = T["compras"][0]
@@ -267,7 +260,6 @@ def t09_referencia_detalle_compra_trazabilidad(admin_tok):
     log(9, "Trazabilidad JOIN detalle_compra <-> movimiento", ok,
         f"n={len(rows)} rows=[{rows}]")
 
-
 def t10_stock_incrementado_vista(admin_tok):
     p1 = T["prods"][0]
     conn = pg(); cur = conn.cursor()
@@ -282,7 +274,6 @@ def t10_stock_incrementado_vista(admin_tok):
     ok = stock_real >= Decimal("15")
     log(10, "Vista stock_productos refleja compras", ok,
         f"producto_id={p1} stock={stock_real} esperado>=15")
-
 
 def t11_auditoria_insert_compras_detalles(admin_tok):
     conn = pg(); cur = conn.cursor()
@@ -312,13 +303,18 @@ def t11_auditoria_insert_compras_detalles(admin_tok):
     log(11, "Auditoría INSERT 3 capas (compra/detalle/mov)", ok,
         f"compra={c1} detalles={c2} mov_inv={c3}")
 
-
 def t12_get_listado(admin_tok):
     r = requests.get(f"{BASE}/api/v1/compras/", headers=h(admin_tok))
     ok = r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 2
-    log(12, "GET compras lista >= 2 (las 2 creadas)", ok,
-        f"status={r.status_code} n={len(r.json()) if r.status_code==200 else 'N/A'}")
-
+    d = f"status={r.status_code} n={len(r.json()) if r.status_code==200 else 'N/A'}"
+    if ok:
+        created = [c for c in r.json() if c.get("id") in T["compras"]]
+        ok = (
+            len(created) >= 2
+            and all(isinstance(c.get("detalles"), list) and len(c["detalles"]) >= 1 for c in created)
+        )
+        d += f" created={len(created)} dets={[len(c.get('detalles') or []) for c in created]}"
+    log(12, "GET compras lista incluye detalles (joinedload)", ok, d)
 
 def t13_get_detalle_con_movimientos(admin_tok):
     compra_id = T["compras"][1]  # multi detalle = 3
@@ -332,7 +328,6 @@ def t13_get_detalle_con_movimientos(admin_tok):
         ok = n_mov == 3 and n_det == 3
         d = f"id={j.get('id')} detalles={n_det} movs={n_mov}"
     log(13, "GET compra/{id} devuelve 3 detalles + 3 movimientos asociados", ok, d)
-
 
 # ========================================================================
 # BLOQUE IV — FILTROS GET (14)
@@ -352,7 +347,6 @@ def t14_filtros_get(admin_tok):
         f"prod1={len(r_b.json()) if r_b.status_code==200 else -1} "
         f"hoy={len(r_c.json()) if r_c.status_code==200 else -1}")
 
-
 # ========================================================================
 # BLOQUE V — VALIDACIONES 404 + 422 + RBAC (15-20)
 # ========================================================================
@@ -365,7 +359,6 @@ def t15_producto_inexistente_404(admin_tok):
     ok = r.status_code == 404
     log(15, "Producto inexistente → 404", ok, f"status={r.status_code} body={r.text[:200]}")
 
-
 def t16_cantidad_invalida_422(admin_tok):
     p1 = T["prods"][0]
     body = {
@@ -375,7 +368,6 @@ def t16_cantidad_invalida_422(admin_tok):
     r = requests.post(f"{BASE}/api/v1/compras/", headers=h(admin_tok), json=body)
     ok = r.status_code == 422
     log(16, "Cantidad ≤ 0 → 422", ok, f"status={r.status_code}")
-
 
 def t17_precio_invalido_422(admin_tok):
     p1 = T["prods"][0]
@@ -387,13 +379,11 @@ def t17_precio_invalido_422(admin_tok):
     ok = r.status_code == 422
     log(17, "Precio_unitario < 0 → 422", ok, f"status={r.status_code}")
 
-
 def t18_detalles_vacio_422(admin_tok):
     body = {"fecha": date.today().isoformat(), "detalles": []}
     r = requests.post(f"{BASE}/api/v1/compras/", headers=h(admin_tok), json=body)
     ok = r.status_code == 422
     log(18, "Detalles vacíos → 422", ok, f"status={r.status_code}")
-
 
 def t19_rbac_operario_crea_ok(oper_tok):
     p1 = T["prods"][0]
@@ -409,7 +399,6 @@ def t19_rbac_operario_crea_ok(oper_tok):
     log(19, "RBAC: OPERARIO puede crear (201)", ok,
         f"status={r.status_code} id={r.json().get('id') if r.status_code==201 else 'N/A'}")
 
-
 def t20_producto_inactivo_422(admin_tok):
     p2 = T["prods"][1]
     # Desactivar
@@ -424,7 +413,6 @@ def t20_producto_inactivo_422(admin_tok):
     ok = r.status_code == 422
     log(20, "Producto inactivo → 422 (luego reactivado)", ok, f"status={r.status_code}")
 
-
 # ========================================================================
 # BLOQUE VI — INMUTABILIDAD + ROLLBACK (21-22)
 # ========================================================================
@@ -437,7 +425,6 @@ def t21_put_delete_no_existen(admin_tok):
     ok = (rp.status_code in (404, 405)) and (rd.status_code in (404, 405))
     log(21, "PUT / DELETE compras NO implementados (404/405)", ok,
         f"put={rp.status_code} del={rd.status_code}")
-
 
 def t22_rollback_atomico_sin_huellas(admin_tok):
     # Contamos antes
@@ -475,7 +462,6 @@ def t22_rollback_atomico_sin_huellas(admin_tok):
     log(22, "Rollback atómico: 0 huellas parciales post-fallo (404)", ok,
         f"status_resp={r.status_code} | "
         f"compras:{compras_antes}→{compras_despues}  movs:{movs_antes}→{movs_despues}")
-
 
 # ========================================================================
 # LIMPIEZA FINAL
@@ -548,6 +534,17 @@ def limpieza(admin_tok):
     print("   HECHO.")
 
 
+def t23_codigo_entrada_por_nombre():
+    p = pathlib.Path(__file__).resolve().parents[1] / "app" / "services" / "compra_service.py"
+    txt = p.read_text(encoding="utf-8")
+    ok = (
+        "TIPO_MOV_ENTRADA_ID" not in txt
+        and 'NOMBRE_TIPO_ENTRADA = "ENTRADA"' in txt
+        and "afecta_stock" in txt
+    )
+    log(23, "compra_service resuelve ENTRADA por nombre, no id hardcodeado", ok)
+
+
 # ========================================================================
 # MAIN
 # ========================================================================
@@ -585,6 +582,7 @@ def main():
     t20_producto_inactivo_422(at)
     t21_put_delete_no_existen(at)
     t22_rollback_atomico_sin_huellas(at)
+    t23_codigo_entrada_por_nombre()
 
     # Limpieza
     try:
@@ -601,7 +599,6 @@ def main():
     for n, name, is_ok, d in R:
         if not is_ok:
             print(f"  FALLO: [{n:02d}] {name}\n       {d[:400]}")
-
 
 if __name__ == "__main__":
     main()

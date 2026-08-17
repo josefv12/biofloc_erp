@@ -6,7 +6,7 @@ Servicio para movimientos_inventario.
 - Trazabilidad Biofloc: si referencia_tipo == 'APLICACION_BIOFLOC' y referencia_id no nulo → validar existencia aplicación.
 """
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
@@ -111,7 +111,7 @@ def crear_movimiento_inventario(
     # 4. Construir registro
     datos = data.model_dump()
     if datos.get("fecha_hora") is None:
-        datos["fecha_hora"] = datetime.utcnow()
+        datos["fecha_hora"] = datetime.now(timezone.utc)
     datos["registrado_por"] = usuario_id
 
     nuevo = MovimientoInventario(**datos)

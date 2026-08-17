@@ -24,22 +24,18 @@ import requests
 import psycopg2
 from datetime import datetime, timezone
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
 # ---------------------------------------------------------------------------
 # Credenciales de prueba — ajustar si los datos de la BD son distintos
 # ---------------------------------------------------------------------------
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-TECNICO_USER = "tecnico_test@biofloc.com"
-TECNICO_PASS = "Tecnico1234!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-
 # DB directa para validaciones
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
 DB_SCHEMA = "biofloc"
 
 # IDs de prueba — se establecen dinámicamente durante la ejecucion
@@ -48,7 +44,6 @@ TEST_BIOMETRIA_IDS = []
 PASS_ICON = "[OK]"
 FAIL_ICON = "[FAIL]"
 results = []
-
 
 def log(num, name, ok, detail=""):
     icon = PASS_ICON if ok else FAIL_ICON
@@ -59,17 +54,14 @@ def log(num, name, ok, detail=""):
     print(msg)
     results.append((num, name, ok, detail))
 
-
 def get_token(correo, password):
     r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": correo, "password": password})
     if r.status_code == 200:
         return r.json()["access_token"]
     return None
 
-
 def auth_header(token):
     return {"Authorization": f"Bearer {token}"}
-
 
 # ---------------------------------------------------------------------------
 # PRE-REQUISITO: obtener un lote_id valido de la BD
@@ -87,7 +79,6 @@ def obtener_lote_valido():
         print(f"  [WARN] No se pudo conectar a PostgreSQL: {e}")
         return None
 
-
 # ---------------------------------------------------------------------------
 # PRUEBA 13: GET /health
 # ---------------------------------------------------------------------------
@@ -95,7 +86,6 @@ def test_health():
     r = requests.get(f"{BASE}/health")
     ok = r.status_code == 200 and r.json().get("api") == "ok"
     log(13, "GET /health", ok, str(r.json()))
-
 
 # ---------------------------------------------------------------------------
 # PRUEBA 1: Login + JWT
@@ -106,7 +96,6 @@ def test_login():
     log(1, f"Login ADMINISTRADOR ({ADMIN_USER})", ok, f"token={'...'+token[-12:] if token else 'NONE'}")
     return token
 
-
 # ---------------------------------------------------------------------------
 # PRUEBA 9: Acceso sin JWT
 # ---------------------------------------------------------------------------
@@ -114,7 +103,6 @@ def test_sin_jwt():
     r = requests.get(f"{BASE}/api/v1/biometrias/")
     ok = r.status_code == 403  # HTTPBearer devuelve 403 sin credentials
     log(9, "GET /biometrias sin JWT → 403", ok, f"status={r.status_code}")
-
 
 # ---------------------------------------------------------------------------
 # PRUEBA 7a: Datos invalidos — cantidad_muestra = 0
@@ -130,7 +118,6 @@ def test_datos_invalidos_cantidad(token, lote_id):
     ok = r.status_code == 422
     log(7, "POST biometria con cantidad_muestra=0 → 422", ok, f"status={r.status_code}")
 
-
 # ---------------------------------------------------------------------------
 # PRUEBA 7b: Datos invalidos — peso negativo
 # ---------------------------------------------------------------------------
@@ -145,7 +132,6 @@ def test_datos_invalidos_peso(token, lote_id):
     ok = r.status_code == 422
     log("7b", "POST biometria con peso_total_muestra=-5 -> 422", ok, f"status={r.status_code}")
 
-
 # ---------------------------------------------------------------------------
 # PRUEBA 8: Lote inexistente
 # ---------------------------------------------------------------------------
@@ -159,7 +145,6 @@ def test_lote_inexistente(token):
     r = requests.post(f"{BASE}/api/v1/biometrias/", json=payload, headers=auth_header(token))
     ok = r.status_code == 404
     log(8, "POST biometria con lote_id=999999 → 404", ok, f"status={r.status_code} | {r.text[:80]}")
-
 
 # ---------------------------------------------------------------------------
 # PRUEBA 2: POST biometria valida
@@ -189,7 +174,6 @@ def test_crear_biometria(token, lote_id, fecha_siembra):
     log(2, "POST biometria valida → 201", ok, detail)
     return bm_id
 
-
 # ---------------------------------------------------------------------------
 # PRUEBA 3: GET biometria por ID
 # ---------------------------------------------------------------------------
@@ -203,7 +187,6 @@ def test_get_by_id(token, bm_id):
         detail = f"status={r.status_code} | {r.text[:80]}"
     log(3, f"GET /biometrias/{bm_id}", ok, detail)
 
-
 # ---------------------------------------------------------------------------
 # PRUEBA 4: GET listado
 # ---------------------------------------------------------------------------
@@ -211,7 +194,6 @@ def test_listar(token):
     r = requests.get(f"{BASE}/api/v1/biometrias/", headers=auth_header(token))
     ok = r.status_code == 200 and isinstance(r.json(), list)
     log(4, "GET /biometrias/ (listado completo)", ok, f"registros={len(r.json()) if ok else 'ERROR'}")
-
 
 # ---------------------------------------------------------------------------
 # PRUEBA 5: GET listado filtrado por lote_id
@@ -226,7 +208,6 @@ def test_listar_filtrado(token, lote_id):
     else:
         detail = f"status={r.status_code}"
     log(5, f"GET /biometrias/?lote_id={lote_id} (filtrado)", ok, detail)
-
 
 # ---------------------------------------------------------------------------
 # PRUEBA 6: Asociacion correcta con lote (verificar en BD)
@@ -248,7 +229,6 @@ def test_asociacion_lote(bm_id, lote_id):
         detail = str(e)
     log(6, "Asociacion biometria↔lote en PostgreSQL", ok, detail)
 
-
 # ---------------------------------------------------------------------------
 # PRUEBA 10: Rol sin permiso (OPERARIO intenta POST)
 # ---------------------------------------------------------------------------
@@ -266,7 +246,6 @@ def test_rol_sin_permiso(lote_id):
     r = requests.post(f"{BASE}/api/v1/biometrias/", json=payload, headers=auth_header(token))
     ok = r.status_code == 403
     log(10, "Rol OPERARIO POST /biometrias → 403", ok, f"status={r.status_code} | {r.text[:80]}")
-
 
 # ---------------------------------------------------------------------------
 # PRUEBA 11: Auditoria en PostgreSQL
@@ -289,7 +268,6 @@ def test_auditoria(bm_id):
         ok = False
         detail = str(e)
     log(11, "Auditoria INSERT en biofloc.auditoria", ok, detail)
-
 
 # ---------------------------------------------------------------------------
 # PRUEBA 12: Validacion PostgreSQL — no se crearon tablas
@@ -334,7 +312,6 @@ def test_postgresql_integridad():
         detail = str(e)
     log(12, "PostgreSQL: no se crearon tablas extra", ok, detail)
 
-
 # ---------------------------------------------------------------------------
 # LIMPIEZA: eliminar unicamente los registros de prueba
 # ---------------------------------------------------------------------------
@@ -361,7 +338,6 @@ def limpiar_datos_prueba():
         print(f"\n  [CLEAN] Limpieza: eliminadas {len(TEST_BIOMETRIA_IDS)} biometria(s) de prueba: {TEST_BIOMETRIA_IDS}")
     except Exception as e:
         print(f"  [WARN] Error durante limpieza: {e}")
-
 
 # ---------------------------------------------------------------------------
 # MAIN

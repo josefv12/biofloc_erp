@@ -1,6 +1,7 @@
 from sqlalchemy import BigInteger, String, Numeric, Text, Date, DateTime, Boolean, ForeignKey, Index, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, date
+from decimal import Decimal
 from app.core.database import Base
 
 
@@ -25,7 +26,7 @@ class Mantenimiento(Base):
     tipo_mantenimiento_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tipos_mantenimiento.id"), nullable=False)
     fecha: Mapped[date] = mapped_column(Date, nullable=False)
     descripcion: Mapped[str] = mapped_column(String(250), nullable=False)
-    costo: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, server_default=text("0"))
+    costo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default=text("0"))
     proveedor: Mapped[str | None] = mapped_column(String(150), nullable=True)
     observaciones: Mapped[str | None] = mapped_column(Text, nullable=True)
     registrado_por: Mapped[int] = mapped_column(BigInteger, ForeignKey("usuarios.id"), nullable=False)

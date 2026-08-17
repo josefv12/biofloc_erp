@@ -14,6 +14,10 @@ from app.schemas.alarma_sistema import (
 )
 
 
+ESTADOS_ALARMA_SEMILLA = frozenset({"PENDIENTE", "ATENDIDA", "CERRADA"})
+# Nombres semilla funcionales: no se pueden renombrar (F14-04 / F15.4).
+
+
 def _audit(db, usuario_id, tabla, accion, registro_id, detalle: dict):
     safe = {}
     for k, v in detalle.items():
@@ -180,6 +184,11 @@ def actualizar_estado_alarma(db: Session, estado_id: int, data: EstadoAlarmaUpda
     if not cambios:
         return e
     if "nombre" in cambios and cambios["nombre"] != e.nombre:
+        if e.nombre in ESTADOS_ALARMA_SEMILLA:
+            raise HTTPException(
+                status_code=422,
+                detail=f"No se puede renombrar el estado semilla '{e.nombre}'",
+            )
         if db.query(EstadoAlarma).filter(EstadoAlarma.nombre == cambios["nombre"]).first():
             raise HTTPException(status_code=409, detail=f"Ya existe otro estado de alarma con nombre '{cambios['nombre']}'")
     for k, v in cambios.items():

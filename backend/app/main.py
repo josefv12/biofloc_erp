@@ -1,5 +1,6 @@
 """
 Biofloc ERP V1 - Punto de entrada de la aplicación FastAPI
+Docs y OpenAPI se controlan con APP_ENV / ENABLE_DOCS (F15.7).
 """
 
 from fastapi import FastAPI, Depends
@@ -48,14 +49,18 @@ from app.routers import (
 )
 
 settings = get_settings()
+_docs = "/docs" if settings.docs_enabled else None
+_redoc = "/redoc" if settings.docs_enabled else None
+_openapi = "/openapi.json" if settings.docs_enabled else None
 
 # --- Instancia de FastAPI ---
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Sistema ERP especializado para piscicultura de tilapia roja en sistema Biofloc.",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=_docs,
+    redoc_url=_redoc,
+    openapi_url=_openapi,
 )
 
 app.include_router(auth.router, prefix="/api/v1/auth")
@@ -122,20 +127,14 @@ def health_check(db: Session = Depends(get_db)):
     - database: "ok" si la consulta de prueba tiene éxito, "unavailable" si falla.
     """
     db_status = "unavailable"
-    db_detail = None
 
     try:
         db.execute(text("SELECT 1"))
         db_status = "ok"
-    except Exception as exc:
-        db_detail = str(exc)
+    except Exception:
+        db_status = "unavailable"
 
-    response = {
+    return {
         "api": "ok",
         "database": db_status,
     }
-
-    if db_detail:
-        response["database_error"] = db_detail
-
-    return response

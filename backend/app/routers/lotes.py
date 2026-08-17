@@ -38,6 +38,7 @@ def listar(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    _require_roles(current_user, db, {"ADMINISTRADOR", "TECNICO", "OPERARIO"})
     return svc.listar_lotes(db, estanque_id)
 
 
@@ -47,6 +48,7 @@ def obtener(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    _require_roles(current_user, db, {"ADMINISTRADOR", "TECNICO", "OPERARIO"})
     return svc.obtener_lote(db, lote_id)
 
 

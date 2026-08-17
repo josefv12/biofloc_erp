@@ -29,17 +29,15 @@ from datetime import datetime, timezone
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+from env_tests import (
+    ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
+    OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
+)
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
 # Credenciales de prueba
-ADMIN_USER = "admin@biofloc.com"
-ADMIN_PASS = "AdminBiofloc2026!"
-OPERARIO_USER = "operario_test@biofloc.com"
-OPERARIO_PASS = "Operario1234!"
-
-DB_CONF = dict(host="localhost", port=5432, dbname="biofloc_erp",
-               user="postgres", password="admin")
 DB_SCHEMA = "biofloc"
 
 TEST_COSECHA_IDS = []
@@ -47,7 +45,6 @@ results = []
 
 PASS_ICON = "[OK]"
 FAIL_ICON = "[FAIL]"
-
 
 def log(num, name, ok, detail=""):
     icon = PASS_ICON if ok else FAIL_ICON
@@ -58,7 +55,6 @@ def log(num, name, ok, detail=""):
     print(msg)
     results.append((num, name, ok, detail))
 
-
 def get_token(correo, password):
     try:
         r = requests.post(f"{BASE}/api/v1/auth/login", json={"correo": correo, "password": password})
@@ -68,10 +64,8 @@ def get_token(correo, password):
         print(f"Error al conectar con endpoint de login: {e}")
     return None
 
-
 def auth_header(token):
     return {"Authorization": f"Bearer {token}"}
-
 
 def obtener_lote_valido():
     try:
@@ -86,12 +80,10 @@ def obtener_lote_valido():
         print(f"  [WARN] No se pudo conectar a PostgreSQL: {e}")
         return None
 
-
 def test_health():
     r = requests.get(f"{BASE}/health")
     ok = r.status_code == 200 and r.json().get("api") == "ok" and r.json().get("database") == "ok"
     log(14, "GET /health (API & DB OK)", ok, str(r.json()))
-
 
 def test_login():
     token = get_token(ADMIN_USER, ADMIN_PASS)
@@ -99,18 +91,15 @@ def test_login():
     log(1, f"Login ADMINISTRADOR ({ADMIN_USER})", ok, f"token={'...'+token[-12:] if token else 'NONE'}")
     return token
 
-
 def test_jwt(token):
     r = requests.get(f"{BASE}/api/v1/cosechas/", headers=auth_header(token))
     ok = r.status_code == 200
     log(2, "Verificación Token JWT válido", ok, f"status={r.status_code}")
 
-
 def test_sin_jwt():
     r = requests.get(f"{BASE}/api/v1/cosechas/")
     ok = r.status_code == 403
     log(10, "GET /cosechas sin JWT -> 403 Forbidden", ok, f"status={r.status_code}")
-
 
 def test_crear_cosecha_valida(token, lote_id):
     fecha_hora = datetime.now(timezone.utc).isoformat()
@@ -132,24 +121,20 @@ def test_crear_cosecha_valida(token, lote_id):
     log(3, "POST /cosechas cosecha válida", ok, f"status={r.status_code} | id={cid}")
     return cid
 
-
 def test_obtener_cosecha_por_id(token, cosecha_id):
     r = requests.get(f"{BASE}/api/v1/cosechas/{cosecha_id}", headers=auth_header(token))
     ok = r.status_code == 200 and r.json().get("id") == cosecha_id
     log(4, f"GET /cosechas/{cosecha_id} por ID", ok, f"status={r.status_code}")
-
 
 def test_obtener_listado(token):
     r = requests.get(f"{BASE}/api/v1/cosechas/", headers=auth_header(token))
     ok = r.status_code == 200 and isinstance(r.json(), list)
     log(5, "GET /cosechas listado general", ok, f"status={r.status_code} | total_items={len(r.json()) if ok else 0}")
 
-
 def test_filtro_por_lote(token, lote_id):
     r = requests.get(f"{BASE}/api/v1/cosechas/?lote_id={lote_id}", headers=auth_header(token))
     ok = r.status_code == 200 and all(item["lote_id"] == lote_id for item in r.json())
     log(6, f"GET /cosechas/?lote_id={lote_id} (Filtro)", ok, f"status={r.status_code} | items_filtrados={len(r.json()) if ok else 0}")
-
 
 def test_lote_inexistente(token):
     payload = {
@@ -162,7 +147,6 @@ def test_lote_inexistente(token):
     ok = r.status_code == 404
     log(7, "POST /cosechas con lote_id inexistente -> 404", ok, f"status={r.status_code} | {r.text[:80]}")
 
-
 def test_datos_invalidos(token, lote_id):
     payload = {
         "lote_id": lote_id,
@@ -173,7 +157,6 @@ def test_datos_invalidos(token, lote_id):
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
     log(8, "POST /cosechas con datos con formato inválido -> 422", ok, f"status={r.status_code}")
-
 
 def test_cantidad_invalida_check(token, lote_id):
     payload = {
@@ -186,7 +169,6 @@ def test_cantidad_invalida_check(token, lote_id):
     ok = r.status_code == 422
     log(9, "POST /cosechas con cantidad_peces=0 (CHECK > 0) -> 422", ok, f"status={r.status_code}")
 
-
 def test_peso_invalido_check(token, lote_id):
     payload = {
         "lote_id": lote_id,
@@ -197,7 +179,6 @@ def test_peso_invalido_check(token, lote_id):
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
     log(10, "POST /cosechas con peso_total <= 0 (CHECK > 0) -> 422", ok, f"status={r.status_code}")
-
 
 def test_permisos_operario(lote_id):
     token_op = get_token(OPERARIO_USER, OPERARIO_PASS)
@@ -217,7 +198,6 @@ def test_permisos_operario(lote_id):
         TEST_COSECHA_IDS.append(r.json()["id"])
     log(11, f"POST /cosechas como OPERARIO -> 201", ok, f"status={r.status_code}")
 
-
 def test_auditoria_postgresql(cosecha_id):
     if not cosecha_id:
         log(12, "Auditoría en PostgreSQL (biofloc.auditoria)", False, "Sin ID de cosecha")
@@ -233,7 +213,6 @@ def test_auditoria_postgresql(cosecha_id):
         log(12, f"Auditoría en PostgreSQL registro_id={cosecha_id}", ok, f"auditoria_id={row[0] if row else 'NONE'}")
     except Exception as e:
         log(12, "Auditoría en PostgreSQL", False, str(e))
-
 
 def test_integridad_fk(cosecha_id):
     if not cosecha_id:
@@ -251,7 +230,6 @@ def test_integridad_fk(cosecha_id):
     except Exception as e:
         log(13, "Integridad FK", False, str(e))
 
-
 def test_estructura_postgresql():
     try:
         conn = psycopg2.connect(**DB_CONF)
@@ -267,7 +245,6 @@ def test_estructura_postgresql():
         log(15, f"Estructura PostgreSQL ({base_tables} tablas + {views} vistas = {total} total)", ok, f"BASE TABLE: {base_tables}, VIEW: {views}, TOTAL: {total}")
     except Exception as e:
         log(15, "Estructura PostgreSQL", False, str(e))
-
 
 def limpiar_datos_prueba():
     if not TEST_COSECHA_IDS:
@@ -285,7 +262,6 @@ def limpiar_datos_prueba():
         log(16, f"Limpieza de datos de prueba ({len(TEST_COSECHA_IDS)} cosechas + auditoría borradas)", True, f"IDs limpiados: {TEST_COSECHA_IDS}")
     except Exception as e:
         log(16, "Limpieza de datos de prueba", False, str(e))
-
 
 def main():
     print("=" * 70)
