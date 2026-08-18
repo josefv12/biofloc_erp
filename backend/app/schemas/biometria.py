@@ -7,7 +7,7 @@ class BiometriaCreate(BaseModel):
     lote_id: int
     fecha_hora: datetime
     cantidad_muestra: int
-    peso_total_muestra: float
+    peso_total_muestra_g: float
     observaciones: Optional[str] = None
     talla_promedio: Optional[float] = None
     unidad_talla: Optional[str] = None
@@ -19,11 +19,11 @@ class BiometriaCreate(BaseModel):
             raise ValueError("cantidad_muestra debe ser mayor que 0")
         return v
 
-    @field_validator("peso_total_muestra")
+    @field_validator("peso_total_muestra_g")
     @classmethod
     def peso_positivo(cls, v: float) -> float:
         if v <= 0:
-            raise ValueError("peso_total_muestra debe ser mayor que 0")
+            raise ValueError("peso_total_muestra_g debe ser mayor que 0")
         return v
 
     @field_validator("talla_promedio")
@@ -39,7 +39,7 @@ class BiometriaOut(BaseModel):
     lote_id: int
     fecha_hora: datetime
     cantidad_muestra: int
-    peso_total_muestra: float
+    peso_total_muestra_g: float
     observaciones: Optional[str] = None
     registrado_por: int
     talla_promedio: Optional[float] = None

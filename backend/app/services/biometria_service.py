@@ -60,7 +60,7 @@ def crear_biometria(db: Session, data: BiometriaCreate, usuario_id: int) -> Biom
         usuario_id, 
         "INSERT", 
         nuevo.id, 
-        {"lote_id": data.lote_id, "cantidad": data.cantidad_muestra, "peso": float(data.peso_total_muestra)}
+        {"lote_id": data.lote_id, "cantidad": data.cantidad_muestra, "peso_g": float(data.peso_total_muestra_g)}
     )
     db.commit()
     db.refresh(nuevo)

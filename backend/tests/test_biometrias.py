@@ -112,7 +112,7 @@ def test_datos_invalidos_cantidad(token, lote_id):
         "lote_id": lote_id,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_muestra": 0,
-        "peso_total_muestra": 10.0
+        "peso_total_muestra_g": 10.0
     }
     r = requests.post(f"{BASE}/api/v1/biometrias/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
@@ -126,11 +126,11 @@ def test_datos_invalidos_peso(token, lote_id):
         "lote_id": lote_id,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_muestra": 10,
-        "peso_total_muestra": -5.0
+        "peso_total_muestra_g": -5.0
     }
     r = requests.post(f"{BASE}/api/v1/biometrias/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
-    log("7b", "POST biometria con peso_total_muestra=-5 -> 422", ok, f"status={r.status_code}")
+    log("7b", "POST biometria con peso_total_muestra_g=-5 -> 422", ok, f"status={r.status_code}")
 
 # ---------------------------------------------------------------------------
 # PRUEBA 8: Lote inexistente
@@ -140,7 +140,7 @@ def test_lote_inexistente(token):
         "lote_id": 999999,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_muestra": 10,
-        "peso_total_muestra": 5.0
+        "peso_total_muestra_g": 5.0
     }
     r = requests.post(f"{BASE}/api/v1/biometrias/", json=payload, headers=auth_header(token))
     ok = r.status_code == 404
@@ -156,7 +156,7 @@ def test_crear_biometria(token, lote_id, fecha_siembra):
         "lote_id": lote_id,
         "fecha_hora": fecha_hora,
         "cantidad_muestra": 30,
-        "peso_total_muestra": 450.750,
+        "peso_total_muestra_g": 450.750,
         "observaciones": "[TEST_BIOMETRIA] Muestreo automatizado de prueba",
         "talla_promedio": 12.5,
         "unidad_talla": "cm"
@@ -168,7 +168,7 @@ def test_crear_biometria(token, lote_id, fecha_siembra):
         data = r.json()
         bm_id = data["id"]
         TEST_BIOMETRIA_IDS.append(bm_id)
-        detail = f"id={bm_id} lote_id={data['lote_id']} peso={data['peso_total_muestra']}"
+        detail = f"id={bm_id} lote_id={data['lote_id']} peso_g={data['peso_total_muestra_g']}"
     else:
         detail = f"status={r.status_code} | {r.text[:120]}"
     log(2, "POST biometria valida → 201", ok, detail)
@@ -241,7 +241,7 @@ def test_rol_sin_permiso(lote_id):
         "lote_id": lote_id,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_muestra": 10,
-        "peso_total_muestra": 100.0
+        "peso_total_muestra_g": 100.0
     }
     r = requests.post(f"{BASE}/api/v1/biometrias/", json=payload, headers=auth_header(token))
     ok = r.status_code == 403

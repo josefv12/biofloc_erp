@@ -11,7 +11,7 @@ Reglas de negocio aplicadas:
 - No se aplica DELETE físico; el estado CANCELADO/FINALIZADO cierra el lote.
 """
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InternalError
 from fastapi import HTTPException
 
 from app.models.lote import Lote, Especie, EtapaProductiva, EstadoLote
@@ -75,7 +75,7 @@ def crear_lote(db: Session, data: LoteCreate, usuario_id: int) -> Lote:
     db.add(nuevo)
     try:
         db.flush()
-    except IntegrityError as exc:
+    except (IntegrityError, InternalError) as exc:
         db.rollback()
         # El trigger de PostgreSQL puede lanzar excepción sobre lote activo duplicado
         if "ya tiene un lote activo" in str(exc.orig).lower() or "lote activo" in str(exc.orig).lower():
@@ -100,15 +100,18 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
     for campo, valor in cambios.items():
         setattr(lote, campo, valor)
 
+    # auditoria.detalle es JSONB: fecha_cierre (date) no es serializable directamente.
+    detalle = data.model_dump(exclude_none=True, mode="json")
+
     try:
         db.flush()
-    except IntegrityError as exc:
+    except (IntegrityError, InternalError) as exc:
         db.rollback()
         if "ya tiene un lote activo" in str(exc.orig).lower():
             raise HTTPException(status_code=409, detail="El estanque ya tiene un lote ACTIVO")
         raise HTTPException(status_code=409, detail=f"Conflicto de integridad: {exc.orig}")
 
-    _registrar_auditoria(db, usuario_id, "UPDATE", lote.id, cambios)
+    _registrar_auditoria(db, usuario_id, "UPDATE", lote.id, detalle)
     db.commit()
     db.refresh(lote)
     return lote

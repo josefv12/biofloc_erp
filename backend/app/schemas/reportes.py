@@ -170,7 +170,7 @@ class ProduccionFilaOut(BaseModel):
     poblacion_estimada: int
     supervivencia_porcentaje: Optional[Decimal] = Field(None, max_digits=8, decimal_places=2)
     ultima_biometria_fecha: Optional[datetime] = None
-    peso_promedio: Optional[Decimal] = Field(None, max_digits=14, decimal_places=3)
+    peso_promedio_g: Optional[Decimal] = Field(None, max_digits=14, decimal_places=3)
 
 
 class ReporteProduccionOut(BaseModel):

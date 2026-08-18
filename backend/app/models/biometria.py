@@ -18,7 +18,7 @@ class Biometria(Base):
     lote_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("lotes.id"), nullable=False)
     fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     cantidad_muestra: Mapped[int] = mapped_column(Integer, nullable=False)
-    peso_total_muestra: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    peso_total_muestra_g: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     observaciones: Mapped[str | None] = mapped_column(Text, nullable=True)
     registrado_por: Mapped[int] = mapped_column(BigInteger, ForeignKey("usuarios.id"), nullable=False)
     talla_promedio: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
@@ -31,7 +31,7 @@ class Biometria(Base):
 
     __table_args__ = (
         CheckConstraint("cantidad_muestra > 0", name="biometrias_cantidad_muestra_check"),
-        CheckConstraint("peso_total_muestra > 0", name="biometrias_peso_total_muestra_check"),
+        CheckConstraint("peso_total_muestra_g > 0", name="biometrias_peso_total_muestra_g_check"),
         CheckConstraint("talla_promedio >= 0", name="biometrias_talla_promedio_check"),
         Index("idx_biometrias_lote_fecha", "lote_id", "fecha_hora"),
     )

@@ -4,7 +4,7 @@ Servicio para operaciones CRUD de cosechas.
 Reglas de negocio aplicadas:
 - lote_id debe existir.
 - La fecha no puede ser anterior a la fecha_siembra del lote.
-- peso_total y cantidad_peces deben ser > 0 (validadas en Pydantic y DB CHECK).
+- peso_total_kg y cantidad_peces deben ser > 0 (validadas en Pydantic y DB CHECK).
 - La auditoría registra INSERT en creación.
 - No se expone UPDATE ni DELETE.
 """
@@ -70,8 +70,8 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
         {
             "lote_id": data.lote_id, 
             "cantidad_peces": data.cantidad_peces, 
-            "peso_total": float(data.peso_total),
-            "peso_promedio": float(data.peso_promedio) if data.peso_promedio is not None else None
+            "peso_total_kg": float(data.peso_total_kg),
+            "peso_promedio_g": float(data.peso_promedio_g) if data.peso_promedio_g is not None else None
         }
     )
     db.commit()

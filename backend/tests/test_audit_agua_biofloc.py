@@ -129,7 +129,7 @@ def main():
         "codigo": f"LOT-AUDIT-{ts}", "estanque_id": est_id,
         "especie_id": 1, "etapa_productiva_id": 1, "estado_id": 1,
         "fecha_siembra": siembra, "cantidad_sembrada": 1000,
-        "peso_inicial_promedio": 1.0
+        "peso_inicial_promedio_g": 1.0
     }, headers=h(ta))
     lote_id = r_lote.json()["id"] if r_lote.status_code == 201 else None
     if lote_id: created_lotes.append(lote_id)

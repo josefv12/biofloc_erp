@@ -23,7 +23,7 @@ from env_tests import (
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 PREF = "[TEST_ALARMA_GENERAL]"
-DDL_SHA = "b35db89dc83fad95c10fc88fece04e031e680b3b921b12b5a584bfb4047bd2e3"
+DDL_SHA = "9f56e2b4eadad4e92a160e59384d4cd0813996720e25d2a10da65f9ac2ca1cf1"
 T = {
     "tipo_extra_id": None,
     "nivel_extra_id": None,

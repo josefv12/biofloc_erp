@@ -417,7 +417,7 @@ def produccion(db: Session, fecha_desde=None, fecha_hasta=None,
         SELECT l.id AS lote_id, l.codigo, el.nombre AS estado, e.codigo AS estanque_codigo,
                es.nombre_comun AS especie, ep.nombre AS etapa, l.fecha_siembra, l.cantidad_sembrada,
                v.mortalidad_acumulada, v.peces_cosechados, v.poblacion_estimada,
-               s.supervivencia_porcentaje, ub.fecha_hora AS ultima_biometria_fecha, ub.peso_promedio
+               s.supervivencia_porcentaje, ub.fecha_hora AS ultima_biometria_fecha, ub.peso_promedio_g
         FROM lotes l
         JOIN estados_lote el ON el.id = l.estado_id
         JOIN estanques e ON e.id = l.estanque_id
@@ -438,7 +438,7 @@ def produccion(db: Session, fecha_desde=None, fecha_hasta=None,
             mortalidad_acumulada=_i(r["mortalidad_acumulada"]), peces_cosechados=_i(r["peces_cosechados"]),
             poblacion_estimada=_i(r["poblacion_estimada"]),
             supervivencia_porcentaje=_d2n(r["supervivencia_porcentaje"]),
-            ultima_biometria_fecha=r["ultima_biometria_fecha"], peso_promedio=_d3n(r["peso_promedio"]),
+            ultima_biometria_fecha=r["ultima_biometria_fecha"], peso_promedio_g=_d3n(r["peso_promedio_g"]),
         ) for r in rows
     ]
     return ReporteProduccionOut(

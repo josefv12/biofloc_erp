@@ -88,7 +88,7 @@ def main():
         "codigo": f"LOT-APL-{ts}", "estanque_id": est_id,
         "especie_id": 1, "etapa_productiva_id": 1, "estado_id": 1,
         "fecha_siembra": siembra, "cantidad_sembrada": 1000,
-        "peso_inicial_promedio": 1.0, "observaciones": "[TEST_APL]"
+        "peso_inicial_promedio_g": 1.0, "observaciones": "[TEST_APL]"
     }, headers=auth_header(token_admin))
     lote_id = r_lote.json()["id"] if r_lote.status_code == 201 else None
     if lote_id: created_temp_lote_ids.append(lote_id)

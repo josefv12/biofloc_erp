@@ -122,7 +122,7 @@ def audit_flujo_productivo(token_admin):
         "estado_id": 1,
         "fecha_siembra": siembra_dt.isoformat(),
         "cantidad_sembrada": 2000,
-        "peso_inicial_promedio": 1.200,
+        "peso_inicial_promedio_g": 1.200,
         "observaciones": "[AUDIT] Lote para flujo de prueba"
     }
     r = requests.post(f"{BASE}/api/v1/lotes/", json=payload_lote, headers=auth_header(token_admin))
@@ -141,7 +141,7 @@ def audit_flujo_productivo(token_admin):
         "lote_id": lote_id,
         "fecha_hora": fecha_valida,
         "cantidad_muestra": 50,
-        "peso_total_muestra": 2.500,
+        "peso_total_muestra_g": 2.500,
         "talla_promedio": 12.5,
         "unidad_talla": "cm",
         "observaciones": "[AUDIT] Muestreo inicial"
@@ -188,8 +188,8 @@ def audit_flujo_productivo(token_admin):
         "lote_id": lote_id,
         "fecha_hora": fecha_valida,
         "cantidad_peces": 500,
-        "peso_total": 250.000,
-        "peso_promedio": 0.500,
+        "peso_total_kg": 250.000,
+        "peso_promedio_g": 0.500,
         "observaciones": "[AUDIT] Cosecha parcial"
     }
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload_cos, headers=auth_header(token_admin))

@@ -50,7 +50,7 @@ class UltimaBiometriaOut(BaseModel):
     lote_id: int
     codigo: str
     fecha_hora: Optional[str] = None
-    peso_promedio: Optional[Decimal] = Field(None, max_digits=14, decimal_places=3)
+    peso_promedio_g: Optional[Decimal] = Field(None, max_digits=14, decimal_places=3)
 
 
 class DashboardResumenOut(BaseModel):
@@ -154,12 +154,13 @@ class DashboardProduccionOut(BaseModel):
     estanques_por_estado: list[NombreNOut]
     lotes_activos: int
     poblacion_estimada_activos: int
-    supervivencia_pct_activos: Decimal = Field(..., max_digits=8, decimal_places=2)
+    supervivencia_pct_activos: Optional[Decimal] = Field(None, max_digits=8, decimal_places=2)
+    supervivencia_pct_activos_motivo: Optional[str] = None
     alimentaciones_periodo: int
     alimentacion_por_unidad: list[UnidadStockOut]
     cosechas_periodo: int
     cosechas_peces: int
-    cosechas_peso_total: Decimal = Field(..., max_digits=18, decimal_places=3)
+    cosechas_peso_total_kg: Decimal = Field(..., max_digits=18, decimal_places=3)
     mortalidades_periodo: int
     mortalidades_peces: int
     mediciones_agua_periodo: int

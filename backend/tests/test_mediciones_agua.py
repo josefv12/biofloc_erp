@@ -101,7 +101,7 @@ def main():
         "estado_id": 1,
         "fecha_siembra": siembra_dt.isoformat(),
         "cantidad_sembrada": 1000,
-        "peso_inicial_promedio": 1.0,
+        "peso_inicial_promedio_g": 1.0,
         "observaciones": "[TEST_MED] Lote temporal"
     }
     r_lote = requests.post(f"{BASE}/api/v1/lotes/", json=payload_lote, headers=auth_header(token_admin))

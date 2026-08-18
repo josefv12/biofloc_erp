@@ -19,6 +19,9 @@ __pycache__/
 *$py.class
 *.pyo
 
+# --- Frontend (Node) ---
+node_modules/
+
 # --- Distribución / empaquetado ---
 dist/
 build/

@@ -516,10 +516,14 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
     """, {})
     sembrada = _i(act.get("sembrada"))
     poblacion = _i(act.get("poblacion"))
+    # Sin peces sembrados el porcentaje no existe: se informa null con motivo,
+    # nunca 0, que se leería como mortalidad total.
     if sembrada > 0:
         surv = (Decimal(poblacion) / Decimal(sembrada) * Decimal("100")).quantize(D2, rounding=ROUND_HALF_UP)
+        surv_motivo = None
     else:
-        surv = Decimal("0.00")
+        surv = None
+        surv_motivo = "SIN_PECES_SEMBRADOS_EN_LOTES_ACTIVOS"
     fa = _filtro("a.fecha_hora", fecha_desde, fecha_hasta, ts=True)
     fc = _filtro("c.fecha_hora", fecha_desde, fecha_hasta, ts=True)
     fmo = _filtro("m.fecha_hora", fecha_desde, fecha_hasta, ts=True)
@@ -539,7 +543,7 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
     cos = _one(db, f"""
         SELECT COUNT(*) AS n,
                COALESCE(SUM(c.cantidad_peces), 0) AS peces,
-               COALESCE(SUM(c.peso_total), 0) AS peso
+               COALESCE(SUM(c.peso_total_kg), 0) AS peso_kg
         FROM cosechas c WHERE 1=1 {fc}
     """, p)
     mort = _one(db, f"""
@@ -565,7 +569,7 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
     bio = _one(db, f"SELECT COUNT(*) AS n FROM mediciones_biofloc mb WHERE 1=1 {fmb}", p)
     apl = _one(db, f"SELECT COUNT(*) AS n FROM aplicaciones_biofloc ab WHERE 1=1 {fab}", p)
     bios = _rows(db, """
-        SELECT v.lote_id, l.codigo, v.fecha_hora, v.peso_promedio
+        SELECT v.lote_id, l.codigo, v.fecha_hora, v.peso_promedio_g
         FROM vista_ultima_biometria v
         JOIN lotes l ON l.id = v.lote_id
         ORDER BY l.codigo
@@ -578,7 +582,7 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
             lote_id=_i(r["lote_id"]),
             codigo=str(r["codigo"]),
             fecha_hora=fh.isoformat() if fh is not None else None,
-            peso_promedio=_d3(r["peso_promedio"]) if r["peso_promedio"] is not None else None,
+            peso_promedio_g=_d3(r["peso_promedio_g"]) if r["peso_promedio_g"] is not None else None,
         ))
     return DashboardProduccionOut(
         periodo=_periodo(fecha_desde, fecha_hasta),
@@ -587,6 +591,7 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
         lotes_activos=_i(act.get("n")),
         poblacion_estimada_activos=poblacion,
         supervivencia_pct_activos=surv,
+        supervivencia_pct_activos_motivo=surv_motivo,
         alimentaciones_periodo=_i(alim.get("n")),
         alimentacion_por_unidad=[
             UnidadStockOut(unidad=str(r["unidad"]), n_productos=_i(r["n_productos"]), stock=_d3(r["stock"]))
@@ -594,7 +599,7 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
         ],
         cosechas_periodo=_i(cos.get("n")),
         cosechas_peces=_i(cos.get("peces")),
-        cosechas_peso_total=_d3(cos.get("peso")),
+        cosechas_peso_total_kg=_d3(cos.get("peso_kg")),
         mortalidades_periodo=_i(mort.get("n")),
         mortalidades_peces=_i(mort.get("peces")),
         mediciones_agua_periodo=_i(agua.get("n")),

@@ -46,6 +46,8 @@ from app.routers import (
     alarmas,
     dashboard,
     reportes,
+    analisis,
+    referencias_produccion,
 )
 
 settings = get_settings()
@@ -99,6 +101,8 @@ app.include_router(estados_alarma.router, prefix="/api/v1/estados-alarma", tags=
 app.include_router(alarmas.router, prefix="/api/v1/alarmas", tags=["Alarmas"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["Reportes"])
+app.include_router(analisis.router, prefix="/api/v1/analisis", tags=["Análisis"])
+app.include_router(referencias_produccion.router, prefix="/api/v1/referencias-produccion", tags=["Referencias Producción"])
 
 
 # ---------------------------------------------------------------------------

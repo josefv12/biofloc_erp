@@ -10,6 +10,7 @@ from app.models.alimentacion import Alimentacion
 from app.models.cosecha import Cosecha
 from app.models.parametro_agua import ParametroAgua
 from app.models.referencia_agua import ReferenciaAgua
+from app.models.referencia_produccion import ReferenciaProduccion
 from app.models.medicion_agua import MedicionAgua
 from app.models.tipo_aplicacion_biofloc import TipoAplicacionBiofloc
 from app.models.medicion_biofloc import MedicionBiofloc
@@ -39,7 +40,7 @@ __all__ = [
     "EstadoEstanque", "Estanque",
     "Especie", "EtapaProductiva", "EstadoLote", "Lote",
     "Biometria", "Mortalidad", "Alimentacion", "Cosecha",
-    "ParametroAgua", "ReferenciaAgua", "MedicionAgua",
+    "ParametroAgua", "ReferenciaAgua", "ReferenciaProduccion", "MedicionAgua",
     "TipoAplicacionBiofloc", "MedicionBiofloc", "AplicacionBiofloc",
     # Inventario
     "CategoriaInventario", "Unidad", "Producto",

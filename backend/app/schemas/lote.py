@@ -43,7 +43,7 @@ class LoteCreate(BaseModel):
     fecha_siembra: date
     fecha_cierre: Optional[date] = None
     cantidad_sembrada: int
-    peso_inicial_promedio: Optional[float] = None
+    peso_inicial_promedio_g: Optional[float] = None
     observaciones: Optional[str] = None
 
     @field_validator("cantidad_sembrada")
@@ -53,11 +53,11 @@ class LoteCreate(BaseModel):
             raise ValueError("cantidad_sembrada debe ser mayor que 0")
         return v
 
-    @field_validator("peso_inicial_promedio")
+    @field_validator("peso_inicial_promedio_g")
     @classmethod
     def peso_no_negativo(cls, v: Optional[float]) -> Optional[float]:
         if v is not None and v < 0:
-            raise ValueError("peso_inicial_promedio debe ser >= 0")
+            raise ValueError("peso_inicial_promedio_g debe ser >= 0")
         return v
 
     @model_validator(mode="after")
@@ -84,7 +84,7 @@ class LoteOut(BaseModel):
     fecha_siembra: date
     fecha_cierre: Optional[date] = None
     cantidad_sembrada: int
-    peso_inicial_promedio: Optional[float] = None
+    peso_inicial_promedio_g: Optional[float] = None
     observaciones: Optional[str] = None
     created_at: datetime
     updated_at: datetime

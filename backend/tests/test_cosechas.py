@@ -12,7 +12,7 @@ Pruebas:
  6. Lote inexistente
  7. Datos inválidos (tipos incorrectos)
  8. Cantidad inválida (CHECK cantidad_peces > 0)
- 9. Peso inválido (CHECK peso_total > 0)
+ 9. Peso inválido (CHECK peso_total_kg > 0)
 10. Acceso sin JWT (403)
 11. Permisos por rol (OPERARIO)
 12. Auditoría en PostgreSQL (INSERT en biofloc.auditoria)
@@ -107,8 +107,8 @@ def test_crear_cosecha_valida(token, lote_id):
         "lote_id": lote_id,
         "fecha_hora": fecha_hora,
         "cantidad_peces": 120,
-        "peso_total": 60.500,
-        "peso_promedio": 0.504,
+        "peso_total_kg": 60.500,
+        "peso_promedio_g": 504.000,
         "observaciones": "[TEST_COSECHA] Cosecha de prueba automatizada"
     }
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token))
@@ -141,7 +141,7 @@ def test_lote_inexistente(token):
         "lote_id": 999999,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_peces": 100,
-        "peso_total": 50.0
+        "peso_total_kg": 50.0
     }
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token))
     ok = r.status_code == 404
@@ -152,7 +152,7 @@ def test_datos_invalidos(token, lote_id):
         "lote_id": lote_id,
         "fecha_hora": "fecha-invalida",
         "cantidad_peces": "cien",
-        "peso_total": 50.0
+        "peso_total_kg": 50.0
     }
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
@@ -163,7 +163,7 @@ def test_cantidad_invalida_check(token, lote_id):
         "lote_id": lote_id,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_peces": 0,
-        "peso_total": 50.0
+        "peso_total_kg": 50.0
     }
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
@@ -174,11 +174,11 @@ def test_peso_invalido_check(token, lote_id):
         "lote_id": lote_id,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_peces": 10,
-        "peso_total": -5.0
+        "peso_total_kg": -5.0
     }
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token))
     ok = r.status_code == 422
-    log(10, "POST /cosechas con peso_total <= 0 (CHECK > 0) -> 422", ok, f"status={r.status_code}")
+    log(10, "POST /cosechas con peso_total_kg <= 0 (CHECK > 0) -> 422", ok, f"status={r.status_code}")
 
 def test_permisos_operario(lote_id):
     token_op = get_token(OPERARIO_USER, OPERARIO_PASS)
@@ -189,7 +189,7 @@ def test_permisos_operario(lote_id):
         "lote_id": lote_id,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad_peces": 50,
-        "peso_total": 25.0,
+        "peso_total_kg": 25.0,
         "observaciones": "[TEST_COSECHA] Operario test"
     }
     r = requests.post(f"{BASE}/api/v1/cosechas/", json=payload, headers=auth_header(token_op))

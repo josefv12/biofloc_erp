@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --bf-bg: #eef2ef;
+  --bf-header: #fbfcfb;
+  --bf-sidebar: #16332d;
+  --bf-ink: #1c2b27;
+  --bf-muted: #5d6e68;
+  --bf-accent: #2f6f5e;
+  --bf-border: #d5ddd8;
+  --bf-chip: #e7eee9;
+  --bf-table-head: #f3f6f4;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--bf-ink);
+  background: var(--bf-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-sans);
+}
+
+.bf-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--bf-border);
+  background: #fff;
+  padding: 0.55rem 0.75rem;
+  color: var(--bf-ink);
+  outline: none;
+}
+
+.bf-input:focus {
+  border-color: var(--bf-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-accent) 18%, transparent);
+}
+
+.bf-btn-primary,
+.bf-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.bf-btn-primary {
+  background: var(--bf-accent);
+  color: #fff;
+}
+
+.bf-btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.bf-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bf-btn-secondary {
+  background: #fff;
+  color: var(--bf-ink);
+  border-color: var(--bf-border);
+}
+
+.bf-btn-secondary:hover {
+  background: var(--bf-chip);
+}
+
+@media print {
+  header,
+  aside,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+}

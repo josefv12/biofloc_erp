@@ -116,14 +116,17 @@ CREATE TABLE lotes (
     fecha_siembra DATE NOT NULL,
     fecha_cierre DATE,
     cantidad_sembrada INTEGER NOT NULL,
-    peso_inicial_promedio NUMERIC(10,3),
+    peso_inicial_promedio_g NUMERIC(10,3),
     observaciones TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (cantidad_sembrada > 0),
-    CHECK (peso_inicial_promedio IS NULL OR peso_inicial_promedio >= 0),
+    CHECK (peso_inicial_promedio_g IS NULL OR peso_inicial_promedio_g >= 0),
     CHECK (fecha_cierre IS NULL OR fecha_cierre >= fecha_siembra)
 );
+
+COMMENT ON COLUMN lotes.peso_inicial_promedio_g IS
+    'Peso promedio individual de los peces al momento de la siembra, en gramos (g).';
 
 -- ============================================================
 -- 4. PRODUCCIÓN
@@ -134,7 +137,7 @@ CREATE TABLE biometrias (
     lote_id BIGINT NOT NULL REFERENCES lotes(id),
     fecha_hora TIMESTAMPTZ NOT NULL,
     cantidad_muestra INTEGER NOT NULL,
-    peso_total_muestra NUMERIC(12,3) NOT NULL,
+    peso_total_muestra_g NUMERIC(12,3) NOT NULL,
     observaciones TEXT,
     registrado_por BIGINT NOT NULL REFERENCES usuarios(id),
     talla_promedio       NUMERIC(10,2) CHECK (talla_promedio >= 0),
@@ -142,8 +145,11 @@ CREATE TABLE biometrias (
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (cantidad_muestra > 0),
-    CHECK (peso_total_muestra > 0)
+    CHECK (peso_total_muestra_g > 0)
 );
+
+COMMENT ON COLUMN biometrias.peso_total_muestra_g IS
+    'Peso total de la muestra biometrada, en gramos (g). peso_total_muestra_g / cantidad_muestra = peso promedio por pez en gramos.';
 
 CREATE TABLE mortalidades (
     id BIGSERIAL PRIMARY KEY,
@@ -162,15 +168,20 @@ CREATE TABLE cosechas (
     lote_id BIGINT NOT NULL REFERENCES lotes(id),
     fecha_hora TIMESTAMPTZ NOT NULL,
     cantidad_peces INTEGER NOT NULL,
-    peso_total NUMERIC(12,3) NOT NULL,
-    peso_promedio NUMERIC(10,3),
+    peso_total_kg NUMERIC(12,3) NOT NULL,
+    peso_promedio_g NUMERIC(10,3),
     observaciones TEXT,
     registrado_por BIGINT NOT NULL REFERENCES usuarios(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (peso_total > 0),
+    CHECK (peso_total_kg > 0),
     CHECK (cantidad_peces > 0),
-    CHECK (peso_promedio IS NULL OR peso_promedio >= 0)
+    CHECK (peso_promedio_g IS NULL OR peso_promedio_g >= 0)
 );
+
+COMMENT ON COLUMN cosechas.peso_total_kg IS
+    'Peso total cosechado, en kilogramos (kg).';
+COMMENT ON COLUMN cosechas.peso_promedio_g IS
+    'Peso promedio individual de los peces cosechados, en gramos (g).';
 
 -- ============================================================
 -- 5. AGUA
@@ -826,11 +837,11 @@ SELECT DISTINCT ON (lote_id)
     lote_id,
     fecha_hora,
     cantidad_muestra,
-    peso_total_muestra,
+    peso_total_muestra_g,
     ROUND(
-        peso_total_muestra / NULLIF(cantidad_muestra, 0),
+        peso_total_muestra_g / NULLIF(cantidad_muestra, 0),
         3
-    ) AS peso_promedio
+    ) AS peso_promedio_g
 FROM biometrias
 ORDER BY lote_id, fecha_hora DESC;
 
