@@ -29,13 +29,14 @@ def listar(
     tipo_equipo_id: Optional[int] = None,
     estado_id: Optional[int] = None,
     codigo: Optional[str] = None,
+    nombre: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
     _require_roles(current_user, db, ROLES_LECTURA)
     return svc.listar_equipos(
         db, solo_activos=solo_activos, tipo_equipo_id=tipo_equipo_id,
-        estado_id=estado_id, codigo=codigo,
+        estado_id=estado_id, codigo=codigo, nombre=nombre,
     )
 
 

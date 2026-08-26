@@ -62,17 +62,15 @@ def get_token(correo, password):
 def auth_header(token):
     return {"Authorization": f"Bearer {token}"}
 
+from lote_operativo import asegurar_lote, asegurar_stock, limpiar_fixtures, obtener_producto_activo
+
+PRODUCTO_ID = None
+
 def obtener_lote_valido():
     try:
-        conn = psycopg2.connect(**DB_CONF)
-        cur = conn.cursor()
-        cur.execute("SELECT id FROM biofloc.lotes WHERE id = 7;")
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return row[0] if row else None
+        return asegurar_lote()[0]
     except Exception as e:
-        print(f"  [WARN] No se pudo conectar a PostgreSQL: {e}")
+        print(f"  [WARN] No se pudo resolver un lote operativo: {e}")
         return None
 
 def test_health():
@@ -94,7 +92,7 @@ def test_sin_jwt():
 def test_datos_invalidos_cantidad(token, lote_id):
     payload = {
         "lote_id": lote_id,
-        "producto_id": 1,
+        "producto_id": PRODUCTO_ID,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad": 0,
         "observaciones": "Prueba"
@@ -106,7 +104,7 @@ def test_datos_invalidos_cantidad(token, lote_id):
 def test_lote_inexistente(token):
     payload = {
         "lote_id": 999999,
-        "producto_id": 1,
+        "producto_id": PRODUCTO_ID,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad": 10.5,
         "observaciones": "Prueba"
@@ -119,7 +117,7 @@ def test_crear_alimentacion(token, lote_id):
     fecha_hora = datetime.now(timezone.utc).isoformat()
     payload = {
         "lote_id": lote_id,
-        "producto_id": 1,
+        "producto_id": PRODUCTO_ID,
         "fecha_hora": fecha_hora,
         "cantidad": 5.25,
         "observaciones": "[TEST] Racion de la mañana"
@@ -173,7 +171,7 @@ def test_asociacion_lote(a_id, lote_id):
         row = cur.fetchone()
         cur.close()
         conn.close()
-        ok = row is not None and row[0] == lote_id and row[1] == 1
+        ok = row is not None and row[0] == lote_id and row[1] == PRODUCTO_ID
         detail = f"BD: alimentaciones.lote_id={row[0] if row else 'NULL'} esperado={lote_id}"
     except Exception as e:
         ok = False
@@ -187,7 +185,7 @@ def test_rol_operario(lote_id):
         return
     payload = {
         "lote_id": lote_id,
-        "producto_id": 1,
+        "producto_id": PRODUCTO_ID,
         "fecha_hora": datetime.now(timezone.utc).isoformat(),
         "cantidad": 3.0,
         "observaciones": "Prueba de operario"
@@ -244,9 +242,9 @@ def test_postgresql_integridad():
             "tipos_estanque", "unidades_medida", "usuarios",
             "vista_biomasa_lotes", "tipos_mantenimiento", "alarmas", "ventas",
             "vista_ultima_biometria", "categorias_inventario", "detalles_venta",
-            "vista_supervivencia_lotes", "tipos_movimiento_inventario", "mantenimientos",
+            "tipos_movimiento_inventario", "mantenimientos",
             "unidades", "vista_stock_productos", "categorias_gasto", "referencias_produccion",
-            "detalles_compra", "gastos", "referencias_agua", "tipos_aplicacion_biofloc",
+            "detalles_compra", "gastos", "referencias_agua", "referencias_biofloc", "tipos_aplicacion_biofloc",
             "estados_equipo", "compras", "mediciones_biofloc", "niveles_alarma",
             "tipos_alarma", "eventos_energia", "estados_alarma", "productos", "fallas"
         }
@@ -305,6 +303,14 @@ if __name__ == "__main__":
         print("\n  [ERROR] Login fallo. Verificar credenciales.")
         sys.exit(1)
 
+    try:
+        PRODUCTO_ID = obtener_producto_activo(token)
+        asegurar_stock(token, PRODUCTO_ID, 100.0)
+        print(f"  [INFO] Usando producto_id={PRODUCTO_ID}\n")
+    except Exception as e:
+        print(f"\n  [ERROR] No hay producto activo para pruebas: {e}")
+        sys.exit(1)
+
     test_sin_jwt()                                 # 9
     test_datos_invalidos_cantidad(token, lote_id)  # 7
     test_lote_inexistente(token)                   # 8
@@ -325,5 +331,7 @@ if __name__ == "__main__":
     print("="*60)
 
     limpiar_datos_prueba()
+    leftover = limpiar_fixtures()
+    print(f"  [CLEAN] LEFTOVER TEST_FIXTURE={leftover}")
 
-    sys.exit(0 if passed == total else 1)
+    sys.exit(0 if passed == total and leftover == 0 else 1)

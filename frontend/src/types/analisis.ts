@@ -67,6 +67,8 @@ export type AnalisisIndicadores = {
   mortalidad_porcentaje: ApiDecimal | null;
   ultima_biometria_id: number | null;
   peso_promedio_g: ApiDecimal | null;
+  talla_promedio: ApiDecimal | null;
+  unidad_talla: string | null;
   fecha_ultima_biometria: string | null;
   peso_inicial_g: ApiDecimal | null;
   dias_cultivo: number;
@@ -79,8 +81,16 @@ export type AnalisisIndicadores = {
   fca: ApiDecimal | null;
   fca_disponible: boolean;
   fca_motivo: string | null;
+  sgr_pct_dia: ApiDecimal | null;
+  densidad_kg_m3: ApiDecimal | null;
+  volumen_util_m3: ApiDecimal | null;
   racion_diaria_recomendada_kg: ApiDecimal | null;
   numero_raciones_diarias: number | null;
+  semana_productiva_alimentacion: number | null;
+  biomasa_esperada_kg: ApiDecimal | null;
+  raciones_diarias_texto: string | null;
+  racion_por_comida_kg: ApiDecimal | null;
+  racion_basada_en_peso: string | null;
 };
 
 export type AnalisisReferenciaProduccion = {
@@ -103,12 +113,76 @@ export type AnalisisReferenciaSemana = {
   motivo: string | null;
 };
 
+export type ReferenciaAlimentacionActiva = {
+  semana_productiva: number;
+  fase: string | null;
+  peso_esperado_g: ApiDecimal | null;
+  peso_real_g: ApiDecimal | null;
+  peso_inicial_g: ApiDecimal | null;
+  peso_operativo_g: ApiDecimal | null;
+  peso_para_racion_g: ApiDecimal | null;
+  basada_en_peso: string | null;
+  peso_utilizado: "real" | "inicial" | "esperado" | null;
+  diferencia_peso_g: ApiDecimal | null;
+  poblacion_estimada: number;
+  biomasa_esperada_kg: ApiDecimal | null;
+  biomasa_para_racion_kg: ApiDecimal | null;
+  tasa_alimentacion_pct: ApiDecimal | null;
+  raciones_diarias: string | null;
+  raciones_min: number | null;
+  raciones_max: number | null;
+  numero_raciones_diarias: number | null;
+  racion_diaria_recomendada_kg: ApiDecimal | null;
+  racion_diaria_recomendada_g: ApiDecimal | null;
+  racion_por_comida_kg: ApiDecimal | null;
+  racion_por_comida_g: ApiDecimal | null;
+  racion_por_comida_min_kg: ApiDecimal | null;
+  racion_por_comida_max_kg: ApiDecimal | null;
+  racion_por_comida_min_g: ApiDecimal | null;
+  racion_por_comida_max_g: ApiDecimal | null;
+  alimento_referencia_1000_peces_kg: ApiDecimal | null;
+  fuente: string;
+  referencia_bd_id: number | null;
+};
+
+export type AlimentacionComparativaPunto = {
+  fecha: string;
+  real_kg: ApiDecimal;
+  recomendada_kg: ApiDecimal | null;
+  desviacion_kg: ApiDecimal | null;
+  desviacion_porcentaje: ApiDecimal | null;
+  semana_cultivo: number;
+};
+
+export type FilaReferenciaAlimentacion = {
+  semana: number;
+  fase: string;
+  peso_esperado_g: ApiDecimal;
+  tasa_alimentacion_pct: ApiDecimal;
+  raciones_diarias: string;
+  raciones_min: number;
+  raciones_max: number;
+  numero_raciones_diarias: number | null;
+  alimento_referencia_1000_peces_kg: ApiDecimal;
+};
+
+export type TablaReferenciaAlimentacion = {
+  version: string;
+  especie: string;
+  semanas: number;
+  base_peces_referencia: number;
+  nota: string;
+  filas: FilaReferenciaAlimentacion[];
+};
+
 export type AnalisisBiometria = {
   id: number;
   fecha_hora: string;
   cantidad_muestra: number;
   peso_total_muestra_g: ApiDecimal;
   peso_promedio_g: ApiDecimal | null;
+  talla_promedio: ApiDecimal | null;
+  unidad_talla: string | null;
   semana_cultivo: number;
   referencia_id: number | null;
   peso_esperado_g: ApiDecimal | null;
@@ -214,6 +288,8 @@ export type AnalisisAguaMedicion = {
   valor_minimo: ApiDecimal | null;
   valor_maximo: ApiDecimal | null;
   fuera_de_rango: boolean | null;
+  registrado_por?: number | null;
+  registrado_por_nombre?: string | null;
 };
 
 export type AnalisisAguaEstadisticas = {
@@ -234,6 +310,8 @@ export type AnalisisBioflocMedicion = {
   volumen_sedimentable: ApiDecimal;
   unidad: string;
   relacion_cn: ApiDecimal | null;
+  registrado_por?: number | null;
+  registrado_por_nombre?: string | null;
 };
 
 export type AnalisisAlimentoRegistro = {
@@ -251,6 +329,7 @@ export type AnalisisAlimentoRegistro = {
 
 export type AnalisisEstadisticas = {
   peso_promedio_g: AnalisisStats;
+  talla_promedio: AnalisisStats;
   biomasa_kg: AnalisisStats;
   poblacion_estimada: AnalisisStats;
   supervivencia_porcentaje: AnalisisStats;
@@ -328,6 +407,8 @@ export type AnalisisLote = {
   biofloc_serie: AnalisisBioflocMedicion[];
   alimentacion_real_por_unidad: Array<{ unidad: string; cantidad: ApiDecimal }>;
   alimentacion_real: AnalisisAlimentoRegistro[];
+  referencia_alimentacion: ReferenciaAlimentacionActiva | null;
+  serie_alimentacion_comparativa: AlimentacionComparativaPunto[];
 };
 
 export type EstanqueComparativo = {
@@ -376,6 +457,8 @@ export type ResumenGranja = {
   lotes_con_fca: number;
   fca: ApiDecimal | null;
   fca_motivo: string;
+  alimento_real_acumulado_kg: ApiDecimal | null;
+  lotes_sin_alimento: number;
   peso_cosechado_kg: ApiDecimal;
   peces_cosechados: number;
   ingresos_lotes_activos: ApiDecimal;

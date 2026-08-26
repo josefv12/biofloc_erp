@@ -17,6 +17,7 @@ from app.schemas.dashboard import (
     DashboardVentasOut, DashboardGastosOut, DashboardEquiposOut,
     DashboardEnergiaOut, DashboardAlarmasOut, DashboardProduccionOut,
 )
+from app.services.indicadores_lote import supervivencia_biologica_pct
 
 D2 = Decimal("0.01")
 D3 = Decimal("0.001")
@@ -508,7 +509,8 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
     act = _one(db, """
         SELECT COUNT(*) AS n,
                COALESCE(SUM(v.poblacion_estimada), 0) AS poblacion,
-               COALESCE(SUM(v.cantidad_sembrada), 0) AS sembrada
+               COALESCE(SUM(v.cantidad_sembrada), 0) AS sembrada,
+               COALESCE(SUM(v.mortalidad_acumulada), 0) AS mortalidad
         FROM vista_biomasa_lotes v
         JOIN lotes l ON l.id = v.lote_id
         JOIN estados_lote el ON el.id = l.estado_id
@@ -516,10 +518,12 @@ def produccion(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
     """, {})
     sembrada = _i(act.get("sembrada"))
     poblacion = _i(act.get("poblacion"))
-    # Sin peces sembrados el porcentaje no existe: se informa null con motivo,
+    mortalidad = _i(act.get("mortalidad"))
+    # Supervivencia biológica de lotes activos: (sembrados − muertos) / sembrados.
+    # La cosecha no entra. Sin siembra el porcentaje no existe: null con motivo,
     # nunca 0, que se leería como mortalidad total.
     if sembrada > 0:
-        surv = (Decimal(poblacion) / Decimal(sembrada) * Decimal("100")).quantize(D2, rounding=ROUND_HALF_UP)
+        surv = supervivencia_biologica_pct(sembrada, mortalidad)
         surv_motivo = None
     else:
         surv = None

@@ -107,6 +107,13 @@ def evaluar_objetivo(
     )
 
 
+def _texto_objetivo(objetivo: Optional[Decimal], unidad: Optional[str]) -> str:
+    if objetivo is None:
+        return ""
+    sufijo = f" {unidad}" if unidad else ""
+    return f" Objetivo configurado: {_d6(objetivo)}{sufijo} (informativo; no sustituye el rango)."
+
+
 def evaluar_rango(
     *,
     indicador: str,
@@ -117,18 +124,20 @@ def evaluar_rango(
     unidad: Optional[str],
     referencia: Optional[str] = None,
     fecha_real: Optional[date] = None,
+    objetivo: Optional[Decimal] = None,
 ) -> EvaluacionIndicadorOut:
-    """Evalúa un rango inclusivo sin inventar bandas de severidad."""
+    """Evalúa un rango inclusivo. El objetivo, si existe, es informativo."""
     if real is None:
         return EvaluacionIndicadorOut(
             indicador=indicador,
             etiqueta=etiqueta,
+            objetivo=objetivo,
             minimo=minimo,
             maximo=maximo,
             unidad=unidad,
             estado_analitico=EstadoAnalitico.SIN_DATOS,
             motivo=MOTIVO_SIN_DATOS,
-            explicacion=f"No hay una medición disponible para {etiqueta}.",
+            explicacion=f"N/D — Sin medición de {etiqueta}.",
             referencia=referencia,
             fecha_real=fecha_real,
         )
@@ -137,12 +146,13 @@ def evaluar_rango(
             indicador=indicador,
             etiqueta=etiqueta,
             real=real,
+            objetivo=objetivo,
             unidad=unidad,
             estado_analitico=EstadoAnalitico.SIN_REFERENCIA,
             motivo=MOTIVO_SIN_REFERENCIA,
             explicacion=(
-                f"{etiqueta} registra {_d6(real)}{f' {unidad}' if unidad else ''}, "
-                "pero no existe un rango configurado."
+                f"Real: {_d6(real)}{f' {unidad}' if unidad else ''}. "
+                "N/D — Sin referencia configurada."
             ),
             referencia=referencia,
             fecha_real=fecha_real,
@@ -159,6 +169,7 @@ def evaluar_rango(
             indicador=indicador,
             etiqueta=etiqueta,
             real=real,
+            objetivo=objetivo,
             minimo=minimo,
             maximo=maximo,
             unidad=unidad,
@@ -167,7 +178,7 @@ def evaluar_rango(
             cumplimiento_rango=CumplimientoRango.DENTRO_RANGO,
             explicacion=(
                 f"El valor real {_d6(real)}{f' {unidad}' if unidad else ''} está dentro "
-                "del rango configurado."
+                f"del rango configurado.{_texto_objetivo(objetivo, unidad)}"
             ),
             referencia=referencia,
             fecha_real=fecha_real,
@@ -180,6 +191,7 @@ def evaluar_rango(
         indicador=indicador,
         etiqueta=etiqueta,
         real=real,
+        objetivo=objetivo,
         minimo=minimo,
         maximo=maximo,
         unidad=unidad,
@@ -191,7 +203,8 @@ def evaluar_rango(
             f"El valor real {_d6(real)}{f' {unidad}' if unidad else ''} está {direccion} "
             f"configurado ({_d6(limite)}{f' {unidad}' if unidad else ''}) por "
             f"{abs(desviacion)}{f' {unidad}' if unidad else ''}. No se asigna severidad "
-            "porque no existen zonas de alerta o criticidad configuradas."
+            f"porque no existen zonas de alerta o criticidad configuradas."
+            f"{_texto_objetivo(objetivo, unidad)}"
         ),
         referencia=referencia,
         fecha_real=fecha_real,
@@ -204,13 +217,20 @@ def recomendacion_agua(
     """Recomienda revisión operativa solo ante un rango formal incumplido."""
     if evaluacion.cumplimiento_rango != CumplimientoRango.FUERA_RANGO:
         return None
+    nombre = evaluacion.etiqueta
+    if evaluacion.minimo is not None and evaluacion.real is not None and evaluacion.real < evaluacion.minimo:
+        que_ocurre = f"{nombre} está por debajo del mínimo configurado"
+    elif evaluacion.maximo is not None and evaluacion.real is not None and evaluacion.real > evaluacion.maximo:
+        que_ocurre = f"{nombre} está por encima del máximo configurado"
+    else:
+        que_ocurre = f"{nombre} está fuera del rango configurado"
     return RecomendacionAnaliticaOut(
         indicador=evaluacion.indicador,
         estado_analitico=evaluacion.estado_analitico,
         cumplimiento_rango=evaluacion.cumplimiento_rango,
         motivo=evaluacion.explicacion,
         recomendacion=(
-            f"Revisar la medición y el control operativo de {evaluacion.etiqueta} "
+            f"{que_ocurre}. Revisar la medición y el control operativo de {nombre} "
             "según el protocolo vigente. La aplicación no propone cantidades ni "
             "acciones automáticas."
         ),

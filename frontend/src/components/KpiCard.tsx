@@ -5,17 +5,20 @@ type KpiCardProps = {
   label: string;
   value: ReactNode;
   hint?: string;
+  /** Texto nativo de ayuda (tooltip). No sustituye el valor. */
+  title?: string;
   to?: string;
   emphasize?: boolean;
 };
 
-export function KpiCard({ label, value, hint, to, emphasize = false }: KpiCardProps) {
+export function KpiCard({ label, value, hint, title, to, emphasize = false }: KpiCardProps) {
+  const nd = value === "N/D";
   const body = (
     <>
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--bf-muted)]">{label}</p>
       <p
         className={`mt-2 font-display text-2xl font-semibold ${
-          emphasize ? "text-amber-800" : "text-[var(--bf-ink)]"
+          nd ? "text-[var(--bf-muted)]" : emphasize ? "text-amber-800" : "text-[var(--bf-ink)]"
         }`}
       >
         {value}
@@ -25,18 +28,23 @@ export function KpiCard({ label, value, hint, to, emphasize = false }: KpiCardPr
   );
 
   const className = [
-    "block rounded-xl border bg-white px-4 py-4 shadow-[0_1px_0_rgba(22,51,45,0.04)]",
+    "block rounded-2xl border bg-white px-4 py-4 shadow-[0_1px_2px_rgba(16,40,33,0.04),0_8px_24px_rgba(16,40,33,0.05)] transition-all duration-150 bf-enter",
     emphasize ? "border-amber-200" : "border-[var(--bf-border)]",
-    to ? "transition-colors hover:border-[var(--bf-accent)] hover:bg-[var(--bf-chip)]" : "",
+    "hover:-translate-y-0.5 hover:border-[var(--bf-accent)] hover:shadow-[0_10px_28px_rgba(16,40,33,0.08)]",
+    to ? "hover:bg-[var(--bf-chip)]" : "",
   ].join(" ");
 
   if (to) {
     return (
-      <Link to={to} className={className}>
+      <Link to={to} className={className} title={title}>
         {body}
       </Link>
     );
   }
 
-  return <article className={className}>{body}</article>;
+  return (
+    <article className={className} title={title}>
+      {body}
+    </article>
+  );
 }

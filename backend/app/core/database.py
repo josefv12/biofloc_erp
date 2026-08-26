@@ -14,7 +14,7 @@ settings = get_settings()
 # --- Motor de SQLAlchemy ---
 engine = create_engine(
     settings.database_url,
-    connect_args={"options": "-csearch_path=biofloc"},
+    connect_args={"options": "-csearch_path=biofloc -cclient_encoding=UTF8"},
     echo=settings.app_debug,       # Imprime SQL solo en modo debug
     pool_pre_ping=True,            # Verifica la conexión antes de usarla
     pool_size=5,

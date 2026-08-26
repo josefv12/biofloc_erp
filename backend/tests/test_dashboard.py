@@ -15,11 +15,12 @@ from env_tests import (
     ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
     OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
 )
+from lote_operativo import asegurar_lote, limpiar_fixtures
 
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 PREF = "[TEST_DASHBOARD]"
-DDL_SHA = "9f56e2b4eadad4e92a160e59384d4cd0813996720e25d2a10da65f9ac2ca1cf1"
+DDL_SHA = "cbb32f437ef44b23c62133e24438d39dd3508ea0da8081add7277c5b077aa61a"
 FECHA = date(2099, 6, 15)
 FECHA_VACIA = date(2099, 8, 1)
 T = {
@@ -151,11 +152,15 @@ def main():
     r = qdate("resumen", tok_a, date(2099, 8, 2), date(2099, 8, 1))
     log("10b", "fecha_desde > fecha_hasta -> 422", r.status_code == 422, f"status={r.status_code} body={r.text[:160]}")
 
-    r = requests.get(f"{BASE}/api/v1/lotes/", headers=h(tok_a))
-    ok = r.status_code == 200 and len(r.json()) >= 1
-    if ok:
-        T["lote_id"] = r.json()[0]["id"]
-    log(11, f"Lote real id={T['lote_id']}", ok)
+    try:
+        T["lote_id"] = asegurar_lote(tok_a)[0]
+        ok = True
+    except Exception as exc:  # noqa: BLE001
+        ok = False
+        T["lote_id"] = None
+        log(11, "Lote real", False, str(exc)[:200])
+    else:
+        log(11, f"Lote real id={T['lote_id']}", ok)
 
     r = requests.get(f"{BASE}/api/v1/categorias-gasto/", headers=h(tok_a))
     T["cat_gasto"] = next((c["id"] for c in r.json() if c["nombre"] == "OTROS"), r.json()[0]["id"])
@@ -369,7 +374,7 @@ def main():
     rows = dict(cur.fetchall())
     cur.close()
     conn.close()
-    log(36, "PostgreSQL 42 BASE TABLE + 4 VIEW = 46", rows.get("BASE TABLE") == 42 and rows.get("VIEW") == 4, str(rows))
+    log(36, "PostgreSQL 43 BASE TABLE + 3 VIEW = 46", rows.get("BASE TABLE") == 43 and rows.get("VIEW") == 3, str(rows))
 
     import re
     hits = []
@@ -401,6 +406,8 @@ def main():
         conn.close()
         log(38, f"Limpieza 0 residuales c={nc} v={nv} g={ng} a={na} p={np} e={ne} au={nau}",
             nc == nv == ng == na == np == ne == nau == 0)
+        leftover_fx = limpiar_fixtures()
+        log("38b", f"LEFTOVER TEST_FIXTURE={leftover_fx}", leftover_fx == 0)
     except Exception as e:
         log(38, f"Limpieza EXCEPTION: {e}", False)
 

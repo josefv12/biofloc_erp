@@ -18,6 +18,40 @@ export type UsuarioActual = {
   activo: boolean;
 };
 
+export type RolCatalogo = {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  activo: boolean;
+};
+
+export type UsuarioGestion = {
+  id: number;
+  nombre: string;
+  correo: string;
+  rol_id: number;
+  rol: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UsuarioCreate = {
+  nombre: string;
+  correo: string;
+  password: string;
+  rol_id: number;
+  activo?: boolean;
+};
+
+export type UsuarioUpdate = {
+  nombre?: string;
+  correo?: string;
+  password?: string;
+  rol_id?: number;
+  activo?: boolean;
+};
+
 export type AuthState = {
   token: string | null;
   user: UsuarioActual | null;

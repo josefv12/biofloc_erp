@@ -34,11 +34,16 @@ import { listCategoriasInventario, listTiposMovimientoInventario } from "../../a
 import { listParametrosAgua, listTiposAplicacionBiofloc, listUnidades } from "../../api/operations";
 import { can } from "../../utils/rbac";
 import { NamedCatalogPanel, type NamedCatalogSpec } from "./NamedCatalogPanel";
+import { EspeciesCatalog } from "./EspeciesCatalog";
+import { EtapasProductivasCatalog } from "./EtapasProductivasCatalog";
 import { ReferenciasAguaCatalog } from "./ReferenciasAguaCatalog";
+import { ReferenciasBioflocCatalog } from "./ReferenciasBioflocCatalog";
+import { ReferenciasProduccionCatalog } from "./ReferenciasProduccionCatalog";
 
 const SECTIONS = [
   { id: "agua", label: "Agua" },
   { id: "biofloc", label: "Biofloc" },
+  { id: "produccion", label: "Producción" },
   { id: "inventario", label: "Inventario" },
   { id: "finanzas", label: "Finanzas" },
   { id: "equipos", label: "Equipos" },
@@ -59,6 +64,7 @@ export function CatalogosPage() {
   const rawSeccion = params.get("seccion");
   const seccion: SeccionId = isSeccion(rawSeccion) ? rawSeccion : "agua";
   const puedeEscribir = can(user?.rol, "escribirCatalogo");
+  const puedeEscribirMaestro = can(user?.rol, "escribirCatalogoMaestro");
 
   function setSeccion(id: SeccionId) {
     const next = new URLSearchParams(params);
@@ -67,6 +73,7 @@ export function CatalogosPage() {
   }
 
   const specs: Record<SeccionId, NamedCatalogSpec[]> = {
+    produccion: [],
     agua: [
       {
         title: "Parámetros de agua",
@@ -76,6 +83,8 @@ export function CatalogosPage() {
         update: (id, body) => updateParametroAgua(id, body as Parameters<typeof updateParametroAgua>[1]),
         fields: ["nombre", "unidad", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo parámetro",
+        note: "La unidad es texto del propio parámetro (mg/L, °C, pH). No se toma del catálogo de inventario.",
       },
     ],
     biofloc: [
@@ -87,6 +96,8 @@ export function CatalogosPage() {
         update: (id, body) => updateTipoAplicacionBiofloc(id, body as Parameters<typeof updateTipoAplicacionBiofloc>[1]),
         fields: ["nombre", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo tipo de aplicación",
+        note: "Catálogo operativo de aplicaciones (carbono, probiótico, etc.). No es una referencia de medición.",
       },
     ],
     inventario: [
@@ -98,6 +109,7 @@ export function CatalogosPage() {
         update: (id, body) => updateCategoriaInventario(id, body as Parameters<typeof updateCategoriaInventario>[1]),
         fields: ["nombre", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nueva categoría",
       },
       {
         title: "Unidades",
@@ -107,6 +119,7 @@ export function CatalogosPage() {
         update: (id, body) => updateUnidad(id, body as Parameters<typeof updateUnidad>[1]),
         fields: ["nombre", "simbolo", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nueva unidad",
         note: "La lista sale del API. No hay DELETE: desactive con Inactivo si ya no debe usarse.",
       },
       {
@@ -118,7 +131,8 @@ export function CatalogosPage() {
           updateTipoMovimientoInventario(id, body as Parameters<typeof updateTipoMovimientoInventario>[1]),
         fields: ["nombre", "descripcion", "afecta_stock"],
         canWrite: puedeEscribir,
-        note: "afecta_stock es +1 o −1 según el contrato del API. El stock lo calcula el servidor.",
+        createLabel: "Nuevo tipo de movimiento",
+        note: "Efecto sobre el stock: +1 o −1 según el contrato del API. El stock lo calcula el servidor.",
       },
     ],
     finanzas: [
@@ -130,6 +144,7 @@ export function CatalogosPage() {
         update: (id, body) => updateCategoriaGasto(id, body as Parameters<typeof updateCategoriaGasto>[1]),
         fields: ["nombre", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nueva categoría",
       },
     ],
     equipos: [
@@ -141,6 +156,7 @@ export function CatalogosPage() {
         update: (id, body) => updateTipoEquipo(id, body as Parameters<typeof updateTipoEquipo>[1]),
         fields: ["nombre", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo tipo de equipo",
       },
       {
         title: "Estados de equipo",
@@ -150,6 +166,7 @@ export function CatalogosPage() {
         update: (id, body) => updateEstadoEquipo(id, body as Parameters<typeof updateEstadoEquipo>[1]),
         fields: ["nombre", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo estado",
       },
       {
         title: "Tipos de mantenimiento",
@@ -159,6 +176,7 @@ export function CatalogosPage() {
         update: (id, body) => updateTipoMantenimiento(id, body as Parameters<typeof updateTipoMantenimiento>[1]),
         fields: ["nombre", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo tipo de mantenimiento",
       },
     ],
     alarmas: [
@@ -170,6 +188,7 @@ export function CatalogosPage() {
         update: (id, body) => updateTipoAlarma(id, body as Parameters<typeof updateTipoAlarma>[1]),
         fields: ["nombre", "descripcion", "activo"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo tipo de alarma",
       },
       {
         title: "Niveles de alarma",
@@ -179,6 +198,7 @@ export function CatalogosPage() {
         update: (id, body) => updateNivelAlarma(id, body as Parameters<typeof updateNivelAlarma>[1]),
         fields: ["nombre", "prioridad"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo nivel",
         note: "No tienen campo activo. La prioridad debe ser mayor que 0.",
       },
       {
@@ -189,6 +209,7 @@ export function CatalogosPage() {
         update: (id, body) => updateEstadoAlarma(id, body as Parameters<typeof updateEstadoAlarma>[1]),
         fields: ["nombre", "descripcion"],
         canWrite: puedeEscribir,
+        createLabel: "Nuevo estado",
         lockNombre: (nombre) => ESTADOS_ALARMA_SEMILLA.has(nombre),
         lockNombreHint: "PENDIENTE, ATENDIDA y CERRADA no se pueden renombrar. El servidor rechaza ese cambio.",
         note: "No tienen campo activo. Los estados semilla PENDIENTE, ATENDIDA y CERRADA no se pueden renombrar.",
@@ -200,7 +221,7 @@ export function CatalogosPage() {
     <div>
       <PageHeader
         title="Catálogos"
-        description="Tipos y parámetros de apoyo a la operación. No hay eliminación: donde el API lo permite, se desactiva."
+        description="Agua, Biofloc, producción, inventario, finanzas, equipos y alarmas. Los catálogos maestros (especies y referencias) los escribe solo el administrador. Referencia configurada por administrador: no es una recomendación universal."
       />
 
       <div className="mb-6 flex flex-wrap gap-2">
@@ -216,10 +237,18 @@ export function CatalogosPage() {
         ))}
       </div>
 
+      {seccion === "produccion" ? (
+        <>
+          <EspeciesCatalog canWrite={puedeEscribirMaestro} />
+          <EtapasProductivasCatalog />
+          <ReferenciasProduccionCatalog canWrite={puedeEscribirMaestro} />
+        </>
+      ) : null}
       {specs[seccion].map((spec) => (
         <NamedCatalogPanel key={spec.title} spec={spec} />
       ))}
-      {seccion === "agua" ? <ReferenciasAguaCatalog canWrite={puedeEscribir} /> : null}
+      {seccion === "agua" ? <ReferenciasAguaCatalog canWrite={puedeEscribirMaestro} /> : null}
+      {seccion === "biofloc" ? <ReferenciasBioflocCatalog canWrite={puedeEscribirMaestro} /> : null}
     </div>
   );
 }

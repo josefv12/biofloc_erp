@@ -18,6 +18,7 @@ from app.models.lote import Lote
 from app.models.parametro_agua import ParametroAgua
 from app.models.auditoria import Auditoria
 from app.schemas.medicion_agua import MedicionAguaCreate
+from app.services.poblacion_lote import exigir_lote_en_produccion
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -56,6 +57,7 @@ def crear_medicion_agua(db: Session, data: MedicionAguaCreate, usuario_id: int) 
     lote = db.query(Lote).filter(Lote.id == data.lote_id).first()
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
+    exigir_lote_en_produccion(db, lote)
 
     # 2. Validar parametro_id
     parametro = db.query(ParametroAgua).filter(ParametroAgua.id == data.parametro_id).first()

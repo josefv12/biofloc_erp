@@ -259,10 +259,10 @@ def main():
         cur.execute("SELECT table_type, count(*) FROM information_schema.tables WHERE table_schema='biofloc' GROUP BY table_type;")
         rows = dict(cur.fetchall())
         cur.close(); conn.close()
-        ok_struct = rows.get("BASE TABLE", 0) == 42 and rows.get("VIEW", 0) == 4
+        ok_struct = rows.get("BASE TABLE", 0) == 43 and rows.get("VIEW", 0) == 3
     except Exception as e:
         print(f"Error estructura: {e}")
-    log(22, "POSTGRESQL", "Estructura intacta (42 tablas + 4 vistas = 46 total)", ok_struct)
+    log(22, "POSTGRESQL", "Estructura intacta (43 tablas + 3 vistas = 46 total)", ok_struct)
 
     # [23] No se crearon tablas nuevas — implícito en [22]
     log(23, "CÓDIGO", "No se crearon tablas nuevas", ok_struct)

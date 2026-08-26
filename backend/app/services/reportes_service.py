@@ -12,6 +12,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from app.services.indicadores_lote import supervivencia_biologica_pct
+
 from app.schemas.reportes import (
     UnidadCantidadOut,
     VentaFilaOut, ReporteVentasOut,
@@ -417,14 +419,13 @@ def produccion(db: Session, fecha_desde=None, fecha_hasta=None,
         SELECT l.id AS lote_id, l.codigo, el.nombre AS estado, e.codigo AS estanque_codigo,
                es.nombre_comun AS especie, ep.nombre AS etapa, l.fecha_siembra, l.cantidad_sembrada,
                v.mortalidad_acumulada, v.peces_cosechados, v.poblacion_estimada,
-               s.supervivencia_porcentaje, ub.fecha_hora AS ultima_biometria_fecha, ub.peso_promedio_g
+               ub.fecha_hora AS ultima_biometria_fecha, ub.peso_promedio_g
         FROM lotes l
         JOIN estados_lote el ON el.id = l.estado_id
         JOIN estanques e ON e.id = l.estanque_id
         JOIN especies es ON es.id = l.especie_id
         JOIN etapas_productivas ep ON ep.id = l.etapa_productiva_id
         JOIN vista_biomasa_lotes v ON v.lote_id = l.id
-        JOIN vista_supervivencia_lotes s ON s.lote_id = l.id
         LEFT JOIN vista_ultima_biometria ub ON ub.lote_id = l.id
         WHERE 1=1 {fs} {extra_sql}
         ORDER BY l.codigo
@@ -437,7 +438,9 @@ def produccion(db: Session, fecha_desde=None, fecha_hasta=None,
             fecha_siembra=r["fecha_siembra"], cantidad_sembrada=_i(r["cantidad_sembrada"]),
             mortalidad_acumulada=_i(r["mortalidad_acumulada"]), peces_cosechados=_i(r["peces_cosechados"]),
             poblacion_estimada=_i(r["poblacion_estimada"]),
-            supervivencia_porcentaje=_d2n(r["supervivencia_porcentaje"]),
+            supervivencia_porcentaje=supervivencia_biologica_pct(
+                _i(r["cantidad_sembrada"]), _i(r["mortalidad_acumulada"])
+            ),
             ultima_biometria_fecha=r["ultima_biometria_fecha"], peso_promedio_g=_d3n(r["peso_promedio_g"]),
         ) for r in rows
     ]

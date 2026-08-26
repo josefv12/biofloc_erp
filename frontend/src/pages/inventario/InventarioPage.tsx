@@ -20,7 +20,7 @@ import {
 } from "../../api/inventory";
 import { listUnidades } from "../../api/operations";
 import { apiErrorMessage } from "../../utils/apiError";
-import { formatNumber } from "../../utils/format";
+import { formatNumber, etiquetaProducto } from "../../utils/format";
 import { can } from "../../utils/rbac";
 import type { Producto, ProductoCreate, ProductoUpdate } from "../../types/inventory";
 
@@ -44,6 +44,7 @@ export function InventarioPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [incluirInactivos, setIncluirInactivos] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Producto | null>(null);
   const [toToggle, setToToggle] = useState<Producto | null>(null);
@@ -86,6 +87,14 @@ export function InventarioPage() {
     () => new Map((alertasQuery.data ?? []).map((row) => [row.producto_id, row])),
     [alertasQuery.data],
   );
+  const productosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    const rows = productosQuery.data ?? [];
+    if (!q) return rows;
+    return rows.filter(
+      (row) => row.nombre.toLowerCase().includes(q) || row.codigo.toLowerCase().includes(q),
+    );
+  }, [productosQuery.data, busqueda]);
 
   const form = useForm<ProductoForm>();
 
@@ -183,7 +192,7 @@ export function InventarioPage() {
             rowKey={(row) => row.producto_id}
             empty="No hay productos en SIN_STOCK ni STOCK_BAJO."
             columns={[
-              { key: "codigo", header: "Producto", render: (row) => `${row.codigo} · ${row.nombre}` },
+              { key: "codigo", header: "Producto", render: (row) => etiquetaProducto(row.nombre, row.codigo) },
               {
                 key: "stock",
                 header: "Stock",
@@ -211,8 +220,22 @@ export function InventarioPage() {
       {error ? <ErrorAlert message={apiErrorMessage(error)} /> : null}
 
       {productosQuery.data ? (
+        <div className="mb-3">
+          <label className="text-sm">
+            <span className="mb-1 block text-[var(--bf-muted)]">Buscar por nombre</span>
+            <input
+              className="bf-input max-w-md"
+              value={busqueda}
+              placeholder="Buscar producto…"
+              onChange={(event) => setBusqueda(event.target.value)}
+            />
+          </label>
+        </div>
+      ) : null}
+
+      {productosQuery.data ? (
         <DataTable
-          rows={productosQuery.data}
+          rows={productosFiltrados}
           rowKey={(row) => row.id}
           empty="No hay productos."
           columns={[

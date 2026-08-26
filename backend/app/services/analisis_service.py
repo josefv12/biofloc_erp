@@ -20,6 +20,7 @@ FCA) reconstruyen el estado a la fecha de cada evento con las mismas fórmulas
 congeladas del indicador puntual: no se repite el valor actual en todas las
 fechas ni se interpola.
 """
+import logging
 from bisect import bisect_right
 from dataclasses import dataclass
 from datetime import date, datetime, time
@@ -28,10 +29,14 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import func, text
 from fastapi import HTTPException
 
+from app.models.cosecha import Cosecha
 from app.models.lote import Lote
+from app.models.parametro_agua import ParametroAgua
+from app.models.referencia_agua import ReferenciaAgua
+from app.models.referencia_biofloc import ReferenciaBiofloc
 from app.models.referencia_produccion import ReferenciaProduccion
 from app.schemas.analisis import (
     AguaMedicionOut,
@@ -65,29 +70,51 @@ from app.schemas.analisis import (
     ReferenciaSemanaOut,
     RecomendacionAnaliticaOut,
     ResumenGranjaOut,
+    StatsSerieOut,
 )
 from app.schemas.lote import EspecieOut, EtapaProductivaOut, EstadoLoteOut
 from app.schemas.referencia_produccion import ReferenciaProduccionOut
 from app.services import estadistica_service as est_svc
 from app.services import evaluacion_analitica_service as eval_svc
 from app.services import referencia_produccion_service as ref_svc
+from app.services import alimentacion_referencia_service as alim_ref_svc
+from app.schemas.alimentacion_referencia import (
+    AlimentacionComparativaPuntoOut,
+    ReferenciaAlimentacionActivaOut,
+)
+from app.config.referencia_alimentacion_tilapia import semana_productiva_alimentacion
+from app.services.indicadores_lote import (
+    MOTIVO_COSECHA_SIN_PESO,
+    MOTIVO_SIN_PESO_INICIAL,
+    biomasa_kg,
+    densidad_kg_m3 as dens_oficial,
+    ganancia_biomasa_productiva_kg,
+    ganancia_diaria_g as gpd_oficial,
+    mortalidad_pct,
+    sgr_pct_dia,
+    supervivencia_biologica_pct,
+    volumen_estanque_m3,
+)
+from app.services.poblacion_lote import calcular_poblacion_disponible, obtener_salidas_peces
 
 TZ = ZoneInfo("America/Bogota")
 D2 = Decimal("0.01")
 D3 = Decimal("0.001")
 D4 = Decimal("0.0001")
-D6 = Decimal("0.000001")
 CIEN = Decimal("100")
 MIL = Decimal("1000")
 
 # Factores hacia kg para las unidades de masa declaradas en `unidades.simbolo`.
 FACTOR_A_KG = {"kg": Decimal("1"), "g": Decimal("0.001")}
 
+logger = logging.getLogger(__name__)
+
 RAZON_SIN_BIOMETRIA = "SIN_BIOMETRIA"
 RAZON_SIN_PESO_INICIAL = "SIN_PESO_INICIAL_LOTE"
 RAZON_DIAS_CERO = "DIAS_CULTIVO_CERO"
 RAZON_SIN_ALIMENTO = "SIN_ALIMENTO_REAL_REGISTRADO"
 RAZON_ALIMENTO_UNIDAD = "UNIDAD_ALIMENTO_INCOMPATIBLE"
+RAZON_POBLACION_NEGATIVA = "POBLACION_NEGATIVA_HISTORICA"
 
 # Motivos de FCA no disponible (contrato de la fase).
 FCA_SIN_BIOMASA_INICIAL = "SIN_BIOMASA_INICIAL"
@@ -114,40 +141,51 @@ DEFINICIONES = DefinicionesCalculoOut(
         "puede calcular."
     ),
     semana_cultivo=(
-        "Semana 1 = días 1 a 7; semana 2 = días 8 a 14; y así sucesivamente. "
-        "semana_cultivo = 0 solo el día de la siembra (dias_cultivo = 0), porque la "
-        "semana 1 empieza en el día 1."
+        "Edad del lote desde la siembra (no semana ISO). "
+        "semana = floor(días_cultivo / 7) + 1: día 0–6 = semana 1, día 7–13 = semana 2, "
+        "día 14 = semana 3. El backend es la única fuente; el frontend no recalcula."
     ),
     unidad_masa_productiva=(
         "g para peso individual y peso de muestra de biometría; kg para peso total de "
         "cosecha, biomasa y alimento del FCA. Declarado en el DDL con COMMENT ON COLUMN."
     ),
     biomasa_inicial_kg="cantidad_sembrada × peso_inicial_promedio_g / 1000.",
-    biomasa_actual_kg="poblacion_estimada × peso_promedio_g de la última biometría / 1000.",
+    biomasa_actual_kg="poblacion_estimada × peso_promedio_g de la última biometría / 1000. N/D sin biometría; nunca 0 inventado.",
     ganancia_peso_g="peso_promedio_g de la última biometría − peso_inicial_promedio_g del lote.",
-    ganancia_diaria_g="ganancia_peso_g / dias_cultivo.",
+    ganancia_diaria_g="ganancia_peso_g / dias_cultivo. N/D si dias_cultivo <= 0.",
     alimento_real_acumulado_kg=(
         "Suma del alimento realmente suministrado al lote, convertido a kg solo desde "
         "unidades de masa ('g', 'kg'). Si alguna alimentación está en una unidad que no "
         "es de masa, no se suma nada y el total queda en null."
     ),
     fca=(
-        "alimento_real_acumulado_kg / (biomasa_actual_kg − biomasa_inicial_kg). "
-        "Criterio temporal: ciclo completo del lote, desde la siembra. "
-        "Usa exclusivamente alimento real; nunca alimento recomendado ni ración teórica."
+        "FCA acumulado (económico): kg de alimento real suministrado por cada kg de "
+        "biomasa neta producida. "
+        "alimento_real_acumulado_kg / ganancia_biomasa_productiva_kg. "
+        "ganancia_biomasa_productiva = biomasa_actual + biomasa_cosechada − biomasa_inicial "
+        "cuando la cosecha tiene peso_total_kg. Sin peso de cosecha no se inventa. "
+        "Usa exclusivamente alimento real del lote; nunca inventario. "
+        "Desde la siembra hasta la fecha de análisis; si el lote está cerrado, hasta el cierre. "
+        "El alimento permanece en el numerador aunque haya mortalidades; una mayor mortalidad "
+        "puede aumentar el FCA. No es FCA biológico, ni por etapa, ni por intervalo. "
+        "FCA esperado: sin referencia oficial configurada."
     ),
     referencia_produccion=(
-        "Se resuelve en referencias_produccion por especie + etapa productiva + "
-        "semana_cultivo, entre las activas. Ante rangos de semana solapados se toma el "
-        "más estrecho. Si no existe, es null y no se asume ningún valor."
+        "Se resuelve por especie + semana_cultivo sobre referencias_produccion activas "
+        "(semana_desde <= semana <= semana_hasta). La etapa del lote solo desempata. "
+        "Una sola fuente: no hay fallback a Python. Si no hay fila, N/D."
     ),
     racion_diaria_recomendada_kg=(
-        "biomasa_actual_kg × tasa_alimentacion_pct / 100, con la tasa de la referencia "
-        "de producción aplicable. Es una recomendación: no se guarda como alimentación."
+        "biomasa_operativa_kg × tasa_alimentacion_pct / 100. "
+        "Biomasa operativa = población viva (sembrados − mortalidad − cosecha) × peso_operativo_g / 1000. "
+        "Peso operativo = última biometría válida; si no hay, peso inicial de siembra. "
+        "El peso esperado de la referencia es guía/comparación; no entra en la ración. "
+        "Tasa y raciones de la referencia de esa especie y semana."
     ),
     numero_raciones_diarias=(
-        "Siempre null: no existe todavía una referencia ni configuración formal del "
-        "número de raciones diarias."
+        "Raciones/día de la referencia de la semana. Si es un rango (6–8) se muestra el rango "
+        "y la cantidad por ración como intervalo (diario/raciones_max … diario/raciones_min); "
+        "no se usa el promedio."
     ),
     poblacion_as_of=(
         "Población a la fecha de un evento: cantidad_sembrada − mortalidades con "
@@ -158,11 +196,13 @@ DEFINICIONES = DefinicionesCalculoOut(
     ),
     serie_biomasa=(
         "Por cada biometría: población as-of de esa fecha × peso_promedio_g de esa "
-        "biometría / 1000. ganancia_biomasa_kg = biomasa del punto − biomasa_inicial_kg."
+        "biometría / 1000. ganancia_biomasa_kg = biomasa del punto + biomasa cosechada "
+        "hasta esa fecha − biomasa_inicial_kg."
     ),
     serie_fca=(
-        "Por cada biometría: alimento real acumulado en kg hasta esa fecha / ganancia de "
-        "biomasa acumulada hasta esa fecha. Si la ganancia es <= 0, o falta biomasa "
+        "Evolución del FCA acumulado: por cada biometría, alimento real acumulado en kg "
+        "hasta esa fecha / ganancia de biomasa acumulada hasta esa fecha. "
+        "No es un FCA de intervalo entre biometrías. Si la ganancia es <= 0, o falta biomasa "
         "inicial, o el alimento no es convertible a kg, el punto queda en null con su "
         "motivo. No se arrastra el FCA final hacia atrás."
     ),
@@ -212,8 +252,8 @@ DEFINICIONES_COMPARATIVO = {
         "motivo SIN_LOTE_ACTIVO."
     ),
     "supervivencia_granja": (
-        "Suma de poblaciones estimadas / suma de cantidades sembradas × 100 sobre los "
-        "lotes activos incluidos."
+        "Suma de (sembrados − mortalidad) / suma de cantidades sembradas × 100 sobre los "
+        "lotes activos. La cosecha no entra en la supervivencia biológica."
     ),
     "mortalidad_granja": (
         "Suma de mortalidades acumuladas / suma de cantidades sembradas × 100 sobre los "
@@ -223,10 +263,16 @@ DEFINICIONES_COMPARATIVO = {
         "Suma de las biomasas actuales disponibles. lotes_sin_biomasa indica cuántos "
         "lotes activos no aportan biomasa por falta de biometría."
     ),
+    "alimento_granja": (
+        "Suma del alimento real acumulado (kg) de los lotes activos donde el backend "
+        "pudo convertirlo a kg. lotes_sin_alimento indica cuántos lotes no aportan "
+        "ese total. No es un nuevo cálculo de ración ni de FCA."
+    ),
     "fca_granja": (
-        "null: agregar FCA entre lotes exige una regla formal (por biomasa, por alimento "
-        "o promedio simple) que todavía no está definida. Se informa cuántos lotes tienen "
-        "FCA disponible."
+        "N/D: actualmente no existe una regla oficial para agregar el FCA de varios lotes "
+        "(por biomasa, por alimento o promedio simple). No se inventa un promedio. "
+        "Se informa cuántos lotes tienen FCA acumulado disponible. El FCA pertenece al lote, "
+        "no al estanque."
     ),
     "estado_agua": (
         "Cuenta de parámetros con última medición, de cuántos tienen referencia para la "
@@ -266,11 +312,11 @@ def _hoy_bogota() -> date:
 
 
 def _dias_semana(fecha_siembra: date, fecha_fin: date) -> tuple[int, int]:
-    """Días de cultivo y semana de cultivo (semana 1 = días 1 a 7)."""
+    """Días de cultivo y semana: floor(días / 7) + 1. Día 0–6 = semana 1."""
     dias = (fecha_fin - fecha_siembra).days
     if dias < 0:
         dias = 0
-    semana = 0 if dias == 0 else (dias + 6) // 7
+    semana = semana_productiva_alimentacion(dias)
     return dias, semana
 
 
@@ -284,6 +330,25 @@ def _fecha_local(momento: datetime) -> date:
     if momento.tzinfo is None:
         return momento.date()
     return momento.astimezone(TZ).date()
+
+
+SQL_ULTIMA_BIOMETRIA_LOTE = """
+SELECT id, fecha_hora,
+       ROUND(peso_total_muestra_g / NULLIF(cantidad_muestra, 0), 3) AS peso_promedio_g,
+       talla_promedio, unidad_talla
+FROM biometrias
+WHERE lote_id = :lote_id
+ORDER BY fecha_hora DESC, id DESC
+LIMIT 1
+"""
+
+
+def elegir_ultima_biometria(filas: list[dict]) -> Optional[dict]:
+    """Misma regla que SQL_ULTIMA_BIOMETRIA_LOTE: fecha_hora DESC, id DESC."""
+    validas = [fila for fila in filas if fila.get("fecha_hora") is not None and fila.get("id") is not None]
+    if not validas:
+        return None
+    return max(validas, key=lambda fila: (fila["fecha_hora"], fila["id"]))
 
 
 def _porcentaje(parte: int, total: int) -> Optional[Decimal]:
@@ -302,7 +367,27 @@ def _alimento_kg(por_unidad: list[AlimentoUnidadOut]) -> tuple[Optional[Decimal]
         if factor is None:
             return None, RAZON_ALIMENTO_UNIDAD
         total += Decimal(str(fila.cantidad)) * factor
-    return total, None
+    return total.quantize(D3, rounding=ROUND_HALF_UP), None
+
+
+def _fca_oficial(
+    alimento_kg: Optional[Decimal],
+    razon_alimento: Optional[str],
+    ganancia: Optional[Decimal],
+    motivo_ganancia: Optional[str],
+) -> tuple[Optional[Decimal], Optional[str]]:
+    """alimento / ganancia productiva. Nunca divide por 0 ni por ganancia negativa."""
+    if ganancia is None:
+        if motivo_ganancia == MOTIVO_SIN_PESO_INICIAL:
+            return None, FCA_SIN_BIOMASA_INICIAL
+        if motivo_ganancia == MOTIVO_COSECHA_SIN_PESO:
+            return None, MOTIVO_COSECHA_SIN_PESO
+        return None, FCA_SIN_BIOMASA_FINAL
+    if alimento_kg is None or alimento_kg <= 0:
+        return None, razon_alimento or RAZON_SIN_ALIMENTO
+    if ganancia <= 0:
+        return None, FCA_GANANCIA_NO_POSITIVA
+    return (alimento_kg / ganancia).quantize(D4, rounding=ROUND_HALF_UP), None
 
 
 def _comparacion(
@@ -350,10 +435,13 @@ class _Contexto:
     peso_promedio_g: Optional[Decimal]
     biomasa_inicial_kg: Optional[Decimal]
     biomasa_actual_kg: Optional[Decimal]
+    biomasa_cosechada_kg: Decimal
+    ganancia_biomasa_kg: Optional[Decimal]
     alimento_por_unidad: list[AlimentoUnidadOut]
     alimento_kg: Optional[Decimal]
     razon_alimento: Optional[str]
     referencia: Optional[ReferenciaProduccion]
+    referencia_alimentacion: Optional[ReferenciaAlimentacionActivaOut]
     indicadores: IndicadoresLoteOut
     pendientes: dict[str, str]
 
@@ -388,23 +476,32 @@ def _bloques_productivos(
         {"lote_id": lote.id},
     ).mappings().one()
 
-    ganancia_biomasa = None
-    if ctx.biomasa_actual_kg is not None and ctx.biomasa_inicial_kg is not None:
-        ganancia_biomasa = _d3(ctx.biomasa_actual_kg - ctx.biomasa_inicial_kg)
-
     motivos_productividad: dict[str, str] = {}
     if ctx.biomasa_actual_kg is None:
         motivos_productividad["biomasa_actual_kg"] = ctx.pendientes.get(
             "biomasa_actual_kg", RAZON_SIN_BIOMETRIA
         )
-    if ganancia_biomasa is None:
+    ganancia_biomasa, motivo_ganancia = ganancia_biomasa_productiva_kg(
+        ctx.biomasa_actual_kg,
+        ctx.biomasa_inicial_kg,
+        ctx.biomasa_cosechada_kg,
+        hay_cosecha=ctx.cosechados > 0,
+        cosecha_con_peso=ctx.biomasa_cosechada_kg > 0,
+    )
+    if ganancia_biomasa is None and motivo_ganancia:
+        motivos_productividad["ganancia_biomasa_kg"] = motivo_ganancia
+    elif ganancia_biomasa is None:
         motivos_productividad["ganancia_biomasa_kg"] = (
             FCA_SIN_BIOMASA_INICIAL
             if ctx.biomasa_inicial_kg is None
             else FCA_SIN_BIOMASA_FINAL
         )
 
-    peso_objetivo = _d2n(ctx.referencia.peso_esperado_g) if ctx.referencia else None
+    peso_objetivo = (
+        _d2n(ctx.referencia_alimentacion.peso_esperado_g)
+        if ctx.referencia_alimentacion is not None
+        else None
+    )
     desviacion_peso = None
     if ctx.peso_promedio_g is not None and peso_objetivo not in (None, Decimal("0")):
         desviacion_peso = (
@@ -451,8 +548,112 @@ def _bloques_productivos(
     return productividad, eficiencia, finanzas_lote
 
 
+def _evaluar_biofloc(
+    db: Session,
+    lote: Lote,
+    *,
+    indicador: str,
+    etiqueta: str,
+    real,
+    unidad: Optional[str],
+    fecha_real,
+):
+    """Contrasta medición Biofloc con la referencia digitada, si existe.
+
+    No inventa C:N ni sólidos. Si el administrador no configuró rango ni
+    objetivo, se mantiene SIN_REFERENCIA_BIOFLOC.
+    """
+    codigo = "VOLUMEN_SEDIMENTABLE" if indicador == "volumen_sedimentable" else "RELACION_CN"
+    ref = (
+        db.query(ReferenciaBiofloc)
+        .filter(
+            ReferenciaBiofloc.especie_id == lote.especie_id,
+            ReferenciaBiofloc.etapa_productiva_id == lote.etapa_productiva_id,
+            ReferenciaBiofloc.indicador == codigo,
+            ReferenciaBiofloc.activo.is_(True),
+        )
+        .first()
+    )
+    minimo = _d4n(ref.valor_minimo) if ref else None
+    maximo = _d4n(ref.valor_maximo) if ref else None
+    objetivo = _d4n(ref.valor_objetivo) if ref else None
+    unidad_ref = (ref.unidad if ref and ref.unidad else unidad)
+    if minimo is not None or maximo is not None:
+        evaluacion = eval_svc.evaluar_rango(
+            indicador=indicador,
+            etiqueta=etiqueta,
+            real=real,
+            minimo=minimo,
+            maximo=maximo,
+            objetivo=objetivo,
+            unidad=unidad_ref,
+            fecha_real=fecha_real,
+        )
+    else:
+        evaluacion = eval_svc.evaluar_objetivo(
+            indicador=indicador,
+            etiqueta=etiqueta,
+            real=real,
+            objetivo=objetivo,
+            unidad=unidad_ref,
+            fecha_real=fecha_real,
+            motivo_sin_referencia="SIN_REFERENCIA_BIOFLOC",
+        )
+    return evaluacion
+
+
+def _evaluaciones_agua_catalogo(
+    db: Session,
+    lote: Lote,
+    agua: list[AguaMedicionOut],
+    ya_evaluadas: list,
+) -> list:
+    """Completa parámetros del catálogo sin medición. No pisa agua:{id} ya evaluado."""
+    vistos = {ev.indicador for ev in ya_evaluadas}
+    mediciones = {m.parametro_id for m in agua}
+    refs = {
+        int(r.parametro_id): r
+        for r in db.query(ReferenciaAgua)
+        .filter(
+            ReferenciaAgua.especie_id == lote.especie_id,
+            ReferenciaAgua.etapa_productiva_id == lote.etapa_productiva_id,
+            ReferenciaAgua.activo.is_(True),
+        )
+        .all()
+    }
+    extras = []
+    parametros = (
+        db.query(ParametroAgua)
+        .filter(ParametroAgua.activo.is_(True))
+        .order_by(ParametroAgua.id)
+        .all()
+    )
+    for parametro in parametros:
+        clave = f"agua:{parametro.id}"
+        if clave in vistos or parametro.id in mediciones:
+            continue
+        ref = refs.get(int(parametro.id))
+        extras.append(
+            eval_svc.evaluar_rango(
+                indicador=clave,
+                etiqueta=parametro.nombre,
+                real=None,
+                minimo=_d4n(ref.valor_minimo) if ref else None,
+                maximo=_d4n(ref.valor_maximo) if ref else None,
+                unidad=parametro.unidad,
+                referencia=(
+                    f"{lote.especie.nombre_comun} / {lote.etapa_productiva.nombre} / {parametro.nombre}"
+                    if ref
+                    else None
+                ),
+            )
+        )
+    return extras
+
+
 def _construir_evaluaciones(
     *,
+    db: Session,
     lote: Lote,
     ctx: _Contexto,
     agua: list[AguaMedicionOut],
@@ -468,10 +669,15 @@ def _construir_evaluaciones(
     evaluaciones: list[EvaluacionIndicadorOut] = []
     recomendaciones: list[RecomendacionAnaliticaOut] = []
 
+    peso_catalogo = (
+        _d2n(ctx.referencia_alimentacion.peso_esperado_g)
+        if ctx.referencia_alimentacion is not None
+        else None
+    )
     referencia_peso = (
-        f"{lote.especie.nombre_comun} / {lote.etapa_productiva.nombre} / "
-        f"Semana {ctx.semana} / referencia #{ctx.referencia.id}"
-        if ctx.referencia is not None
+        f"{lote.especie.nombre_comun} / semana {ctx.semana} / "
+        f"referencia #{ctx.referencia_alimentacion.referencia_bd_id}"
+        if ctx.referencia_alimentacion is not None and ctx.referencia_alimentacion.referencia_bd_id
         else None
     )
     evaluaciones.append(
@@ -479,7 +685,7 @@ def _construir_evaluaciones(
             indicador="peso_promedio_g",
             etiqueta="Peso promedio",
             real=ctx.peso_promedio_g,
-            objetivo=_d2n(ctx.referencia.peso_esperado_g) if ctx.referencia else None,
+            objetivo=peso_catalogo,
             unidad="g",
             referencia=referencia_peso,
             fecha_real=(
@@ -487,10 +693,10 @@ def _construir_evaluaciones(
                 if ctx.indicadores.fecha_ultima_biometria
                 else None
             ),
-            fecha_referencia=_hoy_bogota() if ctx.referencia else None,
+            fecha_referencia=_hoy_bogota() if peso_catalogo is not None else None,
             motivo_sin_datos=RAZON_SIN_BIOMETRIA,
             motivo_sin_referencia=(
-                RAZON_SIN_REFERENCIA if ctx.referencia is None else RAZON_SIN_PESO_ESPERADO
+                RAZON_SIN_REFERENCIA if ctx.referencia_alimentacion is None else RAZON_SIN_PESO_ESPERADO
             ),
         )
     )
@@ -528,6 +734,8 @@ def _construir_evaluaciones(
             )
         )
 
+    evaluaciones.extend(_evaluaciones_agua_catalogo(db, lote, agua, evaluaciones))
+
     fecha_alimento: Optional[date] = None
     alimento_diario: Optional[Decimal] = None
     motivo_alimento = RAZON_SIN_ALIMENTO
@@ -552,7 +760,7 @@ def _construir_evaluaciones(
             objetivo=ctx.indicadores.racion_diaria_recomendada_kg,
             unidad="kg/día",
             referencia=(
-                f"Ración recomendada actual / semana {ctx.semana}"
+                f"Ración recomendada / semana productiva {ctx.indicadores.semana_productiva_alimentacion}"
                 if ctx.indicadores.racion_diaria_recomendada_kg is not None
                 else None
             ),
@@ -569,7 +777,7 @@ def _construir_evaluaciones(
         [
             eval_svc.evaluar_objetivo(
                 indicador="fca",
-                etiqueta="FCA",
+                etiqueta="FCA acumulado",
                 real=ctx.indicadores.fca,
                 objetivo=None,
                 unidad=None,
@@ -592,26 +800,31 @@ def _construir_evaluaciones(
                 unidad="%",
                 motivo_sin_referencia="SIN_REFERENCIA_SUPERVIVENCIA",
             ),
-            eval_svc.evaluar_objetivo(
+            _evaluar_biofloc(
+                db,
+                lote,
                 indicador="volumen_sedimentable",
-                etiqueta="Volumen sedimentable",
+                etiqueta="Sólidos sedimentables",
                 real=biofloc.volumen_sedimentable if biofloc else None,
-                objetivo=None,
                 unidad=biofloc.unidad if biofloc else None,
                 fecha_real=_fecha_local(biofloc.fecha_hora) if biofloc else None,
-                motivo_sin_referencia="SIN_REFERENCIA_BIOFLOC",
             ),
-            eval_svc.evaluar_objetivo(
+            _evaluar_biofloc(
+                db,
+                lote,
                 indicador="relacion_cn",
                 etiqueta="Relación C:N",
                 real=biofloc.relacion_cn if biofloc else None,
-                objetivo=None,
                 unidad=None,
                 fecha_real=_fecha_local(biofloc.fecha_hora) if biofloc else None,
-                motivo_sin_referencia="SIN_REFERENCIA_BIOFLOC",
             ),
         ]
     )
+    for evaluacion in evaluaciones:
+        if evaluacion.indicador in {"volumen_sedimentable", "relacion_cn"}:
+            recomendacion = eval_svc.recomendacion_agua(evaluacion)
+            if recomendacion is not None:
+                recomendaciones.append(recomendacion)
     return evaluaciones, recomendaciones
 
 
@@ -633,57 +846,41 @@ def _cargar_lote(db: Session, lote_id: int) -> Lote:
 
 
 def _calcular_indicadores(db: Session, lote: Lote) -> _Contexto:
-    """Indicadores puntuales del lote con las fórmulas congeladas."""
-    vista = db.execute(
-        text(
-            """
-            SELECT v.cantidad_sembrada, v.mortalidad_acumulada, v.peces_cosechados, v.poblacion_estimada,
-                   s.supervivencia_porcentaje
-            FROM vista_biomasa_lotes v
-            JOIN vista_supervivencia_lotes s ON s.lote_id = v.lote_id
-            WHERE v.lote_id = :lote_id
-            """
-        ),
-        {"lote_id": lote.id},
-    ).mappings().first()
-    if not vista:
-        raise HTTPException(status_code=404, detail="Lote no encontrado")
-
-    sembrados = _i(vista["cantidad_sembrada"])
-    mort_acum = _i(vista["mortalidad_acumulada"])
-    cosechados = _i(vista["peces_cosechados"])
-    poblacion = _i(vista["poblacion_estimada"])
-    surv = _d2n(vista["supervivencia_porcentaje"])
-    mort_pct = _porcentaje(mort_acum, sembrados)
+    """Indicadores puntuales del lote con las fórmulas oficiales de Etapa 3."""
+    sembrados = _i(lote.cantidad_sembrada)
+    mort_acum, cosechados = obtener_salidas_peces(db, lote.id)
+    poblacion = calcular_poblacion_disponible(sembrados, mort_acum, cosechados)
+    surv = supervivencia_biologica_pct(sembrados, mort_acum)
+    mort_pct = mortalidad_pct(sembrados, mort_acum)
+    biomasa_cosechada_kg = _d3(
+        Decimal(
+            str(
+                db.query(func.coalesce(func.sum(Cosecha.peso_total_kg), 0))
+                .filter(Cosecha.lote_id == lote.id)
+                .scalar()
+                or 0
+            )
+        )
+    )
 
     ultima = db.execute(
-        text(
-            """
-            SELECT lote_id, fecha_hora, peso_promedio_g
-            FROM vista_ultima_biometria
-            WHERE lote_id = :lote_id
-            """
-        ),
+        text(SQL_ULTIMA_BIOMETRIA_LOTE),
         {"lote_id": lote.id},
     ).mappings().first()
 
-    ultima_id = None
-    if ultima and ultima["fecha_hora"] is not None:
-        row_id = db.execute(
-            text(
-                """
-                SELECT id FROM biometrias
-                WHERE lote_id = :lote_id AND fecha_hora = :fh
-                ORDER BY id DESC LIMIT 1
-                """
-            ),
-            {"lote_id": lote.id, "fh": ultima["fecha_hora"]},
-        ).first()
-        ultima_id = int(row_id[0]) if row_id else None
+    if ultima:
+        ultima_id = _i(ultima["id"])
+        talla_promedio = _d2n(ultima["talla_promedio"])
+        unidad_talla = str(ultima["unidad_talla"]) if ultima["unidad_talla"] else None
+        peso_promedio_g = _d3n(ultima["peso_promedio_g"])
+    else:
+        ultima_id = None
+        talla_promedio = None
+        unidad_talla = None
+        peso_promedio_g = None
 
     dias, semana = _dias_y_semana(lote.fecha_siembra, lote.fecha_cierre)
     peso_inicial_g = _d3n(lote.peso_inicial_promedio_g)
-    peso_promedio_g = _d3n(ultima["peso_promedio_g"]) if ultima else None
 
     alim_u = db.execute(
         text(
@@ -705,19 +902,33 @@ def _calcular_indicadores(db: Session, lote: Lote) -> _Contexto:
 
     pendientes: dict[str, str] = {}
 
+    # Histórico inválido: se reporta, no se corrige ni se oculta con MAX(0).
+    if poblacion < 0:
+        pendientes["poblacion_estimada"] = RAZON_POBLACION_NEGATIVA
+        logger.warning(
+            "Población histórica negativa lote_id=%s codigo=%s sembrados=%s "
+            "mortalidad=%s cosechados=%s poblacion=%s. No se modifica el dato.",
+            lote.id,
+            lote.codigo,
+            sembrados,
+            mort_acum,
+            cosechados,
+            poblacion,
+        )
+
     # Biomasa inicial: cantidad sembrada × peso inicial (g) / 1000.
     if peso_inicial_g is None:
         biomasa_inicial_kg = None
         pendientes["biomasa_inicial_kg"] = RAZON_SIN_PESO_INICIAL
     else:
-        biomasa_inicial_kg = _d3(Decimal(sembrados) * peso_inicial_g / MIL)
+        biomasa_inicial_kg = biomasa_kg(sembrados, peso_inicial_g)
 
     # Biomasa actual: población estimada × peso promedio (g) / 1000.
     if peso_promedio_g is None:
         biomasa_actual_kg = None
         pendientes["biomasa_actual_kg"] = RAZON_SIN_BIOMETRIA
     else:
-        biomasa_actual_kg = _d3(Decimal(poblacion) * peso_promedio_g / MIL)
+        biomasa_actual_kg = biomasa_kg(poblacion, peso_promedio_g)
 
     # Ganancia de peso: peso promedio actual − peso promedio inicial.
     if peso_promedio_g is None:
@@ -730,34 +941,39 @@ def _calcular_indicadores(db: Session, lote: Lote) -> _Contexto:
         ganancia_peso_g = _d3(peso_promedio_g - peso_inicial_g)
 
     # Ganancia diaria: ganancia / días de cultivo.
-    if ganancia_peso_g is None:
-        ganancia_diaria_g = None
-        pendientes["ganancia_diaria_g"] = pendientes.get("ganancia_peso_g", RAZON_SIN_BIOMETRIA)
-    elif dias == 0:
-        ganancia_diaria_g = None
-        pendientes["ganancia_diaria_g"] = RAZON_DIAS_CERO
-    else:
-        ganancia_diaria_g = (ganancia_peso_g / Decimal(dias)).quantize(D6, rounding=ROUND_HALF_UP)
+    ganancia_diaria_g, motivo_gpd = gpd_oficial(ganancia_peso_g, dias)
+    if ganancia_diaria_g is None:
+        if ganancia_peso_g is None:
+            pendientes["ganancia_diaria_g"] = pendientes.get("ganancia_peso_g", RAZON_SIN_BIOMETRIA)
+        else:
+            pendientes["ganancia_diaria_g"] = motivo_gpd or RAZON_DIAS_CERO
+
+    sgr, sgr_motivo = sgr_pct_dia(peso_inicial_g, peso_promedio_g, dias)
+    if sgr is None and sgr_motivo:
+        pendientes["sgr_pct_dia"] = sgr_motivo
+
+    volumen = volumen_estanque_m3(
+        Decimal(str(lote.estanque.diametro)) if lote.estanque and lote.estanque.diametro is not None else None,
+        Decimal(str(lote.estanque.profundidad)) if lote.estanque and lote.estanque.profundidad is not None else None,
+    )
+    densidad, dens_motivo = dens_oficial(biomasa_actual_kg, volumen)
+    if densidad is None and dens_motivo:
+        pendientes["densidad_kg_m3"] = dens_motivo
 
     alimento_kg, razon_alimento = _alimento_kg(alimentacion_por_unidad)
+    if alimento_kg is not None:
+        alimento_kg = _d3(alimento_kg)
     if alimento_kg is None and razon_alimento is not None:
         pendientes["alimento_real_acumulado_kg"] = razon_alimento
 
-    # FCA: alimento real (kg) / (biomasa actual − biomasa inicial), ambas en kg.
-    fca = None
-    if biomasa_inicial_kg is None:
-        fca_motivo = FCA_SIN_BIOMASA_INICIAL
-    elif biomasa_actual_kg is None:
-        fca_motivo = FCA_SIN_BIOMASA_FINAL
-    elif alimento_kg is None:
-        fca_motivo = razon_alimento or RAZON_SIN_ALIMENTO
-    elif biomasa_actual_kg - biomasa_inicial_kg <= 0:
-        fca_motivo = FCA_GANANCIA_NO_POSITIVA
-    else:
-        fca = (alimento_kg / (biomasa_actual_kg - biomasa_inicial_kg)).quantize(
-            D4, rounding=ROUND_HALF_UP
-        )
-        fca_motivo = None
+    ganancia_biomasa, motivo_ganancia = ganancia_biomasa_productiva_kg(
+        biomasa_actual_kg,
+        biomasa_inicial_kg,
+        biomasa_cosechada_kg,
+        hay_cosecha=cosechados > 0,
+        cosecha_con_peso=biomasa_cosechada_kg > 0,
+    )
+    fca, fca_motivo = _fca_oficial(alimento_kg, razon_alimento, ganancia_biomasa, motivo_ganancia)
     if fca_motivo is not None:
         pendientes["fca"] = fca_motivo
 
@@ -765,22 +981,50 @@ def _calcular_indicadores(db: Session, lote: Lote) -> _Contexto:
         db, lote.especie_id, lote.etapa_productiva_id, semana
     )
 
-    # Ración recomendada: biomasa actual × tasa de la referencia / 100. Es
-    # recomendación, no alimentación registrada.
-    tasa = referencia.tasa_alimentacion_pct if referencia is not None else None
-    if referencia is None:
-        racion_kg = None
-        pendientes["racion_diaria_recomendada_kg"] = RAZON_SIN_REFERENCIA
-    elif tasa is None:
-        racion_kg = None
-        pendientes["racion_diaria_recomendada_kg"] = RAZON_SIN_TASA
-    elif biomasa_actual_kg is None:
-        racion_kg = None
-        pendientes["racion_diaria_recomendada_kg"] = RAZON_SIN_BIOMETRIA
+    resultado_alim = alim_ref_svc.calcular_racion_lote(
+        db,
+        lote,
+        dias_cultivo=dias,
+        peso_inicial_g=peso_inicial_g,
+        peso_real_g=peso_promedio_g,
+    )
+    params_alim = resultado_alim.parametros
+    racion_kg = resultado_alim.racion_diaria_kg
+    if params_alim is not None:
+        referencia_alimentacion = ReferenciaAlimentacionActivaOut(
+            semana_productiva=resultado_alim.semana_productiva,
+            fase=params_alim.fase,
+            peso_esperado_g=params_alim.peso_esperado_g,
+            peso_real_g=peso_promedio_g,
+            peso_inicial_g=peso_inicial_g,
+            peso_operativo_g=resultado_alim.peso_operativo_g,
+            peso_para_racion_g=resultado_alim.peso_para_racion_g,
+            basada_en_peso=resultado_alim.basada_en_peso,
+            peso_utilizado=resultado_alim.peso_utilizado,
+            diferencia_peso_g=resultado_alim.diferencia_peso_g,
+            poblacion_estimada=resultado_alim.poblacion,
+            biomasa_esperada_kg=resultado_alim.biomasa_esperada_kg,
+            biomasa_para_racion_kg=resultado_alim.biomasa_para_racion_kg,
+            tasa_alimentacion_pct=params_alim.tasa_alimentacion_pct,
+            raciones_diarias=params_alim.raciones_texto,
+            raciones_min=params_alim.raciones_min,
+            raciones_max=params_alim.raciones_max,
+            numero_raciones_diarias=params_alim.numero_raciones_diarias,
+            racion_diaria_recomendada_kg=racion_kg,
+            racion_diaria_recomendada_g=resultado_alim.racion_diaria_g,
+            racion_por_comida_kg=resultado_alim.racion_por_comida_kg,
+            racion_por_comida_g=resultado_alim.racion_por_comida_g,
+            racion_por_comida_min_kg=resultado_alim.racion_por_comida_min_kg,
+            racion_por_comida_max_kg=resultado_alim.racion_por_comida_max_kg,
+            racion_por_comida_min_g=resultado_alim.racion_por_comida_min_g,
+            racion_por_comida_max_g=resultado_alim.racion_por_comida_max_g,
+            alimento_referencia_1000_peces_kg=params_alim.alimento_referencia_1000_peces_kg,
+            fuente=params_alim.fuente,
+            referencia_bd_id=params_alim.referencia_bd_id,
+        )
     else:
-        racion_kg = _d3(biomasa_actual_kg * Decimal(str(tasa)) / CIEN)
-
-    pendientes["numero_raciones_diarias"] = RAZON_SIN_RACIONES
+        referencia_alimentacion = None
+    pendientes.update(resultado_alim.pendientes)
 
     indicadores = IndicadoresLoteOut(
         peces_sembrados=sembrados,
@@ -791,6 +1035,8 @@ def _calcular_indicadores(db: Session, lote: Lote) -> _Contexto:
         mortalidad_porcentaje=mort_pct,
         ultima_biometria_id=ultima_id,
         peso_promedio_g=peso_promedio_g,
+        talla_promedio=talla_promedio,
+        unidad_talla=unidad_talla,
         fecha_ultima_biometria=ultima["fecha_hora"] if ultima else None,
         peso_inicial_g=peso_inicial_g,
         dias_cultivo=dias,
@@ -803,8 +1049,16 @@ def _calcular_indicadores(db: Session, lote: Lote) -> _Contexto:
         fca=fca,
         fca_disponible=fca is not None,
         fca_motivo=fca_motivo,
+        sgr_pct_dia=sgr,
+        densidad_kg_m3=densidad,
+        volumen_util_m3=volumen,
         racion_diaria_recomendada_kg=racion_kg,
-        numero_raciones_diarias=None,
+        numero_raciones_diarias=params_alim.numero_raciones_diarias if params_alim else None,
+        semana_productiva_alimentacion=resultado_alim.semana_productiva,
+        biomasa_esperada_kg=resultado_alim.biomasa_esperada_kg,
+        raciones_diarias_texto=params_alim.raciones_texto if params_alim else None,
+        racion_por_comida_kg=resultado_alim.racion_por_comida_kg,
+        racion_basada_en_peso=resultado_alim.basada_en_peso,
     )
 
     return _Contexto(
@@ -818,10 +1072,13 @@ def _calcular_indicadores(db: Session, lote: Lote) -> _Contexto:
         peso_promedio_g=peso_promedio_g,
         biomasa_inicial_kg=biomasa_inicial_kg,
         biomasa_actual_kg=biomasa_actual_kg,
+        biomasa_cosechada_kg=biomasa_cosechada_kg,
+        ganancia_biomasa_kg=ganancia_biomasa,
         alimento_por_unidad=alimentacion_por_unidad,
         alimento_kg=alimento_kg,
         razon_alimento=razon_alimento,
         referencia=referencia,
+        referencia_alimentacion=referencia_alimentacion,
         indicadores=indicadores,
         pendientes=pendientes,
     )
@@ -849,6 +1106,23 @@ class _Acumulador:
     def hasta(self, momento: datetime) -> int:
         indice = bisect_right(self.fechas, momento)
         return self.acumulado[indice - 1] if indice else 0
+
+
+class _AcumuladorKg:
+    """Acumulado de masa (kg) por fecha, para biomasa cosechada as-of."""
+
+    def __init__(self, filas: list[tuple[datetime, Decimal]]) -> None:
+        self.fechas: list[datetime] = []
+        self.acumulado: list[Decimal] = []
+        total = Decimal("0")
+        for fecha, cantidad in filas:
+            total += cantidad
+            self.fechas.append(fecha)
+            self.acumulado.append(total)
+
+    def hasta(self, momento: datetime) -> Decimal:
+        indice = bisect_right(self.fechas, momento)
+        return self.acumulado[indice - 1] if indice else Decimal("0")
 
 
 def _poblacion_as_of(
@@ -911,11 +1185,11 @@ def analizar_lote(
         ).mappings()
     ]
     cosechas_filas = [
-        (r["fecha_hora"], _i(r["cantidad_peces"]))
+        (r["fecha_hora"], _i(r["cantidad_peces"]), _d3(r["peso_total_kg"]))
         for r in db.execute(
             text(
                 """
-                SELECT fecha_hora, cantidad_peces
+                SELECT fecha_hora, cantidad_peces, peso_total_kg
                 FROM cosechas
                 WHERE lote_id = :lote_id
                 ORDER BY fecha_hora ASC, id ASC
@@ -925,7 +1199,8 @@ def analizar_lote(
         ).mappings()
     ]
     acum_morts = _Acumulador([(fecha, cantidad) for fecha, cantidad, _ in morts_filas])
-    acum_cosechas = _Acumulador(cosechas_filas)
+    acum_cosechas = _Acumulador([(fecha, cantidad) for fecha, cantidad, _ in cosechas_filas])
+    acum_cosecha_kg = _AcumuladorKg([(fecha, peso) for fecha, _, peso in cosechas_filas])
 
     bio_filas = [
         dict(r)
@@ -933,7 +1208,8 @@ def analizar_lote(
             text(
                 """
                 SELECT id, fecha_hora, cantidad_muestra, peso_total_muestra_g,
-                       ROUND(peso_total_muestra_g / NULLIF(cantidad_muestra, 0), 3) AS peso_promedio_g
+                       ROUND(peso_total_muestra_g / NULLIF(cantidad_muestra, 0), 3) AS peso_promedio_g,
+                       talla_promedio, unidad_talla
                 FROM biometrias
                 WHERE lote_id = :lote_id
                 ORDER BY fecha_hora ASC, id ASC
@@ -949,32 +1225,41 @@ def analizar_lote(
         _dias_semana(lote.fecha_siembra, _fecha_local(fila["fecha_hora"]))[1] for fila in bio_filas
     }
     semanas = sorted(semanas_bio | {ctx.semana})
-    refs_por_semana = ref_svc.resolver_referencias_por_semana(
-        db, lote.especie_id, lote.etapa_productiva_id, semanas
-    )
-    referencias_por_semana = [
-        ReferenciaSemanaOut(
-            semana_cultivo=semana,
-            referencia_id=refs_por_semana[semana].id if refs_por_semana.get(semana) else None,
-            peso_esperado_g=_d2n(
-                refs_por_semana[semana].peso_esperado_g if refs_por_semana.get(semana) else None
-            ),
-            tasa_alimentacion_pct=(
-                refs_por_semana[semana].tasa_alimentacion_pct
-                if refs_por_semana.get(semana)
-                else None
-            ),
-            motivo=None if refs_por_semana.get(semana) else RAZON_SIN_REFERENCIA,
+    referencias_por_semana = []
+    for semana in semanas:
+        # La semana N se busca como N. Nunca semana → días → semana (eso desfasaba a N-1).
+        params_alim = alim_ref_svc.resolver_parametros_semana(
+            db, lote.especie_id, lote.etapa_productiva_id, semana
         )
-        for semana in semanas
-    ]
+        if params_alim is None:
+            referencias_por_semana.append(
+                ReferenciaSemanaOut(
+                    semana_cultivo=semana,
+                    referencia_id=None,
+                    peso_esperado_g=None,
+                    tasa_alimentacion_pct=None,
+                    motivo="SIN_REFERENCIA_PRODUCCION_APLICABLE",
+                )
+            )
+            continue
+        referencias_por_semana.append(
+            ReferenciaSemanaOut(
+                semana_cultivo=semana,
+                referencia_id=params_alim.referencia_bd_id,
+                peso_esperado_g=_d2n(params_alim.peso_esperado_g),
+                tasa_alimentacion_pct=params_alim.tasa_alimentacion_pct,
+                motivo=None,
+            )
+        )
+
+    ref_por_semana = {item.semana_cultivo: item for item in referencias_por_semana}
 
     # Serie de peso: real de la biometría contra el esperado de su propia semana.
     biometrias: list[BiometriaSerieOut] = []
     for fila in bio_filas:
         _, semana_punto = _dias_semana(lote.fecha_siembra, _fecha_local(fila["fecha_hora"]))
-        referencia_punto = refs_por_semana.get(semana_punto)
-        esperado = _d2n(referencia_punto.peso_esperado_g) if referencia_punto else None
+        ref_row = ref_por_semana.get(semana_punto)
+        esperado = _d2n(ref_row.peso_esperado_g) if ref_row else None
         peso = _d3n(fila["peso_promedio_g"])
         diferencia = None
         diferencia_pct = None
@@ -991,8 +1276,10 @@ def analizar_lote(
                 cantidad_muestra=_i(fila["cantidad_muestra"]),
                 peso_total_muestra_g=_d3(fila["peso_total_muestra_g"]),
                 peso_promedio_g=peso,
+                talla_promedio=_d2n(fila["talla_promedio"]),
+                unidad_talla=str(fila["unidad_talla"]) if fila["unidad_talla"] else None,
                 semana_cultivo=semana_punto,
-                referencia_id=referencia_punto.id if referencia_punto else None,
+                referencia_id=ref_row.referencia_id if ref_row else None,
                 peso_esperado_g=esperado,
                 diferencia_peso_g=diferencia,
                 diferencia_peso_pct=diferencia_pct,
@@ -1020,7 +1307,7 @@ def analizar_lote(
     eventos.setdefault(momento_siembra, set()).add("SIEMBRA")
     for fecha, _cantidad, _ident in morts_filas:
         eventos.setdefault(fecha, set()).add("MORTALIDAD")
-    for fecha, _cantidad in cosechas_filas:
+    for fecha, _cantidad, _peso in cosechas_filas:
         eventos.setdefault(fecha, set()).add("COSECHA")
     for fila in bio_filas:
         eventos.setdefault(fila["fecha_hora"], set()).add("BIOMETRIA")
@@ -1038,7 +1325,9 @@ def analizar_lote(
                 peces_cosechados=cosechados_punto,
                 poblacion_estimada=poblacion_punto,
                 mortalidad_porcentaje=_porcentaje(mortalidad_punto, ctx.sembrados),
-                supervivencia_porcentaje=_porcentaje(poblacion_punto, ctx.sembrados),
+                supervivencia_porcentaje=supervivencia_biologica_pct(
+                    ctx.sembrados, mortalidad_punto
+                ),
             )
         )
 
@@ -1109,21 +1398,15 @@ def analizar_lote(
         if peso is None:
             continue
         momento = fila["fecha_hora"]
-        dias_punto, _ = _dias_semana(lote.fecha_siembra, momento.date())
+        dias_punto, _ = _dias_semana(lote.fecha_siembra, _fecha_local(momento))
         ganancia_peso = (
             None if ctx.peso_inicial_g is None else _d3(peso - ctx.peso_inicial_g)
         )
+        ganancia_diaria, motivo_gpd = gpd_oficial(ganancia_peso, dias_punto)
         if ganancia_peso is None:
-            ganancia_diaria = None
             motivo_crecimiento = "SIN_PESO_INICIAL"
-        elif dias_punto <= 0:
-            ganancia_diaria = None
-            motivo_crecimiento = "DIA_CERO"
         else:
-            ganancia_diaria = (ganancia_peso / Decimal(dias_punto)).quantize(
-                D6, rounding=ROUND_HALF_UP
-            )
-            motivo_crecimiento = None
+            motivo_crecimiento = motivo_gpd
         serie_crecimiento.append(
             CrecimientoPuntoOut(
                 fecha_hora=momento,
@@ -1135,12 +1418,17 @@ def analizar_lote(
                 motivo=motivo_crecimiento,
             )
         )
-        poblacion_punto, _m, _c = _poblacion_as_of(
+        poblacion_punto, _m, cosechados_punto = _poblacion_as_of(
             ctx.sembrados, acum_morts, acum_cosechas, momento
         )
-        biomasa_punto = _d3(Decimal(poblacion_punto) * peso / MIL)
-        ganancia = (
-            None if ctx.biomasa_inicial_kg is None else _d3(biomasa_punto - ctx.biomasa_inicial_kg)
+        biomasa_punto = biomasa_kg(poblacion_punto, peso)
+        cosechada_punto = acum_cosecha_kg.hasta(momento)
+        ganancia, motivo_ganancia = ganancia_biomasa_productiva_kg(
+            biomasa_punto,
+            ctx.biomasa_inicial_kg,
+            cosechada_punto,
+            hay_cosecha=cosechados_punto > 0,
+            cosecha_con_peso=cosechada_punto > 0,
         )
         serie_biomasa.append(
             BiomasaPuntoOut(
@@ -1154,16 +1442,9 @@ def analizar_lote(
         )
 
         alimento_punto, razon_punto = alimento_hasta(momento)
-        fca_punto = None
-        if ctx.biomasa_inicial_kg is None:
-            motivo_punto = FCA_SIN_BIOMASA_INICIAL
-        elif alimento_punto is None:
-            motivo_punto = razon_punto or RAZON_SIN_ALIMENTO
-        elif ganancia is None or ganancia <= 0:
-            motivo_punto = FCA_GANANCIA_NO_POSITIVA
-        else:
-            fca_punto = (alimento_punto / ganancia).quantize(D4, rounding=ROUND_HALF_UP)
-            motivo_punto = None
+        fca_punto, motivo_punto = _fca_oficial(
+            alimento_punto, razon_punto, ganancia, motivo_ganancia
+        )
         serie_fca.append(
             FcaPuntoOut(
                 fecha_hora=momento,
@@ -1182,7 +1463,8 @@ def analizar_lote(
     sql_agua = """
         SELECT {distinct}
                mw.id, pa.id AS parametro_id, pa.nombre AS parametro, pa.unidad,
-               mw.valor, mw.fecha_hora,
+               mw.valor, mw.fecha_hora, mw.registrado_por,
+               u.nombre AS registrado_por_nombre,
                r.valor_minimo, r.valor_maximo,
                CASE
                  WHEN r.id IS NULL THEN NULL
@@ -1192,6 +1474,7 @@ def analizar_lote(
                END AS fuera_de_rango
         FROM mediciones_agua mw
         JOIN parametros_agua pa ON pa.id = mw.parametro_id
+        LEFT JOIN usuarios u ON u.id = mw.registrado_por
         LEFT JOIN referencias_agua r
           ON r.especie_id = :especie_id
          AND r.etapa_productiva_id = :etapa_id
@@ -1217,6 +1500,10 @@ def analizar_lote(
             valor_minimo=_d4n(row["valor_minimo"]),
             valor_maximo=_d4n(row["valor_maximo"]),
             fuera_de_rango=row["fuera_de_rango"],
+            registrado_por=_i(row["registrado_por"]) if row.get("registrado_por") is not None else None,
+            registrado_por_nombre=(
+                str(row["registrado_por_nombre"]) if row.get("registrado_por_nombre") else None
+            ),
         )
 
     agua = [
@@ -1242,10 +1529,12 @@ def analizar_lote(
     bio_rows = db.execute(
         text(
             """
-            SELECT id, fecha_hora, volumen_sedimentable, unidad, relacion_cn
-            FROM mediciones_biofloc
-            WHERE lote_id = :lote_id
-            ORDER BY fecha_hora ASC, id ASC
+            SELECT mb.id, mb.fecha_hora, mb.volumen_sedimentable, mb.unidad, mb.relacion_cn,
+                   mb.registrado_por, u.nombre AS registrado_por_nombre
+            FROM mediciones_biofloc mb
+            LEFT JOIN usuarios u ON u.id = mb.registrado_por
+            WHERE mb.lote_id = :lote_id
+            ORDER BY mb.fecha_hora ASC, mb.id ASC
             """
         ),
         {"lote_id": lote_id},
@@ -1257,6 +1546,10 @@ def analizar_lote(
             volumen_sedimentable=_d2(r["volumen_sedimentable"]),
             unidad=str(r["unidad"]),
             relacion_cn=_d3n(r["relacion_cn"]),
+            registrado_por=_i(r["registrado_por"]) if r.get("registrado_por") is not None else None,
+            registrado_por_nombre=(
+                str(r["registrado_por_nombre"]) if r.get("registrado_por_nombre") else None
+            ),
         )
         for r in bio_rows
     ]
@@ -1264,6 +1557,43 @@ def analizar_lote(
 
     # Ventana de fechas: recorta lo que se devuelve, no lo que se calcula.
     alimentacion_real_completa = list(alimentacion_real)
+
+    from collections import defaultdict
+
+    alim_por_dia: dict[date, Decimal] = defaultdict(lambda: Decimal("0"))
+    for reg in alimentacion_real_completa:
+        if reg.cantidad_kg is not None:
+            alim_por_dia[_fecha_local(reg.fecha_hora)] += reg.cantidad_kg
+    bio_fechas_alim: list[datetime] = []
+    bio_pesos_alim: list[Decimal] = []
+    for fila in bio_filas:
+        peso_bio = _d3n(fila["peso_promedio_g"])
+        if peso_bio is not None:
+            bio_fechas_alim.append(fila["fecha_hora"])
+            bio_pesos_alim.append(peso_bio)
+    serie_alim_raw = alim_ref_svc.construir_serie_alimentacion_comparativa(
+        db,
+        lote,
+        sembrados=ctx.sembrados,
+        acum_morts=acum_morts,
+        acum_cosechas=acum_cosechas,
+        bio_fechas=bio_fechas_alim,
+        bio_pesos=bio_pesos_alim,
+        alimentacion_por_dia=dict(alim_por_dia),
+    )
+    serie_alimentacion_comparativa = [
+        AlimentacionComparativaPuntoOut(
+            fecha=p["fecha"].isoformat(),
+            real_kg=p["real_kg"],
+            recomendada_kg=p["recomendada_kg"],
+            desviacion_kg=p["desviacion_kg"],
+            desviacion_porcentaje=p["desviacion_porcentaje"],
+            semana_cultivo=p["semana_cultivo"],
+        )
+        for p in serie_alim_raw
+        if _en_rango(datetime.combine(p["fecha"], time.min, tzinfo=TZ), fecha_desde, fecha_hasta)
+    ]
+
     biometrias = [p for p in biometrias if visible(p.fecha_hora)]
     mortalidades = [p for p in mortalidades if visible(p.fecha_hora)]
     serie_poblacion = [p for p in serie_poblacion if visible(p.fecha_hora)]
@@ -1276,6 +1606,7 @@ def analizar_lote(
 
     estadisticas = EstadisticasAnalisisOut(
         peso_promedio_g=est_svc.stats_serie([p.peso_promedio_g for p in biometrias], "g"),
+        talla_promedio=_stats_talla(biometrias),
         biomasa_kg=est_svc.stats_serie([p.biomasa_kg for p in serie_biomasa], "kg"),
         poblacion_estimada=est_svc.stats_serie(
             [Decimal(p.poblacion_estimada) for p in serie_poblacion], "peces"
@@ -1301,15 +1632,22 @@ def analizar_lote(
     comparaciones = ComparacionesAnalisisOut(
         peso_g=_comparacion(
             real=ctx.peso_promedio_g,
-            objetivo=_d2n(ctx.referencia.peso_esperado_g) if ctx.referencia else None,
+            objetivo=(
+                _d2n(ctx.referencia_alimentacion.peso_esperado_g)
+                if ctx.referencia_alimentacion is not None
+                else None
+            ),
             unidad="g",
             motivo_sin_real=RAZON_SIN_BIOMETRIA,
             motivo_sin_objetivo=(
-                RAZON_SIN_REFERENCIA if ctx.referencia is None else RAZON_SIN_PESO_ESPERADO
+                RAZON_SIN_REFERENCIA
+                if ctx.referencia_alimentacion is None
+                else RAZON_SIN_PESO_ESPERADO
             ),
         )
     )
     evaluaciones, recomendaciones = _construir_evaluaciones(
+        db=db,
         lote=lote,
         ctx=ctx,
         agua=agua,
@@ -1368,7 +1706,25 @@ def analizar_lote(
         biofloc_serie=biofloc_serie_visible,
         alimentacion_real_por_unidad=ctx.alimento_por_unidad,
         alimentacion_real=alimentacion_real,
+        referencia_alimentacion=ctx.referencia_alimentacion,
+        serie_alimentacion_comparativa=serie_alimentacion_comparativa,
     )
+
+
+def _stats_talla(biometrias: list[BiometriaSerieOut]) -> StatsSerieOut:
+    """Estadística de talla solo si todas las mediciones comparten unidad. No convierte."""
+    puntos = [
+        (fila.talla_promedio, fila.unidad_talla)
+        for fila in biometrias
+        if fila.talla_promedio is not None
+    ]
+    if not puntos:
+        return est_svc.stats_serie([], None)
+    unidades = {unidad for _, unidad in puntos}
+    if len(unidades) > 1:
+        return est_svc.stats_serie([], None)
+    unidad = next(iter(unidades))
+    return est_svc.stats_serie([valor for valor, _ in puntos], unidad)
 
 
 def _estadisticas_agua(serie: list[AguaMedicionOut]) -> list[AguaParametroEstadisticasOut]:
@@ -1509,6 +1865,8 @@ def comparativo_estanques(
     total_biomasa = Decimal("0")
     lotes_sin_biomasa = 0
     lotes_con_fca = 0
+    lotes_sin_alimento = 0
+    total_alimento = Decimal("0")
     con_lote_activo = 0
     peso_cosechado = Decimal("0")
     peces_cosechados = 0
@@ -1546,6 +1904,10 @@ def comparativo_estanques(
             total_biomasa += ind.biomasa_actual_kg
         if ind.fca_disponible:
             lotes_con_fca += 1
+        if ind.alimento_real_acumulado_kg is None:
+            lotes_sin_alimento += 1
+        else:
+            total_alimento += ind.alimento_real_acumulado_kg
         peso_cosechado += productividad.peso_cosechado_kg
         peces_cosechados += productividad.peces_cosechados
         ingresos_lotes += finanzas.ingresos_lote
@@ -1599,11 +1961,17 @@ def comparativo_estanques(
             _d3(total_biomasa) if con_lote_activo > lotes_sin_biomasa else None
         ),
         lotes_sin_biomasa=lotes_sin_biomasa,
-        supervivencia_porcentaje=_porcentaje(total_poblacion, total_sembrados),
+        supervivencia_porcentaje=supervivencia_biologica_pct(
+            total_sembrados, total_mortalidad
+        ),
         mortalidad_porcentaje=_porcentaje(total_mortalidad, total_sembrados),
         lotes_con_fca=lotes_con_fca,
         fca=None,
         fca_motivo=RAZON_FCA_GRANJA,
+        alimento_real_acumulado_kg=(
+            _d3(total_alimento) if con_lote_activo > lotes_sin_alimento else None
+        ),
+        lotes_sin_alimento=lotes_sin_alimento,
         peso_cosechado_kg=_d3(peso_cosechado),
         peces_cosechados=peces_cosechados,
         ingresos_lotes_activos=ingresos_lotes.quantize(D2),

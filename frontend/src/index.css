@@ -5,15 +5,21 @@
 }
 
 :root {
-  --bf-bg: #eef2ef;
-  --bf-header: #fbfcfb;
-  --bf-sidebar: #16332d;
-  --bf-ink: #1c2b27;
-  --bf-muted: #5d6e68;
-  --bf-accent: #2f6f5e;
-  --bf-border: #d5ddd8;
-  --bf-chip: #e7eee9;
-  --bf-table-head: #f3f6f4;
+  --bf-bg: #e8efe9;
+  --bf-header: #f7faf8;
+  --bf-sidebar: #102821;
+  --bf-ink: #12231e;
+  --bf-muted: #5a6f67;
+  --bf-accent: #1f6b54;
+  --bf-accent-soft: #d8eee4;
+  --bf-border: #cddad3;
+  --bf-chip: #e4eee8;
+  --bf-table-head: #f0f5f2;
+  --bf-card: #ffffff;
+  --bf-surface: #f3f8f5;
+  --bf-shadow: 0 1px 2px rgba(16, 40, 33, 0.04), 0 8px 24px rgba(16, 40, 33, 0.06);
+  --bf-radius: 1rem;
+  --bf-radius-sm: 0.75rem;
 }
 
 html,
@@ -26,54 +32,84 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   color: var(--bf-ink);
-  background: var(--bf-bg);
+  background:
+    radial-gradient(1200px 500px at 8% -10%, rgba(47, 140, 110, 0.09), transparent 55%),
+    radial-gradient(900px 420px at 100% 0%, rgba(16, 40, 33, 0.05), transparent 50%),
+    var(--bf-bg);
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--bf-accent) 22%, white);
+  color: var(--bf-ink);
 }
 
 .font-display {
   font-family: var(--font-sans);
 }
 
+.bf-card {
+  border-radius: var(--bf-radius);
+  border: 1px solid var(--bf-border);
+  background: var(--bf-card);
+  box-shadow: var(--bf-shadow);
+}
+
 .bf-input {
   width: 100%;
-  border-radius: 0.5rem;
+  border-radius: var(--bf-radius-sm);
   border: 1px solid var(--bf-border);
   background: #fff;
-  padding: 0.55rem 0.75rem;
+  padding: 0.6rem 0.85rem;
   color: var(--bf-ink);
   outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.bf-input:hover {
+  border-color: color-mix(in srgb, var(--bf-accent) 35%, var(--bf-border));
 }
 
 .bf-input:focus {
   border-color: var(--bf-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-accent) 18%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bf-accent) 16%, transparent);
 }
 
 .bf-btn-primary,
 .bf-btn-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  padding: 0.52rem 1rem;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
+  transition: background-color 150ms ease, filter 150ms ease, border-color 150ms ease,
+    box-shadow 150ms ease, transform 120ms ease;
 }
 
 .bf-btn-primary {
   background: var(--bf-accent);
   color: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.16) inset, 0 8px 18px rgba(31, 107, 84, 0.22);
 }
 
 .bf-btn-primary:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.06);
+}
+
+.bf-btn-primary:active {
+  transform: translateY(1px);
 }
 
 .bf-btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .bf-btn-secondary {
@@ -84,6 +120,26 @@ body {
 
 .bf-btn-secondary:hover {
   background: var(--bf-chip);
+  border-color: color-mix(in srgb, var(--bf-accent) 30%, var(--bf-border));
+}
+
+details summary {
+  cursor: pointer;
+}
+
+@keyframes bf-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.bf-enter {
+  animation: bf-enter 220ms ease-out;
 }
 
 @media print {

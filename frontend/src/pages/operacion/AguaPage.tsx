@@ -6,6 +6,7 @@ import { DataTable } from "../../components/DataTable";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
+import { StatusBadge } from "../../components/StatusBadge";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
 import {
@@ -14,15 +15,19 @@ import {
   listParametrosAgua,
   listReferenciasAgua,
 } from "../../api/operations";
+import { listUsuarios } from "../../api/users";
 import { getLote, listLotes } from "../../api/production";
 import { apiErrorMessage } from "../../utils/apiError";
 import {
-  datetimeLocalToIso,
   formatDateTime,
   formatNumber,
   toDatetimeLocalValue,
+  withFechaHoraIso,
 } from "../../utils/format";
 import { can } from "../../utils/rbac";
+import { esLoteActivo, lotesActivos } from "../../utils/loteEstado";
+import { cumplimientoPorRango, etiquetaCumplimiento, toneCumplimiento } from "../../utils/analisisStatus";
+import { toNumber } from "../../utils/series";
 import type { MedicionAgua, MedicionAguaCreate, ParametroAgua, ReferenciaAgua } from "../../types/operations";
 import type { Lote } from "../../types/production";
 
@@ -146,9 +151,15 @@ export function AguaMedicionesPanel({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const puedeRegistrar = can(user?.rol, "registrarAgua");
+  const puedeRegistrar = (!loteId || esLoteActivo(lote)) && can(user?.rol, "registrarAgua");
   const parametrosMap = useMemo(() => new Map(parametros.map((row) => [row.id, row])), [parametros]);
   const lotesMap = useMemo(() => new Map(lotes.map((row) => [row.id, row])), [lotes]);
+  const enProduccion = lotesActivos(lotes);
+  const usuariosQuery = useQuery({ queryKey: ["usuarios"], queryFn: () => listUsuarios(false) });
+  const usuarios = useMemo(
+    () => new Map((usuariosQuery.data ?? []).map((row) => [row.id, row.nombre])),
+    [usuariosQuery.data],
+  );
   const rows = compact ? (mediciones ?? []).slice(0, 5) : (mediciones ?? []);
 
   const form = useForm({
@@ -156,7 +167,7 @@ export function AguaMedicionesPanel({
       lote_id: loteId ?? 0,
       parametro_id: parametros[0]?.id ?? 0,
       fecha_hora: toDatetimeLocalValue(),
-      valor: 0,
+      valor: "",
       observaciones: "",
     },
   });
@@ -202,10 +213,10 @@ export function AguaMedicionesPanel({
               onClick={() => {
                 setFormError(null);
                 form.reset({
-                  lote_id: loteId ?? lotes[0]?.id ?? 0,
+                  lote_id: loteId ?? enProduccion[0]?.id ?? 0,
                   parametro_id: parametros[0]?.id ?? 0,
                   fecha_hora: toDatetimeLocalValue(),
-                  valor: 0,
+                  valor: "",
                   observaciones: "",
                 });
                 setOpen(true);
@@ -262,13 +273,34 @@ export function AguaMedicionesPanel({
               render: (row) => {
                 if (!lote) return "Seleccione un lote";
                 const ref = referenciaDe(row.parametro_id);
-                if (!ref) return "No existe referencia disponible";
+                if (!ref) return "N/D — Sin referencia configurada";
                 const min =
                   ref.valor_minimo == null ? "—" : formatNumber(ref.valor_minimo, { maximumFractionDigits: 4 });
                 const max =
                   ref.valor_maximo == null ? "—" : formatNumber(ref.valor_maximo, { maximumFractionDigits: 4 });
                 return `${min} – ${max}`;
               },
+            },
+            {
+              key: "estado",
+              header: "Estado",
+              render: (row) => {
+                const ref = referenciaDe(row.parametro_id);
+                const estado = cumplimientoPorRango(
+                  toNumber(row.valor),
+                  ref ? toNumber(ref.valor_minimo) : null,
+                  ref ? toNumber(ref.valor_maximo) : null,
+                );
+                if (estado === "NO_EVALUABLE") {
+                  return <StatusBadge label="N/D — Sin referencia configurada" tone="neutral" />;
+                }
+                return <StatusBadge label={etiquetaCumplimiento(estado)} tone={toneCumplimiento(estado)} />;
+              },
+            },
+            {
+              key: "usuario",
+              header: "Usuario",
+              render: (row) => usuarios.get(row.registrado_por) ?? `#${row.registrado_por}`,
             },
             { key: "obs", header: "Observaciones", render: (row) => row.observaciones || "—" },
           ]}
@@ -279,10 +311,12 @@ export function AguaMedicionesPanel({
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+            if (!fechaHora) return;
             mutation.mutate({
               lote_id: Number(values.lote_id),
               parametro_id: Number(values.parametro_id),
-              fecha_hora: datetimeLocalToIso(values.fecha_hora),
+              fecha_hora: fechaHora,
               valor: Number(values.valor),
               observaciones: values.observaciones.trim() || null,
             });
@@ -294,7 +328,7 @@ export function AguaMedicionesPanel({
           ) : (
             <Field label="Lote">
               <select className="bf-input" {...form.register("lote_id", { valueAsNumber: true, required: true })}>
-                {lotes.map((row) => (
+                {enProduccion.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.codigo}
                   </option>

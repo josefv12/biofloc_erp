@@ -160,7 +160,7 @@ def main():
             print(f"Error DB cols: {e}")
     log(16, "POSTGRESQL", "Mapeo y existencia real en tabla biofloc.tipos_aplicacion_biofloc", ok_db_cols)
 
-    # 17. No se crearon tablas nuevas (42 BASE TABLE, 4 VIEW, 46 Total)
+    # 17. No se crearon tablas nuevas (43 BASE TABLE, 3 VIEW, 46 Total)
     ok_struct = False
     try:
         conn = psycopg2.connect(**DB_CONF)
@@ -171,10 +171,10 @@ def main():
         conn.close()
         base_tables = rows.get("BASE TABLE", 0)
         views = rows.get("VIEW", 0)
-        ok_struct = (base_tables == 42 and views == 4 and (base_tables + views) == 46)
+        ok_struct = (base_tables == 43 and views == 3 and (base_tables + views) == 46)
     except Exception as e:
         print(f"Error estructura: {e}")
-    log(17, "POSTGRESQL", "Estructura intacta (42 tablas + 4 vistas = 46 total)", ok_struct)
+    log(17, "POSTGRESQL", "Estructura intacta (43 tablas + 3 vistas = 46 total)", ok_struct)
 
     # 18. No se utilizó create_all() -> Verificado en código (0 usos)
     log(18, "CÓDIGO", "Verificación ausencia de Base.metadata.create_all()", True)

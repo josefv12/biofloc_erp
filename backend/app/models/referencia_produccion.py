@@ -1,12 +1,14 @@
-from sqlalchemy import BigInteger, Integer, Numeric, Text, Boolean, DateTime, ForeignKey, CheckConstraint, UniqueConstraint, text
+from sqlalchemy import BigInteger, Integer, Numeric, String, Text, Boolean, DateTime, ForeignKey, CheckConstraint, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 
 from app.core.database import Base
 
+FASES_ALIMENTACION = ("Inicio", "Levante", "Engorde")
+
 
 class ReferenciaProduccion(Base):
-    """Valores esperados por especie, etapa y rango de semana. Tabla DDL existente."""
+    """Valores esperados por especie, etapa y semana. Tabla DDL existente."""
 
     __tablename__ = "referencias_produccion"
     __table_args__ = (
@@ -16,6 +18,18 @@ class ReferenciaProduccion(Base):
         CheckConstraint(
             "tasa_alimentacion_pct IS NULL OR tasa_alimentacion_pct >= 0",
             name="referencias_produccion_tasa_check",
+        ),
+        CheckConstraint(
+            "raciones_min IS NULL OR raciones_min >= 0",
+            name="referencias_produccion_raciones_check",
+        ),
+        CheckConstraint(
+            "raciones_min IS NULL OR raciones_max IS NULL OR raciones_max >= raciones_min",
+            name="referencias_produccion_raciones_rango_check",
+        ),
+        CheckConstraint(
+            "fase IS NULL OR fase IN ('Inicio', 'Levante', 'Engorde')",
+            name="referencias_produccion_fase_check",
         ),
         UniqueConstraint(
             "especie_id",
@@ -33,6 +47,9 @@ class ReferenciaProduccion(Base):
     semana_hasta: Mapped[int] = mapped_column(Integer, nullable=False)
     peso_esperado_g: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     tasa_alimentacion_pct: Mapped[float | None] = mapped_column(Numeric(6, 3), nullable=True)
+    raciones_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    raciones_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fase: Mapped[str | None] = mapped_column(String(40), nullable=True)
     observaciones: Mapped[str | None] = mapped_column(Text, nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))

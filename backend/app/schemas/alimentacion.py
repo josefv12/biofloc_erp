@@ -30,3 +30,7 @@ class AlimentacionOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AlimentacionConStockOut(AlimentacionOut):
+    stock_restante: Optional[float] = None

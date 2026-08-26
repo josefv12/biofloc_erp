@@ -19,11 +19,12 @@ from env_tests import (
     ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
     OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
 )
+from lote_operativo import asegurar_lote, limpiar_fixtures
 
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 PREF = "[TEST_ALARMA_GENERAL]"
-DDL_SHA = "9f56e2b4eadad4e92a160e59384d4cd0813996720e25d2a10da65f9ac2ca1cf1"
+DDL_SHA = "cbb32f437ef44b23c62133e24438d39dd3508ea0da8081add7277c5b077aa61a"
 T = {
     "tipo_extra_id": None,
     "nivel_extra_id": None,
@@ -167,11 +168,12 @@ def main():
     r = requests.post(f"{BASE}/api/v1/estados-alarma/", headers=h(tok_o), json={"nombre": "TAG_NO_EST"})
     log(14, "POST estado OPERARIO -> 403", r.status_code == 403)
 
-    r = requests.get(f"{BASE}/api/v1/lotes/", headers=h(tok_a))
-    ok = r.status_code == 200 and len(r.json()) >= 1
-    if ok:
-        T["lote_id"] = r.json()[0]["id"]
-    log(15, f"Resuelto lote_id={T['lote_id']}", ok)
+    try:
+        T["lote_id"] = asegurar_lote(tok_a)[0]
+        log(15, f"Resuelto lote_id={T['lote_id']}", True)
+    except Exception as exc:  # noqa: BLE001
+        T["lote_id"] = None
+        log(15, "Resuelto lote_id", False, str(exc)[:200])
 
     r = requests.get(f"{BASE}/api/v1/tipos-equipo/", headers=h(tok_a))
     tipo_eq = next((t["id"] for t in r.json() if t["nombre"] == "BLOWER"), r.json()[0]["id"] if r.status_code == 200 else None)
@@ -435,7 +437,7 @@ def main():
     base_n, view_n = rows.get("BASE TABLE", 0), rows.get("VIEW", 0)
     cur.close()
     conn.close()
-    log(43, "PostgreSQL 42 BASE TABLE + 4 VIEW = 46", base_n == 42 and view_n == 4, f"BASE={base_n} VIEW={view_n}")
+    log(43, "PostgreSQL 43 BASE TABLE + 3 VIEW = 46", base_n == 43 and view_n == 3, f"BASE={base_n} VIEW={view_n}")
 
     root = pathlib.Path(__file__).resolve().parents[2]
     sql_path = root / "database" / "biofloc_erp_v1_1_schema_final.sql"
@@ -494,6 +496,8 @@ def main():
         conn.close()
         log(46, f"Limpieza 0 residuales a={na} au={nau} extra={nt+nn+ne} eq={neq}; semillas tipos={ns}",
             na == 0 and nau == 0 and nt == 0 and nn == 0 and ne == 0 and neq == 0 and ns == 3)
+        leftover_fx = limpiar_fixtures()
+        log("46b", f"LEFTOVER TEST_FIXTURE={leftover_fx}", leftover_fx == 0)
     except Exception as e:
         log(46, f"Limpieza EXCEPTION: {e}", False)
 

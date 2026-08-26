@@ -22,6 +22,8 @@ from env_tests import (
     OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
 )
 
+from lote_operativo import obtener_producto_activo, asegurar_stock
+
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
 
@@ -169,9 +171,11 @@ def audit_flujo_productivo(token_admin):
     log_test(7, "FLUJO", "4/6 Creación de Mortalidad", ok_mort, f"mortalidad_id={mort_id}")
 
     # E. Alimentación
+    producto_id = obtener_producto_activo(token_admin)
+    asegurar_stock(token_admin, producto_id, 100.0)
     payload_ali = {
         "lote_id": lote_id,
-        "producto_id": 1,
+        "producto_id": producto_id,
         "fecha_hora": fecha_valida,
         "cantidad": 15.000,
         "observaciones": "[AUDIT] Alimentación inicial"
@@ -258,8 +262,8 @@ def audit_postgresql_structure():
         base_tables = rows.get("BASE TABLE", 0)
         views = rows.get("VIEW", 0)
         total = base_tables + views
-        ok = (base_tables == 42 and views == 4 and total == 46)
-        log_test(13, "POSTGRESQL", f"Conteo exacto (42 BASE TABLE + 4 VIEW = 46 Total)", ok, f"BASE TABLE: {base_tables}, VIEW: {views}")
+        ok = (base_tables == 43 and views == 3 and total == 46)
+        log_test(13, "POSTGRESQL", f"Conteo exacto (43 BASE TABLE + 3 VIEW = 46 Total)", ok, f"BASE TABLE: {base_tables}, VIEW: {views}")
     except Exception as e:
         log_test(13, "POSTGRESQL", "Error consultando estructura", False, str(e))
 

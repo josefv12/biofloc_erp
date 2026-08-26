@@ -25,37 +25,79 @@ import {
   listCosechas,
   listMortalidades,
 } from "../../api/production";
-import { LoteAnalisisPanel } from "./LoteAnalisisPanel";
+import { LoteAnalisisPanel, VistaOperativaAnalisis, type SeccionOperativa } from "./LoteAnalisisPanel";
+import { ChartCard } from "../../components/charts/ChartCard";
+import { TimeSeriesChart } from "../../components/charts/TimeSeriesChart";
 import { AguaMedicionesPanel } from "../operacion/AguaPage";
 import { AplicacionesBioflocPanel, MedicionesBioflocPanel } from "../operacion/BioflocPage";
 import { AlimentacionPanel } from "../operacion/AlimentacionPage";
+import { PATH_COMPARACION, pathFichaEstanque } from "./fichaPaths";
 import { apiErrorMessage } from "../../utils/apiError";
 import {
-  datetimeLocalToIso,
   formatCop,
   formatDate,
   formatDateTime,
   formatNumber,
   toDatetimeLocalValue,
+  withFechaHoraIso,
 } from "../../utils/format";
+import { mensajeRestantesCosecha } from "../../utils/indicadoresProduccion";
+import {
+  FCA_HINT_ECONOMICO,
+  FCA_LABEL,
+  fcaHintDisponible,
+  fcaHintNoDisponible,
+} from "../../utils/fcaPresentacion";
 import { can } from "../../utils/rbac";
+import { toNumber } from "../../utils/series";
+import type { AnalisisLote } from "../../types/analisis";
 import type { BiometriaCreate, CosechaCreate, Lote, MortalidadCreate } from "../../types/production";
 
-type TabId = "resumen" | "analisis" | "historial" | "biometrias" | "mortalidades" | "cosechas" | "agua" | "biofloc" | "alimentacion";
+type TabId =
+  | "resumen"
+  | "produccion"
+  | "agua"
+  | "biofloc"
+  | "alimentacion"
+  | "finanzas"
+  | "historial";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "resumen", label: "Resumen" },
-  { id: "analisis", label: "Análisis" },
-  { id: "historial", label: "Historial del estanque" },
-  { id: "biometrias", label: "Biometrías" },
-  { id: "mortalidades", label: "Mortalidades" },
-  { id: "cosechas", label: "Cosechas" },
-  { id: "agua", label: "Agua" },
+  { id: "produccion", label: "Producción" },
+  { id: "agua", label: "Calidad de agua" },
   { id: "biofloc", label: "Biofloc" },
   { id: "alimentacion", label: "Alimentación" },
+  { id: "finanzas", label: "Finanzas" },
+  { id: "historial", label: "Historial" },
 ];
 
+const TABS_OPERATIVOS: { id: TabId; label: string }[] = [
+  { id: "resumen", label: "Resumen" },
+  { id: "produccion", label: "Producción" },
+  { id: "agua", label: "Calidad de agua" },
+  { id: "biofloc", label: "Biofloc" },
+];
+const TABS_OPERATIVOS_IDS = new Set(TABS_OPERATIVOS.map((item) => item.id));
+
 const TAB_IDS = new Set<string>(TABS.map((item) => item.id));
+
+/** URLs antiguas: las gráficas vivían en ?tab=analisis y el CRUD en pestañas sueltas. */
+const TAB_ALIASES: Record<string, TabId> = {
+  analisis: "produccion",
+  biometrias: "produccion",
+  mortalidades: "produccion",
+  cosechas: "produccion",
+};
+
+export type LoteFichaTabId = TabId;
+
+export function parseLoteFichaTab(valor: string | null, fallback: TabId = "resumen"): TabId {
+  if (!valor) return fallback;
+  if (TAB_IDS.has(valor)) return valor as TabId;
+  if (valor in TAB_ALIASES) return TAB_ALIASES[valor];
+  return fallback;
+}
 
 function invalidateAnalisis(queryClient: ReturnType<typeof useQueryClient>) {
   return Promise.all([
@@ -70,14 +112,14 @@ export function LoteFichaPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const loteId = Number(id);
   const invalidId = !Number.isInteger(loteId) || loteId <= 0;
-  const tabSolicitada = searchParams.get("tab");
-  const tab: TabId = tabSolicitada && TAB_IDS.has(tabSolicitada) ? (tabSolicitada as TabId) : "resumen";
+  const tab = parseLoteFichaTab(searchParams.get("tab"));
 
   // La pestaña vive en la URL para que la ficha sea compartible y el botón
   // atrás del navegador recorra las pestañas visitadas.
   function setTab(siguiente: TabId) {
     const params = new URLSearchParams(searchParams);
     params.set("tab", siguiente);
+    params.delete("seccion");
     setSearchParams(params, { replace: false });
   }
 
@@ -130,9 +172,26 @@ export function LoteFichaPage() {
             <h1 className="font-display text-3xl font-semibold text-[var(--bf-ink)]">{lote.codigo}</h1>
             <p className="mt-1 text-sm text-[var(--bf-muted)]">
               {lote.especie.nombre_comun} ·{" "}
-              <Link to="/produccion/estanques?comparativo=1" className="text-[var(--bf-accent)] hover:underline">
+              <Link
+                to={pathFichaEstanque(lote.estanque_id, { loteId: lote.id })}
+                className="text-[var(--bf-accent)] hover:underline"
+              >
                 Estanque {estanqueLabel}
               </Link>
+            </p>
+            <p className="mt-2 text-xs text-[var(--bf-muted)]">
+              <Link to="/dashboard" className="hover:underline">
+                Granja
+              </Link>
+              {" · "}
+              <Link to={PATH_COMPARACION} className="hover:underline">
+                Comparación
+              </Link>
+              {" · "}
+              <Link to={pathFichaEstanque(lote.estanque_id, { loteId: lote.id })} className="hover:underline">
+                Estanque
+              </Link>
+              {" · Lote"}
             </p>
           </div>
           <StatusBadge label={lote.estado.nombre} tone={lote.estado.nombre === "ACTIVO" ? "ok" : "neutral"} />
@@ -148,17 +207,71 @@ export function LoteFichaPage() {
         </dl>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-1 overflow-x-auto border-b border-[var(--bf-border)]">
+      <LoteFichaWorkspace lote={lote} tab={tab} onTab={setTab} />
+    </div>
+  );
+}
+
+export function LoteFichaWorkspace({
+  lote,
+  tab,
+  onTab,
+  mostrarGraficasResumen = true,
+  modoOperativo = false,
+}: {
+  lote: Lote;
+  tab: TabId;
+  onTab: (siguiente: TabId) => void;
+  mostrarGraficasResumen?: boolean;
+  /** Ficha del estanque: indicadores en Resumen, Producción, Calidad de agua y Biofloc. */
+  modoOperativo?: boolean;
+}) {
+  const tabActivo = tab;
+
+  if (modoOperativo) {
+    const tabOperativo: SeccionOperativa = TABS_OPERATIVOS_IDS.has(tabActivo)
+      ? (tabActivo as SeccionOperativa)
+      : "resumen";
+    return (
+      <>
+        <div className="flex flex-wrap gap-2 border-t border-[var(--bf-border)] px-6 pt-5">
+          {TABS_OPERATIVOS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={tabOperativo === item.id ? "bf-btn-primary" : "bf-btn-secondary"}
+              onClick={() => onTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <VistaOperativaAnalisis loteId={lote.id} seccion={tabOperativo} />
+        <details className="mx-6 mb-6 rounded-xl border border-[var(--bf-border)] bg-white p-4">
+          <summary className="cursor-pointer font-display text-sm font-semibold text-[var(--bf-ink)]">
+            Historial de ciclos del estanque
+          </summary>
+          <div className="mt-4">
+            <HistorialEstanqueTab estanqueId={lote.estanque_id} loteActualId={lote.id} />
+          </div>
+        </details>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="mt-4 flex flex-wrap gap-1 overflow-x-auto rounded-2xl border border-[var(--bf-border)] bg-white p-1 shadow-[0_1px_2px_rgba(16,40,33,0.04)]">
         {TABS.map((item) => (
           <button
             key={item.id}
             type="button"
-            className={`whitespace-nowrap px-3 py-2 text-sm ${
-              tab === item.id
-                ? "border-b-2 border-[var(--bf-accent)] font-medium text-[var(--bf-ink)]"
-                : "text-[var(--bf-muted)] hover:text-[var(--bf-ink)]"
+            className={`whitespace-nowrap rounded-xl px-3 py-2 text-sm transition-colors ${
+              tabActivo === item.id
+                ? "bg-[var(--bf-accent-soft)] font-semibold text-[var(--bf-accent)]"
+                : "text-[var(--bf-muted)] hover:bg-[var(--bf-chip)] hover:text-[var(--bf-ink)]"
             }`}
-            onClick={() => setTab(item.id)}
+            onClick={() => onTab(item.id)}
           >
             {item.label}
           </button>
@@ -166,17 +279,77 @@ export function LoteFichaPage() {
       </div>
 
       <div className="mt-5">
-        {tab === "resumen" ? <ResumenTab loteId={lote.id} observaciones={lote.observaciones} fechaCierre={lote.fecha_cierre} pesoInicial={lote.peso_inicial_promedio_g} /> : null}
-        {tab === "analisis" ? <LoteAnalisisPanel loteId={lote.id} /> : null}
-        {tab === "historial" ? <HistorialEstanqueTab estanqueId={lote.estanque_id} loteActualId={lote.id} /> : null}
-        {tab === "biometrias" ? <BiometriasTab loteId={lote.id} /> : null}
-        {tab === "mortalidades" ? <MortalidadesTab loteId={lote.id} /> : null}
-        {tab === "cosechas" ? <CosechasTab loteId={lote.id} /> : null}
-        {tab === "agua" ? <AguaTab lote={lote} /> : null}
-        {tab === "biofloc" ? <BioflocTab lote={lote} /> : null}
-        {tab === "alimentacion" ? <AlimentacionTab lote={lote} /> : null}
+        {tabActivo === "resumen" ? (
+          <ResumenTab
+            loteId={lote.id}
+            observaciones={lote.observaciones}
+            fechaCierre={lote.fecha_cierre}
+            pesoInicial={lote.peso_inicial_promedio_g}
+            onVerGraficas={() => onTab("produccion")}
+            mostrarGraficasResumen={mostrarGraficasResumen}
+          />
+        ) : null}
+        {tabActivo === "produccion" ? (
+          <div className="space-y-8">
+            <LoteAnalisisPanel loteId={lote.id} seccionFija="produccion" />
+            <details className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
+              <summary className="cursor-pointer font-display text-sm font-semibold text-[var(--bf-ink)]">
+                Registros de producción
+              </summary>
+              <p className="mt-1 text-xs text-[var(--bf-muted)]">
+                Biometrías, mortalidades y cosechas. Las gráficas de arriba usan el análisis del API.
+              </p>
+              <div className="mt-6 space-y-10">
+                <BiometriasTab loteId={lote.id} loteActivo={lote.estado.nombre === "ACTIVO"} />
+                <MortalidadesTab loteId={lote.id} loteActivo={lote.estado.nombre === "ACTIVO"} />
+                <CosechasTab lote={lote} />
+              </div>
+            </details>
+          </div>
+        ) : null}
+        {tabActivo === "agua" ? (
+          <div className="space-y-8">
+            <LoteAnalisisPanel loteId={lote.id} seccionFija="agua" />
+            <details className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
+              <summary className="cursor-pointer font-display text-sm font-semibold text-[var(--bf-ink)]">
+                Registrar mediciones de agua
+              </summary>
+              <div className="mt-4">
+                <AguaTab lote={lote} />
+              </div>
+            </details>
+          </div>
+        ) : null}
+        {tabActivo === "biofloc" ? (
+          <div className="space-y-8">
+            <LoteAnalisisPanel loteId={lote.id} seccionFija="biofloc" />
+            <details className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
+              <summary className="cursor-pointer font-display text-sm font-semibold text-[var(--bf-ink)]">
+                Registrar Biofloc
+              </summary>
+              <div className="mt-4">
+                <BioflocTab lote={lote} />
+              </div>
+            </details>
+          </div>
+        ) : null}
+        {tabActivo === "alimentacion" ? (
+          <div className="space-y-8">
+            <LoteAnalisisPanel loteId={lote.id} seccionFija="alimentacion" />
+            <details className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
+              <summary className="cursor-pointer font-display text-sm font-semibold text-[var(--bf-ink)]">
+                Registrar alimentación
+              </summary>
+              <div className="mt-4">
+                <AlimentacionTab lote={lote} />
+              </div>
+            </details>
+          </div>
+        ) : null}
+        {tabActivo === "finanzas" ? <FinanzasTab loteId={lote.id} /> : null}
+        {tabActivo === "historial" ? <HistorialEstanqueTab estanqueId={lote.estanque_id} loteActualId={lote.id} /> : null}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -184,6 +357,7 @@ function HistorialEstanqueTab({ estanqueId, loteActualId }: { estanqueId: number
   const query = useQuery({
     queryKey: ["analisis-estanque-historial", estanqueId],
     queryFn: () => getComparativoEstanques(false, { estanqueId, incluirHistorial: true }),
+    refetchOnMount: "always",
   });
   if (query.isLoading) return <LoadingState label="Cargando ciclos del estanque…" />;
   if (query.isError) return <ErrorAlert message={apiErrorMessage(query.error)} />;
@@ -202,19 +376,27 @@ function HistorialEstanqueTab({ estanqueId, loteActualId }: { estanqueId: number
             key: "lote",
             header: "Lote",
             render: (row) => (
-              <Link className="font-medium text-[var(--bf-accent)] hover:underline" to={`/produccion/lotes/${row.lote_id}?tab=analisis`}>
+              <Link
+                className="font-medium text-[var(--bf-accent)] hover:underline"
+                to={pathFichaEstanque(estanqueId, { loteId: row.lote_id })}
+              >
                 {row.lote_codigo}{row.lote_id === loteActualId ? " · actual" : ""}
               </Link>
             ),
           },
-          { key: "estado", header: "Estado", render: (row) => row.estado_lote },
+          { key: "estado", header: "Estado", render: (row) => (
+            <StatusBadge
+              label={row.estado_lote}
+              tone={row.estado_lote === "ACTIVO" ? "ok" : "neutral"}
+            />
+          ) },
           { key: "especie", header: "Especie", render: (row) => row.especie },
           { key: "siembra", header: "Siembra", render: (row) => formatDate(row.fecha_siembra) },
           { key: "cierre", header: "Cierre", render: (row) => row.fecha_cierre ? formatDate(row.fecha_cierre) : "N/D" },
           { key: "biomasa", header: "Biomasa (kg)", render: (row) => row.productividad.biomasa_actual_kg == null ? "N/D" : formatNumber(row.productividad.biomasa_actual_kg, { maximumFractionDigits: 3 }) },
           { key: "produccion", header: "Cosechado (kg)", render: (row) => formatNumber(row.productividad.peso_cosechado_kg, { maximumFractionDigits: 3 }) },
           { key: "supervivencia", header: "Superv. %", render: (row) => row.productividad.supervivencia_porcentaje == null ? "N/D" : formatNumber(row.productividad.supervivencia_porcentaje, { maximumFractionDigits: 2 }) },
-          { key: "fca", header: "FCA", render: (row) => row.eficiencia.fca_disponible ? formatNumber(row.eficiencia.fca, { maximumFractionDigits: 4 }) : <span title={row.eficiencia.fca_motivo ?? undefined}>N/D</span> },
+          { key: "fca", header: FCA_LABEL, render: (row) => row.eficiencia.fca_disponible ? <span title={FCA_HINT_ECONOMICO}>{formatNumber(row.eficiencia.fca, { maximumFractionDigits: 4 })}</span> : <span title={row.eficiencia.fca_motivo ?? undefined}>N/D</span> },
           { key: "ingresos", header: "Ingresos", render: (row) => formatCop(row.finanzas.ingresos_lote) },
           { key: "gastos", header: "Gastos directos", render: (row) => formatCop(row.finanzas.gastos_directos_lote) },
         ]}
@@ -224,8 +406,118 @@ function HistorialEstanqueTab({ estanqueId, loteActualId }: { estanqueId: number
 }
 
 function nd(valor: string | number | null | undefined, digitos = 3): string {
-  if (valor === null || valor === undefined || valor === "") return "N/D";
-  return formatNumber(valor, { maximumFractionDigits: digitos });
+  if (valor == null || valor === "") return "N/D";
+  return formatNumber(valor, { minimumFractionDigits: digitos, maximumFractionDigits: digitos });
+}
+
+function GraficasResumen({
+  data,
+  onVerTodas,
+}: {
+  data: AnalisisLote;
+  onVerTodas?: () => void;
+}) {
+  const puntosPeso = data.biometrias.map((fila) => ({
+    etiqueta: formatDateTime(fila.fecha_hora),
+    peso: toNumber(fila.peso_promedio_g),
+    esperado: toNumber(fila.peso_esperado_g),
+  }));
+  const hayEsperado = puntosPeso.some((punto) => punto.esperado !== null);
+  const puntosBiomasa = data.serie_biomasa.map((fila) => ({
+    etiqueta: formatDateTime(fila.fecha_hora),
+    biomasa: toNumber(fila.biomasa_kg),
+  }));
+  const puntosPoblacion = data.serie_poblacion.map((fila) => ({
+    etiqueta: formatDateTime(fila.fecha_hora),
+    poblacion: fila.poblacion_estimada,
+    mortalidad: fila.mortalidad_acumulada,
+    supervivencia: toNumber(fila.supervivencia_porcentaje),
+  }));
+  const puntosAlimento = data.alimentacion_real
+    .filter((fila) => fila.convertible_a_kg && fila.acumulado_kg != null)
+    .map((fila) => ({
+      etiqueta: formatDateTime(fila.fecha_hora),
+      acumulado: toNumber(fila.acumulado_kg),
+    }));
+  const biomasaActual = nd(data.indicadores.biomasa_actual_kg);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
+          Gráficas principales
+        </h2>
+        {onVerTodas ? (
+          <button type="button" className="bf-btn-secondary !py-1 text-xs" onClick={onVerTodas}>
+            Ver producción completa
+          </button>
+        ) : null}
+      </div>
+      <div className="grid gap-3 xl:grid-cols-2">
+        <ChartCard
+          title="Peso promedio vs tiempo"
+          unidad="g"
+          vacio={puntosPeso.length === 0}
+          vacioMensaje="Sin datos suficientes para graficar. Falta registrar biometrías."
+        >
+          <TimeSeriesChart
+            data={puntosPeso}
+            series={
+              hayEsperado
+                ? [
+                    { key: "peso", nombre: "Peso real (g)" },
+                    { key: "esperado", nombre: "Peso esperado (g)", color: "#b45309" },
+                  ]
+                : [{ key: "peso", nombre: "Peso real (g)" }]
+            }
+            unidad="g"
+          />
+        </ChartCard>
+        <ChartCard
+          title="Biomasa vs tiempo"
+          unidad="kg"
+          vacio={puntosBiomasa.length === 0}
+          vacioMensaje={`Serie histórica de biomasa no disponible. Biomasa actual: ${biomasaActual}${
+            biomasaActual === "N/D" ? ` · ${data.pendientes.biomasa_actual_kg ?? "SIN_BIOMETRIA"}` : " kg"
+          }.`}
+        >
+          <TimeSeriesChart
+            data={puntosBiomasa}
+            series={[{ key: "biomasa", nombre: "Biomasa (kg)" }]}
+            unidad="kg"
+          />
+        </ChartCard>
+        <ChartCard
+          title="Población y mortalidad acumulada"
+          unidad="peces"
+          vacio={puntosPoblacion.length === 0}
+          vacioMensaje="El backend no entrega serie histórica de población para este lote."
+        >
+          <TimeSeriesChart
+            data={puntosPoblacion}
+            series={[
+              { key: "poblacion", nombre: "Población estimada" },
+              { key: "mortalidad", nombre: "Mortalidad acumulada", color: "#b45309" },
+            ]}
+            unidad="peces"
+            digitos={0}
+          />
+        </ChartCard>
+        <ChartCard
+          title="Alimento real acumulado"
+          unidad="kg"
+          vacio={puntosAlimento.length === 0}
+          vacioMensaje="Sin datos suficientes para graficar. Falta alimentación convertible a kg."
+        >
+          <TimeSeriesChart
+            data={puntosAlimento}
+            series={[{ key: "acumulado", nombre: "Acumulado (kg)" }]}
+            unidad="kg"
+          />
+        </ChartCard>
+      </div>
+    </div>
+  );
 }
 
 function ResumenTab({
@@ -233,41 +525,87 @@ function ResumenTab({
   observaciones,
   fechaCierre,
   pesoInicial,
+  onVerGraficas,
+  mostrarGraficasResumen = true,
 }: {
   loteId: number;
   observaciones: string | null;
   fechaCierre: string | null;
   pesoInicial: number | null;
+  onVerGraficas?: () => void;
+  mostrarGraficasResumen?: boolean;
 }) {
   const analisis = useQuery({
     queryKey: ["analisis-lote", loteId, "", ""],
     queryFn: () => getAnalisisLote(loteId),
   });
-  const bio = useQuery({ queryKey: ["biometrias", loteId], queryFn: () => listBiometrias(loteId) });
-  const mort = useQuery({ queryKey: ["mortalidades", loteId], queryFn: () => listMortalidades(loteId) });
-  const cos = useQuery({ queryKey: ["cosechas", loteId], queryFn: () => listCosechas(loteId) });
   const ind = analisis.data?.indicadores;
   const fin = analisis.data?.finanzas;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {analisis.isLoading ? <LoadingState label="Cargando indicadores del lote…" /> : null}
       {analisis.isError ? <ErrorAlert message={apiErrorMessage(analisis.error)} /> : null}
+
       {ind ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Días de cultivo" value={formatNumber(ind.dias_cultivo)} hint={`Semana ${ind.semana_cultivo}`} />
-          <KpiCard label="Población estimada" value={formatNumber(ind.poblacion_estimada)} />
-          <KpiCard label="Peso promedio (g)" value={nd(ind.peso_promedio_g)} hint={ind.peso_promedio_g == null ? "SIN_BIOMETRIA" : undefined} />
-          <KpiCard label="Biomasa actual (kg)" value={nd(ind.biomasa_actual_kg)} hint={analisis.data?.pendientes.biomasa_actual_kg} />
-          <KpiCard label="Supervivencia (%)" value={nd(ind.supervivencia_porcentaje, 2)} />
-          <KpiCard label="Mortalidad (%)" value={nd(ind.mortalidad_porcentaje, 2)} />
-          <KpiCard label="FCA" value={ind.fca_disponible ? nd(ind.fca, 4) : "N/D"} hint={ind.fca_motivo ?? undefined} />
-          <KpiCard
-            label="Productividad Δ kg"
-            value={nd(analisis.data?.productividad.ganancia_biomasa_kg)}
-            hint={analisis.data?.productividad.motivos.ganancia_biomasa_kg}
-          />
-        </div>
+        <section>
+          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
+            Estado del cultivo
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard label="Peces sembrados" value={formatNumber(ind.peces_sembrados)} />
+            <KpiCard label="Población estimada" value={formatNumber(ind.poblacion_estimada)} />
+            <KpiCard label="Peces cosechados" value={formatNumber(ind.peces_cosechados)} />
+            <KpiCard label="Mortalidad acumulada" value={formatNumber(ind.mortalidad_acumulada)} />
+            <KpiCard label="Supervivencia (%)" value={nd(ind.supervivencia_porcentaje, 2)} />
+            <KpiCard label="Mortalidad (%)" value={nd(ind.mortalidad_porcentaje, 2)} />
+            <KpiCard label="Días de cultivo" value={formatNumber(ind.dias_cultivo)} />
+            <KpiCard label="Semana" value={formatNumber(ind.semana_cultivo)} />
+            <KpiCard
+              label="Biomasa inicial (kg)"
+              value={nd(ind.biomasa_inicial_kg, 2)}
+              hint={analisis.data?.pendientes.biomasa_inicial_kg}
+            />
+            <KpiCard
+              label="Biomasa actual (kg)"
+              value={nd(ind.biomasa_actual_kg, 2)}
+              hint={analisis.data?.pendientes.biomasa_actual_kg}
+            />
+            <KpiCard
+              label="Peso promedio (g)"
+              value={nd(ind.peso_promedio_g)}
+              hint={ind.peso_promedio_g == null ? "SIN_BIOMETRIA" : undefined}
+            />
+            <KpiCard
+              label={FCA_LABEL}
+              value={ind.fca_disponible ? nd(ind.fca, 4) : "N/D"}
+              hint={
+                ind.fca_disponible
+                  ? fcaHintDisponible(fechaCierre)
+                  : fcaHintNoDisponible(ind.fca_motivo)
+              }
+              title={FCA_HINT_ECONOMICO}
+            />
+            <KpiCard
+              label="Ración diaria recomendada (kg)"
+              value={nd(ind.racion_diaria_recomendada_kg)}
+              hint={analisis.data?.pendientes.racion_diaria_recomendada_kg}
+            />
+            <KpiCard
+              label="Raciones por día"
+              value={
+                ind.raciones_diarias_texto
+                  ? ind.raciones_diarias_texto
+                  : nd(ind.numero_raciones_diarias, 0)
+              }
+              hint={ind.raciones_diarias_texto ? undefined : analisis.data?.pendientes.numero_raciones_diarias}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {mostrarGraficasResumen && analisis.data ? (
+        <GraficasResumen data={analisis.data} onVerTodas={onVerGraficas} />
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -292,10 +630,10 @@ function ResumenTab({
         </div>
         <div className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
           <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
-            Finanzas imputadas
+            Resumen financiero del lote
           </h2>
           <p className="mt-1 text-xs text-[var(--bf-muted)]">
-            Solo ingresos y gastos con lote_id. Utilidad y costo/kg permanecen N/D.
+            Solo ingresos y gastos con lote_id. Costo completo, utilidad y margen permanecen N/D.
           </p>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between">
@@ -307,55 +645,82 @@ function ResumenTab({
               <dd>{fin ? formatCop(fin.gastos_directos_lote) : "…"}</dd>
             </div>
             <div className="flex justify-between">
-              <dt>Utilidad / margen</dt>
-              <dd>N/D</dd>
+              <dt>Balance directo</dt>
+              <dd>{fin ? formatCop(Number(fin.ingresos_lote) - Number(fin.gastos_directos_lote)) : "…"}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Costo completo / rentabilidad</dt>
+              <dd title={fin?.costos_completos_motivo ?? fin?.utilidad_motivo}>N/D</dd>
             </div>
           </dl>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link to={`/finanzas/ventas?lote_id=${loteId}`} className="bf-btn-secondary !py-1 text-xs">
-              Ventas del lote
-            </Link>
-            <Link to={`/finanzas/gastos?lote_id=${loteId}`} className="bf-btn-secondary !py-1 text-xs">
-              Gastos del lote
+              Ver Finanzas del lote
             </Link>
           </div>
-        </div>
-        <div className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
-          <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
-            Registros de seguimiento
-          </h2>
-          <p className="mt-1 text-xs text-[var(--bf-muted)]">Conteo de filas del API. No es población estimada.</p>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt>Biometrías</dt>
-              <dd>{bio.data ? formatNumber(bio.data.length) : "…"}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt>Mortalidades</dt>
-              <dd>{mort.data ? formatNumber(mort.data.length) : "…"}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt>Cosechas</dt>
-              <dd>{cos.data ? formatNumber(cos.data.length) : "…"}</dd>
-            </div>
-          </dl>
         </div>
       </div>
     </div>
   );
 }
 
-function BiometriasTab({ loteId }: { loteId: number }) {
+function FinanzasTab({ loteId }: { loteId: number }) {
+  const analisis = useQuery({
+    queryKey: ["analisis-lote", loteId, "", ""],
+    queryFn: () => getAnalisisLote(loteId),
+  });
+  const fin = analisis.data?.finanzas;
+
+  return (
+    <div className="space-y-4">
+      {analisis.isLoading ? <LoadingState label="Cargando finanzas del lote…" /> : null}
+      {analisis.isError ? <ErrorAlert message={apiErrorMessage(analisis.error)} /> : null}
+      <div className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
+        <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
+          Finanzas imputadas
+        </h2>
+        <p className="mt-1 text-xs text-[var(--bf-muted)]">
+          Solo ingresos y gastos con lote_id. Utilidad, margen y costo/kg permanecen N/D: el backend no
+          prorratea costos incompletos.
+        </p>
+        {fin ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard label="Ingresos" value={formatCop(fin.ingresos_lote)} hint={`${fin.ventas_registradas} venta(s)`} />
+            <KpiCard label="Gastos directos" value={formatCop(fin.gastos_directos_lote)} hint={`${fin.gastos_registrados} gasto(s)`} />
+            <KpiCard
+              label="Balance directo"
+              value={formatCop(Number(fin.ingresos_lote) - Number(fin.gastos_directos_lote))}
+              hint="Ingresos − gastos imputados al lote. No es utilidad."
+            />
+            <KpiCard label="Costo completo" value="N/D" hint={fin.costos_completos_motivo} />
+            <KpiCard label="Utilidad" value="N/D" hint={fin.utilidad_motivo} />
+            <KpiCard label="Margen / rentabilidad" value="N/D" hint={fin.margen_motivo} />
+          </div>
+        ) : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link to={`/finanzas/ventas?lote_id=${loteId}`} className="bf-btn-primary !py-1 text-xs">
+            Ver Finanzas del lote
+          </Link>
+          <Link to={`/finanzas/gastos?lote_id=${loteId}`} className="bf-btn-secondary !py-1 text-xs">
+            Gastos del lote
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BiometriasTab({ loteId, loteActivo }: { loteId: number; loteActivo: boolean }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const puedeCrear = can(user?.rol, "crearBiometria");
+  const puedeCrear = loteActivo && can(user?.rol, "crearBiometria");
   const query = useQuery({ queryKey: ["biometrias", loteId], queryFn: () => listBiometrias(loteId) });
   const form = useForm({
     defaultValues: {
       fecha_hora: toDatetimeLocalValue(),
-      cantidad_muestra: 1,
+      cantidad_muestra: "",
       peso_total_muestra_g: "",
       talla_promedio: "",
       unidad_talla: "",
@@ -388,7 +753,7 @@ function BiometriasTab({ loteId }: { loteId: number }) {
                 setFormError(null);
                 form.reset({
                   fecha_hora: toDatetimeLocalValue(),
-                  cantidad_muestra: 1,
+                  cantidad_muestra: "",
                   peso_total_muestra_g: "",
                   talla_promedio: "",
                   unidad_talla: "",
@@ -422,7 +787,7 @@ function BiometriasTab({ loteId }: { loteId: number }) {
               header: "Talla promedio",
               render: (row) =>
                 row.talla_promedio == null
-                  ? "—"
+                  ? "N/D"
                   : `${formatNumber(row.talla_promedio, { maximumFractionDigits: 3 })}${row.unidad_talla ? ` ${row.unidad_talla}` : ""}`,
             },
             { key: "obs", header: "Observaciones", render: (row) => row.observaciones || "—" },
@@ -434,10 +799,12 @@ function BiometriasTab({ loteId }: { loteId: number }) {
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+            if (!fechaHora) return;
             const talla = values.talla_promedio.trim();
             mutation.mutate({
               lote_id: loteId,
-              fecha_hora: datetimeLocalToIso(values.fecha_hora),
+              fecha_hora: fechaHora,
               cantidad_muestra: Number(values.cantidad_muestra),
               peso_total_muestra_g: Number(values.peso_total_muestra_g),
               talla_promedio: talla === "" ? null : Number(talla),
@@ -474,17 +841,17 @@ function BiometriasTab({ loteId }: { loteId: number }) {
   );
 }
 
-function MortalidadesTab({ loteId }: { loteId: number }) {
+function MortalidadesTab({ loteId, loteActivo }: { loteId: number; loteActivo: boolean }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const puedeCrear = can(user?.rol, "crearMortalidad");
+  const puedeCrear = loteActivo && can(user?.rol, "crearMortalidad");
   const query = useQuery({ queryKey: ["mortalidades", loteId], queryFn: () => listMortalidades(loteId) });
   const form = useForm({
     defaultValues: {
       fecha_hora: toDatetimeLocalValue(),
-      cantidad: 1,
+      cantidad: "",
       causa: "",
       observaciones: "",
     },
@@ -515,7 +882,7 @@ function MortalidadesTab({ loteId }: { loteId: number }) {
                 setFormError(null);
                 form.reset({
                   fecha_hora: toDatetimeLocalValue(),
-                  cantidad: 1,
+                  cantidad: "",
                   causa: "",
                   observaciones: "",
                 });
@@ -546,9 +913,11 @@ function MortalidadesTab({ loteId }: { loteId: number }) {
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+            if (!fechaHora) return;
             mutation.mutate({
               lote_id: loteId,
-              fecha_hora: datetimeLocalToIso(values.fecha_hora),
+              fecha_hora: fechaHora,
               cantidad: Number(values.cantidad),
               causa: values.causa.trim() || null,
               observaciones: values.observaciones.trim() || null,
@@ -577,22 +946,35 @@ function MortalidadesTab({ loteId }: { loteId: number }) {
   );
 }
 
-function CosechasTab({ loteId }: { loteId: number }) {
+function CosechasTab({ lote }: { lote: Lote }) {
+  const loteId = lote.id;
+  const loteActivo = lote.estado.nombre === "ACTIVO";
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const puedeCrear = can(user?.rol, "crearCosecha");
+  const puedeCrear = loteActivo && can(user?.rol, "crearCosecha");
   const query = useQuery({ queryKey: ["cosechas", loteId], queryFn: () => listCosechas(loteId) });
+  const analisisQuery = useQuery({
+    queryKey: ["analisis-lote", loteId, "", ""],
+    queryFn: () => getAnalisisLote(loteId),
+    enabled: open,
+  });
+  const disponible = analisisQuery.data?.indicadores.poblacion_estimada ?? null;
   const form = useForm({
     defaultValues: {
       fecha_hora: toDatetimeLocalValue(),
-      cantidad_peces: 1,
+      cantidad_peces: "",
       peso_total_kg: "",
       peso_promedio_g: "",
       observaciones: "",
     },
   });
+  const cantidadWatch = Number(form.watch("cantidad_peces"));
+  const restantesPreview =
+    disponible != null && Number.isInteger(cantidadWatch) && cantidadWatch > 0
+      ? disponible - cantidadWatch
+      : null;
 
   const mutation = useMutation({
     mutationFn: (data: CosechaCreate) => createCosecha(data),
@@ -600,6 +982,8 @@ function CosechasTab({ loteId }: { loteId: number }) {
       setOpen(false);
       setFormError(null);
       await queryClient.invalidateQueries({ queryKey: ["cosechas", loteId] });
+      await queryClient.invalidateQueries({ queryKey: ["lote", loteId] });
+      await queryClient.invalidateQueries({ queryKey: ["lotes"] });
       await invalidateAnalisis(queryClient);
     },
     onError: (error) => setFormError(apiErrorMessage(error)),
@@ -619,7 +1003,7 @@ function CosechasTab({ loteId }: { loteId: number }) {
                 setFormError(null);
                 form.reset({
                   fecha_hora: toDatetimeLocalValue(),
-                  cantidad_peces: 1,
+                  cantidad_peces: "",
                   peso_total_kg: "",
                   peso_promedio_g: "",
                   observaciones: "",
@@ -663,26 +1047,53 @@ function CosechasTab({ loteId }: { loteId: number }) {
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+            if (!fechaHora) return;
+            const cantidadPeces = Number(values.cantidad_peces);
+            const pesoTotalKg = Number(values.peso_total_kg);
+            if (!Number.isInteger(cantidadPeces) || cantidadPeces <= 0) {
+              setFormError("La cantidad de peces debe ser un entero mayor que 0.");
+              return;
+            }
+            if (disponible != null && cantidadPeces > disponible) {
+              setFormError(
+                `No se pueden cosechar ${cantidadPeces} peces. La población disponible es ${disponible}.`,
+              );
+              return;
+            }
+            if (!Number.isFinite(pesoTotalKg) || pesoTotalKg <= 0) {
+              setFormError("El peso total cosechado debe ser mayor que 0.");
+              return;
+            }
             const promedio = values.peso_promedio_g.trim();
             mutation.mutate({
               lote_id: loteId,
-              fecha_hora: datetimeLocalToIso(values.fecha_hora),
-              cantidad_peces: Number(values.cantidad_peces),
-              peso_total_kg: Number(values.peso_total_kg),
+              fecha_hora: fechaHora,
+              cantidad_peces: cantidadPeces,
+              peso_total_kg: pesoTotalKg,
               peso_promedio_g: promedio === "" ? null : Number(promedio),
               observaciones: values.observaciones.trim() || null,
             });
           })}
         >
           {formError ? <ErrorAlert message={formError} /> : null}
+          <p className="text-sm text-[var(--bf-ink)]">
+            Población disponible:{" "}
+            <span className="font-semibold">
+              {disponible == null ? "N/D" : `${formatNumber(disponible)} peces`}
+            </span>
+          </p>
+          {restantesPreview != null && restantesPreview >= 0 ? (
+            <p className="text-sm text-[var(--bf-muted)]">{mensajeRestantesCosecha(restantesPreview)}</p>
+          ) : null}
           <Field label="Fecha y hora">
             <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
           </Field>
           <Field label="Cantidad de peces">
-            <input type="number" min="1" className="bf-input" {...form.register("cantidad_peces", { valueAsNumber: true })} />
+            <input type="number" min="1" step="1" className="bf-input" {...form.register("cantidad_peces", { required: true })} />
           </Field>
           <Field label="Peso total en kilogramos">
-            <input type="number" step="any" min="0.001" className="bf-input" {...form.register("peso_total_kg", { required: true, valueAsNumber: true, min: 0.001 })} />
+            <input type="number" step="any" min="0.001" className="bf-input" {...form.register("peso_total_kg", { required: true })} />
           </Field>
           <Field label="Peso promedio por pez en gramos (opcional)">
             <input type="number" step="any" min="0" className="bf-input" {...form.register("peso_promedio_g")} />

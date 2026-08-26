@@ -1,5 +1,11 @@
 import { StatusBadge } from "../StatusBadge";
 import { formatDate, formatNumber } from "../../utils/format";
+import {
+  bordeEstado,
+  etiquetaCumplimiento,
+  toneCumplimiento,
+  toneEstadoAnalitico,
+} from "../../utils/analisisStatus";
 import type { EvaluacionIndicador } from "../../types/analisis";
 
 type RealReferenceCardProps = {
@@ -10,96 +16,106 @@ function numero(valor: string | number, digitos = 4): string {
   return formatNumber(valor, { maximumFractionDigits: digitos });
 }
 
+function tituloVisible(evaluacion: EvaluacionIndicador): string {
+  if (evaluacion.indicador === "volumen_sedimentable" || evaluacion.etiqueta === "Volumen sedimentable") {
+    return "Sólidos sedimentables";
+  }
+  if (/^agua:\d+$/i.test(evaluacion.indicador) && (!evaluacion.etiqueta || evaluacion.etiqueta === "Agua")) {
+    return "Parámetro de agua";
+  }
+  return evaluacion.etiqueta;
+}
+
 function badge(evaluacion: EvaluacionIndicador) {
-  if (evaluacion.cumplimiento_rango === "DENTRO_RANGO") {
-    return <StatusBadge label="Dentro del rango" tone="ok" />;
-  }
-  if (evaluacion.cumplimiento_rango === "FUERA_RANGO") {
-    return <StatusBadge label="Fuera del rango" tone="danger" />;
-  }
+  const cumplimientoTone = toneCumplimiento(evaluacion.cumplimiento_rango);
+  const cumplimiento =
+    evaluacion.cumplimiento_rango === "NO_EVALUABLE" ? null : (
+      <StatusBadge label={etiquetaCumplimiento(evaluacion.cumplimiento_rango)} tone={cumplimientoTone} />
+    );
+  let estado = null;
   switch (evaluacion.estado_analitico) {
     case "NORMAL":
-      return <StatusBadge label="🟢 NORMAL" tone="ok" />;
+      estado = <StatusBadge label="NORMAL" tone="ok" />;
+      break;
     case "ALERTA":
-      return <StatusBadge label="🟡 ALERTA" tone="warn" />;
+      estado = <StatusBadge label="ALERTA" tone="warn" />;
+      break;
     case "CRITICO":
-      return <StatusBadge label="🔴 CRÍTICO" tone="danger" />;
+      estado = <StatusBadge label="CRÍTICO" tone="danger" />;
+      break;
     case "SIN_DATOS":
-      return <StatusBadge label="⚪ SIN DATOS" tone="neutral" />;
+      estado = <StatusBadge label="N/D — Sin medición" tone="neutral" />;
+      break;
     case "SIN_REFERENCIA":
-      return <StatusBadge label="⚫ SIN REFERENCIA" tone="neutral" />;
+      estado = <StatusBadge label="N/D — Sin referencia configurada" tone="neutral" />;
+      break;
     default:
-      return null;
+      estado = null;
   }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {cumplimiento}
+      {estado}
+    </span>
+  );
 }
 
 /**
  * Presenta exactamente la evaluación entregada por el backend. No deriva
- * objetivos, rangos, desviaciones ni estados.
+ * objetivos, rangos, desviaciones ni estados. El objetivo no sustituye el rango.
  */
 export function RealReferenceCard({ evaluacion }: RealReferenceCardProps) {
   const unidad = evaluacion.unidad ? ` ${evaluacion.unidad}` : "";
-  const rango =
-    evaluacion.minimo !== null || evaluacion.maximo !== null
-      ? `${evaluacion.minimo === null ? "N/D" : numero(evaluacion.minimo)} – ${
-          evaluacion.maximo === null ? "N/D" : numero(evaluacion.maximo)
-        }${unidad}`
-      : null;
+  const borde =
+    evaluacion.cumplimiento_rango === "NO_EVALUABLE"
+      ? bordeEstado(toneEstadoAnalitico(evaluacion.estado_analitico))
+      : bordeEstado(toneCumplimiento(evaluacion.cumplimiento_rango));
+  const realTxt =
+    evaluacion.real === null
+      ? "N/D — Sin medición"
+      : `${numero(evaluacion.real)}${unidad}`;
+  const hayRango = evaluacion.minimo !== null || evaluacion.maximo !== null;
+  const rangoTxt = hayRango
+    ? `${evaluacion.minimo == null ? "—" : numero(evaluacion.minimo)} – ${
+        evaluacion.maximo == null ? "—" : numero(evaluacion.maximo)
+      }${unidad}`
+    : "N/D — Sin referencia configurada";
 
   return (
-    <article className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
+    <article className={`rounded-2xl border bg-white p-4 shadow-[0_1px_2px_rgba(16,40,33,0.04)] ${borde}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h3 className="font-display text-sm font-semibold text-[var(--bf-ink)]">
-          {evaluacion.etiqueta}
-        </h3>
+        <h3 className="font-display text-sm font-semibold text-[var(--bf-ink)]">{tituloVisible(evaluacion)}</h3>
         {badge(evaluacion)}
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-        <Dato
-          label="Real"
-          valor={
-            evaluacion.real === null ? "N/D" : `${numero(evaluacion.real)}${unidad}`
-          }
-        />
+      <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+        <Dato label="Valor real" valor={realTxt} />
+        <Dato label="Rango" valor={rangoTxt} />
         {evaluacion.objetivo !== null ? (
           <Dato label="Objetivo" valor={`${numero(evaluacion.objetivo)}${unidad}`} />
         ) : null}
-        {rango ? <Dato label="Rango" valor={rango} /> : null}
         {evaluacion.diferencia_objetivo !== null ? (
-          <Dato
-            label="Diferencia"
-            valor={`${numero(evaluacion.diferencia_objetivo)}${unidad}`}
-          />
+          <Dato label="Diferencia" valor={`${numero(evaluacion.diferencia_objetivo)}${unidad}`} />
         ) : null}
         {evaluacion.diferencia_objetivo_porcentaje !== null ? (
-          <Dato
-            label="Desviación"
-            valor={`${numero(evaluacion.diferencia_objetivo_porcentaje, 2)} %`}
-          />
+          <Dato label="Desviación" valor={`${numero(evaluacion.diferencia_objetivo_porcentaje, 2)} %`} />
         ) : null}
-        {evaluacion.desviacion_rango !== null ? (
-          <Dato
-            label="Desviación del límite"
-            valor={`${numero(evaluacion.desviacion_rango)}${unidad}`}
-          />
+        {evaluacion.desviacion_rango !== null && evaluacion.cumplimiento_rango === "FUERA_RANGO" ? (
+          <Dato label="Desviación del límite" valor={`${numero(evaluacion.desviacion_rango)}${unidad}`} />
         ) : null}
       </dl>
 
       <p className="mt-3 text-xs text-[var(--bf-muted)]">{evaluacion.explicacion}</p>
       {evaluacion.referencia ? (
         <p className="mt-2 text-xs text-[var(--bf-muted)]">
-          <span className="font-medium text-[var(--bf-ink)]">Referencia:</span>{" "}
-          {evaluacion.referencia}
+          <span className="font-medium text-[var(--bf-ink)]">Referencia:</span> {evaluacion.referencia}
         </p>
       ) : null}
       {evaluacion.fecha_real || evaluacion.fecha_referencia ? (
         <p className="mt-1 text-xs text-[var(--bf-muted)]">
           {evaluacion.fecha_real ? `Dato: ${formatDate(evaluacion.fecha_real)}` : ""}
           {evaluacion.fecha_real && evaluacion.fecha_referencia ? " · " : ""}
-          {evaluacion.fecha_referencia
-            ? `Referencia: ${formatDate(evaluacion.fecha_referencia)}`
-            : ""}
+          {evaluacion.fecha_referencia ? `Referencia: ${formatDate(evaluacion.fecha_referencia)}` : ""}
         </p>
       ) : null}
     </article>

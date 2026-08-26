@@ -6,7 +6,7 @@ import { LoadingState } from "../../components/LoadingState";
 import { listProductos, listProductosStock, listTiposMovimientoInventario } from "../../api/inventory";
 import { getCompra } from "../../api/purchases";
 import { apiErrorMessage } from "../../utils/apiError";
-import { formatCop, formatDate, formatDateTime, formatNumber } from "../../utils/format";
+import { etiquetaProducto, formatCop, formatDate, formatDateTime, formatNumber } from "../../utils/format";
 
 export function CompraDetallePage() {
   const { id } = useParams();
@@ -83,7 +83,7 @@ export function CompraDetallePage() {
               header: "Producto",
               render: (row) => {
                 const producto = productos.get(row.producto_id);
-                return producto ? `${producto.codigo} · ${producto.nombre}` : `#${row.producto_id}`;
+                return producto ? etiquetaProducto(producto.nombre, producto.codigo) : `#${row.producto_id}`;
               },
             },
             {

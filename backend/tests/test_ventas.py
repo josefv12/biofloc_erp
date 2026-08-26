@@ -39,6 +39,7 @@ from env_tests import (
     ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
     OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
 )
+from lote_operativo import asegurar_lote, limpiar_fixtures
 
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
@@ -101,12 +102,15 @@ def t03_sin_jwt():
     log(3, "GET ventas sin JWT 403", ok, f"status={r.status_code}")
 
 def t03b_resolver_lote_real(admin_tok):
-    r = requests.get(f"{BASE}/api/v1/lotes/", headers=h(admin_tok))
-    ok = r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 1
-    if ok:
-        T["lote_real"] = r.json()[0]["id"]
-    log("3b", f"Resuelto lote_real id={T['lote_real']}", ok,
-        f"status={r.status_code} len={len(r.json()) if r.status_code==200 else '?'}")
+    try:
+        T["lote_real"] = asegurar_lote(admin_tok)[0]
+        ok = True
+    except Exception as exc:  # noqa: BLE001
+        ok = False
+        T["lote_real"] = None
+        log("3b", "Resuelto lote_real", False, str(exc)[:200])
+        return
+    log("3b", f"Resuelto lote_real id={T['lote_real']}", ok)
 
 # =========================== BLOQUE II VENTAS VÁLIDAS ========================
 def t04_venta_1_detalle(admin_tok):
@@ -409,7 +413,9 @@ def main():
         cur.execute(f"SELECT count(*) FROM {SCH}.auditoria WHERE detalle::text LIKE %s", (f"%{PREF}%",)); ra = cur.fetchone()[0]
         cur.close(); conn.close()
         ok_clean = rv == 0 and rd == 0 and ra == 0
-        log(19, f"Limpieza 0 residuales V={rv} DV={rd} A={ra}", ok_clean, "")
+        leftover_fx = limpiar_fixtures()
+        ok_clean = ok_clean and leftover_fx == 0
+        log(19, f"Limpieza 0 residuales V={rv} DV={rd} A={ra} fixture={leftover_fx}", ok_clean, "")
     except Exception as e:
         ok_clean = False
         log(19, f"Limpieza EXCEPTION: {e}", False, "")

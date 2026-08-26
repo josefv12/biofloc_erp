@@ -11,6 +11,7 @@ import type {
   ParametroAgua,
   Producto,
   ReferenciaAgua,
+  ReferenciaBiofloc,
   TipoAplicacionBiofloc,
   Unidad,
 } from "../types/operations";
@@ -31,6 +32,20 @@ export function listReferenciasAgua(params: {
   if (params.parametro_id) query.set("parametro_id", String(params.parametro_id));
   query.set("solo_activos", params.solo_activos === false ? "false" : "true");
   return apiFetch<ReferenciaAgua[]>(`/api/v1/referencias-agua/?${query.toString()}`);
+}
+
+export function listReferenciasBiofloc(params: {
+  especie_id?: number;
+  etapa_productiva_id?: number;
+  indicador?: string;
+  solo_activos?: boolean;
+} = {}): Promise<ReferenciaBiofloc[]> {
+  const query = new URLSearchParams();
+  if (params.especie_id) query.set("especie_id", String(params.especie_id));
+  if (params.etapa_productiva_id) query.set("etapa_productiva_id", String(params.etapa_productiva_id));
+  if (params.indicador) query.set("indicador", params.indicador);
+  query.set("solo_activos", params.solo_activos === false ? "false" : "true");
+  return apiFetch<ReferenciaBiofloc[]>(`/api/v1/referencias-biofloc/?${query.toString()}`);
 }
 
 export function listMedicionesAgua(params: { lote_id?: number; parametro_id?: number } = {}): Promise<MedicionAgua[]> {

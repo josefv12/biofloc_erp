@@ -16,9 +16,10 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.models.usuario import Usuario
-from app.schemas.alimentacion import AlimentacionCreate, AlimentacionOut
+from app.schemas.alimentacion import AlimentacionCreate, AlimentacionOut, AlimentacionConStockOut
 from app.services.auth_service import get_current_user
 from app.services import alimentacion_service as svc
+from app.services.movimiento_inventario_service import obtener_stock_producto
 
 router = APIRouter()
 
@@ -78,12 +79,12 @@ def obtener(
 # ---------------------------------------------------------------------------
 @router.post(
     "/",
-    response_model=AlimentacionOut,
+    response_model=AlimentacionConStockOut,
     status_code=201,
     summary="Registrar alimentación",
     description=(
-        "Registra un evento de alimentación para un lote. "
-        "Valida que el lote y el producto existan, y que la fecha sea válida. "
+        "Registra un evento de alimentación para un lote y genera automáticamente "
+        "un movimiento de SALIDA de inventario. Valida stock suficiente. "
         "Roles permitidos: ADMINISTRADOR, TECNICO, OPERARIO."
     ),
 )
@@ -93,4 +94,8 @@ def crear(
     current_user: Usuario = Depends(get_current_user),
 ):
     _require_roles(current_user, db, {"ADMINISTRADOR", "TECNICO", "OPERARIO"})
-    return svc.crear_alimentacion(db, data, current_user.id)
+    alimentacion = svc.crear_alimentacion(db, data, current_user.id)
+    stock = obtener_stock_producto(db, data.producto_id)
+    result = AlimentacionConStockOut.model_validate(alimentacion)
+    result.stock_restante = float(stock)
+    return result

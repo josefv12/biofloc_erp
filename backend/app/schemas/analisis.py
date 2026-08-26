@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 
 from app.schemas.lote import EspecieOut, EtapaProductivaOut, EstadoLoteOut
 from app.schemas.referencia_produccion import ReferenciaProduccionOut
+from app.schemas.alimentacion_referencia import (
+    AlimentacionComparativaPuntoOut,
+    ReferenciaAlimentacionActivaOut,
+)
 
 
 class AnalisisEstanqueOut(BaseModel):
@@ -33,6 +37,8 @@ class IndicadoresLoteOut(BaseModel):
     mortalidad_porcentaje: Optional[Decimal] = Field(None, max_digits=8, decimal_places=2)
     ultima_biometria_id: Optional[int] = None
     peso_promedio_g: Optional[Decimal] = Field(None, max_digits=14, decimal_places=3)
+    talla_promedio: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
+    unidad_talla: Optional[str] = None
     fecha_ultima_biometria: Optional[datetime] = None
     peso_inicial_g: Optional[Decimal] = Field(None, max_digits=10, decimal_places=3)
     dias_cultivo: int
@@ -45,8 +51,16 @@ class IndicadoresLoteOut(BaseModel):
     fca: Optional[Decimal] = Field(None, max_digits=12, decimal_places=4)
     fca_disponible: bool
     fca_motivo: Optional[str] = None
-    racion_diaria_recomendada_kg: Optional[Decimal] = Field(None, max_digits=18, decimal_places=3)
+    sgr_pct_dia: Optional[Decimal] = Field(None, max_digits=14, decimal_places=4)
+    densidad_kg_m3: Optional[Decimal] = Field(None, max_digits=18, decimal_places=3)
+    volumen_util_m3: Optional[Decimal] = Field(None, max_digits=18, decimal_places=3)
+    racion_diaria_recomendada_kg: Optional[Decimal] = Field(None, max_digits=18, decimal_places=4)
     numero_raciones_diarias: Optional[int] = None
+    semana_productiva_alimentacion: Optional[int] = None
+    biomasa_esperada_kg: Optional[Decimal] = Field(None, max_digits=18, decimal_places=3)
+    raciones_diarias_texto: Optional[str] = None
+    racion_por_comida_kg: Optional[Decimal] = Field(None, max_digits=18, decimal_places=3)
+    racion_basada_en_peso: Optional[str] = None
 
 
 class DefinicionesCalculoOut(BaseModel):
@@ -164,6 +178,8 @@ class BiometriaSerieOut(BaseModel):
     cantidad_muestra: int
     peso_total_muestra_g: Decimal = Field(..., max_digits=12, decimal_places=3)
     peso_promedio_g: Optional[Decimal] = Field(None, max_digits=14, decimal_places=3)
+    talla_promedio: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
+    unidad_talla: Optional[str] = None
     semana_cultivo: int
     referencia_id: Optional[int] = None
     peso_esperado_g: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
@@ -241,6 +257,8 @@ class AguaMedicionOut(BaseModel):
     valor_minimo: Optional[Decimal] = Field(None, max_digits=12, decimal_places=4)
     valor_maximo: Optional[Decimal] = Field(None, max_digits=12, decimal_places=4)
     fuera_de_rango: Optional[bool] = None
+    registrado_por: Optional[int] = None
+    registrado_por_nombre: Optional[str] = None
 
 
 class BioflocMedicionOut(BaseModel):
@@ -249,6 +267,8 @@ class BioflocMedicionOut(BaseModel):
     volumen_sedimentable: Decimal = Field(..., max_digits=10, decimal_places=2)
     unidad: str
     relacion_cn: Optional[Decimal] = Field(None, max_digits=10, decimal_places=3)
+    registrado_por: Optional[int] = None
+    registrado_por_nombre: Optional[str] = None
 
 
 class AlimentoUnidadOut(BaseModel):
@@ -283,6 +303,7 @@ class AguaParametroEstadisticasOut(BaseModel):
 
 class EstadisticasAnalisisOut(BaseModel):
     peso_promedio_g: StatsSerieOut
+    talla_promedio: StatsSerieOut
     biomasa_kg: StatsSerieOut
     poblacion_estimada: StatsSerieOut
     supervivencia_porcentaje: StatsSerieOut
@@ -384,6 +405,8 @@ class AnalisisLoteCompletoOut(BaseModel):
     biofloc_serie: list[BioflocMedicionOut]
     alimentacion_real_por_unidad: list[AlimentoUnidadOut]
     alimentacion_real: list[AlimentoRegistroOut]
+    referencia_alimentacion: Optional[ReferenciaAlimentacionActivaOut] = None
+    serie_alimentacion_comparativa: list[AlimentacionComparativaPuntoOut] = []
 
 
 # --- Comparativo por estanque (nivel granja) -------------------------------
@@ -454,6 +477,8 @@ class ResumenGranjaOut(BaseModel):
     lotes_con_fca: int
     fca: Optional[Decimal] = None
     fca_motivo: str
+    alimento_real_acumulado_kg: Optional[Decimal] = Field(None, max_digits=18, decimal_places=3)
+    lotes_sin_alimento: int
     peso_cosechado_kg: Decimal = Field(..., max_digits=18, decimal_places=3)
     peces_cosechados: int
     ingresos_lotes_activos: Decimal = Field(..., max_digits=18, decimal_places=2)

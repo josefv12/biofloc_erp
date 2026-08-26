@@ -46,6 +46,7 @@ export type NamedCatalogSpec = {
   update: (id: number, body: Record<string, unknown>) => Promise<unknown>;
   fields: CatalogField[];
   canWrite: boolean;
+  createLabel?: string;
   note?: string;
   lockNombre?: (nombre: string) => boolean;
   lockNombreHint?: string;
@@ -189,7 +190,7 @@ export function NamedCatalogPanel({ spec }: { spec: NamedCatalogSpec }) {
         </div>
         {spec.canWrite ? (
           <button type="button" className="bf-btn-primary" onClick={openCreate}>
-            Nuevo
+            {spec.createLabel ?? "Nuevo"}
           </button>
         ) : null}
       </div>
@@ -261,7 +262,7 @@ export function NamedCatalogPanel({ spec }: { spec: NamedCatalogSpec }) {
             </Field>
           ) : null}
           {hasField(spec.fields, "afecta_stock") ? (
-            <Field label="afecta_stock">
+            <Field label="Efecto sobre el stock">
               <select className="bf-input" {...form.register("afecta_stock", { required: true })}>
                 <option value="1">+1</option>
                 <option value="-1">−1</option>

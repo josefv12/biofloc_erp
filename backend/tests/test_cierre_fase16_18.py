@@ -278,30 +278,30 @@ def main() -> int:
     ind = cuerpo["indicadores"]
     igual("peso promedio = 300 g / 10 peces", dec(ind["peso_promedio_g"]), Decimal("30.000"))
     igual("población = 1000 − 20 − 50", ind["poblacion_estimada"], 930)
-    igual("supervivencia = 930 / 1000 × 100", dec(ind["supervivencia_porcentaje"]), Decimal("93.00"))
+    igual("supervivencia = (1000 − 20) / 1000 × 100", dec(ind["supervivencia_porcentaje"]), Decimal("98.00"))
     igual("mortalidad = 20 / 1000 × 100", dec(ind["mortalidad_porcentaje"]), Decimal("2.00"))
     igual("biomasa inicial = 1000 × 10 g / 1000", dec(ind["biomasa_inicial_kg"]), Decimal("10.000"))
     igual("biomasa actual = 930 × 30 g / 1000", dec(ind["biomasa_actual_kg"]), Decimal("27.900"))
     igual("ganancia de peso = 30 − 10", dec(ind["ganancia_peso_g"]), Decimal("20.000"))
     igual("ganancia diaria = 20 / 14 días", dec(ind["ganancia_diaria_g"]), Decimal("1.428571"))
-    igual("ración = 27.900 kg × 4 % / 100", dec(ind["racion_diaria_recomendada_kg"]), Decimal("1.116"))
+    igual("ración = 27.900 kg × 3 % / 100", dec(ind["racion_diaria_recomendada_kg"]), Decimal("0.837"))
     igual("alimento real = 4 kg + 5 kg", dec(ind["alimento_real_acumulado_kg"]), Decimal("9.000"))
-    igual("FCA = 9 / (27.900 − 10.000)", dec(ind["fca"]), Decimal("0.5028"))
+    igual("FCA = 9 / (27.900 + 12.500 − 10.000)", dec(ind["fca"]), Decimal("0.2961"))
     igual("días de cultivo", ind["dias_cultivo"], 14)
-    # Semana de cultivo = ceil(días / 7): 14 días son la semana 2, con tasa 4 %.
-    igual("semana de cultivo = ceil(14 / 7)", ind["semana_cultivo"], 2)
-    igual("referencia de la semana 2", dec(cuerpo["referencia_produccion"]["tasa_alimentacion_pct"]), Decimal("4.000"))
+    # Semana = floor(días / 7) + 1: 14 días son la semana 3. Tasa de la ref 3–4 = 3 %.
+    igual("semana de cultivo = floor(14 / 7) + 1", ind["semana_cultivo"], 3)
+    igual("referencia de la semana 3", dec(cuerpo["referencia_produccion"]["tasa_alimentacion_pct"]), Decimal("3.000"))
     check("sin NaN ni Infinity en el análisis", sin_no_finitos(cuerpo))
 
     # ---------------- Productividad y eficiencia separadas ----------------
     prod = cuerpo["productividad"]
     efi = cuerpo["eficiencia"]
     igual("productividad: biomasa actual", dec(prod["biomasa_actual_kg"]), Decimal("27.900"))
-    igual("productividad: ganancia de biomasa", dec(prod["ganancia_biomasa_kg"]), Decimal("17.900"))
+    igual("productividad: ganancia de biomasa", dec(prod["ganancia_biomasa_kg"]), Decimal("30.400"))
     igual("productividad: cosecha en kg", dec(prod["peso_cosechado_kg"]), Decimal("12.500"))
     igual("productividad: peces cosechados", prod["peces_cosechados"], 50)
     check("productividad no expone FCA ni costos", "fca" not in prod and "costo_por_kg" not in prod)
-    igual("eficiencia: FCA reutilizado", dec(efi["fca"]), Decimal("0.5028"))
+    igual("eficiencia: FCA reutilizado", dec(efi["fca"]), Decimal("0.2961"))
     igual("eficiencia: alimento real en kg", dec(efi["alimento_real_acumulado_kg"]), Decimal("9.000"))
     igual("eficiencia: FCA disponible", efi["fca_disponible"], True)
     check("eficiencia no duplica la cosecha", "peso_cosechado_kg" not in efi)
@@ -406,8 +406,8 @@ def main() -> int:
     fila_a = comparativo["estanques"][0]
     igual("comparativo repite la población del análisis", fila_a["poblacion_estimada"], 930)
     igual("comparativo repite la biomasa", dec(fila_a["biomasa_actual_kg"]), Decimal("27.900"))
-    igual("comparativo repite la supervivencia", dec(fila_a["supervivencia_porcentaje"]), Decimal("93.00"))
-    igual("comparativo repite el FCA", dec(fila_a["eficiencia"]["fca"]), Decimal("0.5028"))
+    igual("comparativo repite la supervivencia", dec(fila_a["supervivencia_porcentaje"]), Decimal("98.00"))
+    igual("comparativo repite el FCA", dec(fila_a["eficiencia"]["fca"]), Decimal("0.2961"))
     igual("historial del estanque trae su ciclo", [c["lote_id"] for c in comparativo["ciclos"]], [lote])
     igual("FCA de granja sigue sin definirse", comparativo["resumen"]["fca"], None)
 
@@ -416,7 +416,7 @@ def main() -> int:
     fila_rep = reporte.json()["filas"][0]
     igual("reporte repite población, supervivencia y peso",
           (fila_rep["poblacion_estimada"], dec(fila_rep["supervivencia_porcentaje"]), dec(fila_rep["peso_promedio_g"])),
-          (930, Decimal("93.00"), Decimal("30.000")))
+          (930, Decimal("98.00"), Decimal("30.000")))
 
     sin_historial = get(admin, "/api/v1/analisis/estanques", solo_activos="true")
     igual("comparativo de granja no arrastra historial", sin_historial.json()["ciclos"], [])

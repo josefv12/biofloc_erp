@@ -21,3 +21,7 @@ class AplicacionBioflocOut(AplicacionBioflocBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AplicacionBioflocConStockOut(AplicacionBioflocOut):
+    stock_restante: Optional[float] = None

@@ -2,7 +2,7 @@
 -- ============================================================
 -- BIOFLOC ERP V1 - PostgreSQL
 -- Sistema de gestión para producción de tilapia roja en Biofloc
--- 42 tablas | V1.1
+-- 43 tablas | 3 vistas | V1.1
 -- ============================================================
 
 BEGIN;
@@ -83,12 +83,22 @@ CREATE TABLE referencias_produccion (
     semana_hasta        INTEGER NOT NULL CHECK (semana_hasta >= semana_desde),
     peso_esperado_g     NUMERIC(10,2) CHECK (peso_esperado_g >= 0),
     tasa_alimentacion_pct NUMERIC(6,3) CHECK (tasa_alimentacion_pct >= 0),
+    raciones_min        INTEGER CHECK (raciones_min IS NULL OR raciones_min >= 0),
+    raciones_max        INTEGER,
+    fase                VARCHAR(40),
     observaciones       TEXT,
     activo              BOOLEAN NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (especie_id, etapa_productiva_id, semana_desde, semana_hasta)
+    UNIQUE (especie_id, etapa_productiva_id, semana_desde, semana_hasta),
+    CHECK (raciones_max IS NULL OR raciones_min IS NULL OR raciones_max >= raciones_min),
+    CHECK (fase IS NULL OR fase IN ('Inicio', 'Levante', 'Engorde'))
 );
+
+COMMENT ON COLUMN referencias_produccion.raciones_min IS
+    'Mínimo de raciones/día. Un rango 6–8 se guarda como min=6 max=8; no se promedia.';
+COMMENT ON COLUMN referencias_produccion.fase IS
+    'Fase de alimentación (Inicio/Levante/Engorde). Independiente de etapas_productivas.';
 
 
 
@@ -262,6 +272,41 @@ CREATE TABLE mediciones_biofloc (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (volumen_sedimentable >= 0)
 );
+
+CREATE TABLE referencias_biofloc (
+    id BIGSERIAL PRIMARY KEY,
+    especie_id BIGINT NOT NULL REFERENCES especies(id),
+    etapa_productiva_id BIGINT NOT NULL REFERENCES etapas_productivas(id),
+    indicador VARCHAR(40) NOT NULL,
+    valor_minimo NUMERIC(12,4),
+    valor_objetivo NUMERIC(12,4),
+    valor_maximo NUMERIC(12,4),
+    unidad VARCHAR(30),
+    observaciones TEXT,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    CHECK (indicador IN ('VOLUMEN_SEDIMENTABLE', 'RELACION_CN')),
+    CHECK (
+        valor_minimo IS NULL
+        OR valor_maximo IS NULL
+        OR valor_minimo <= valor_maximo
+    ),
+    CHECK (
+        valor_objetivo IS NULL
+        OR valor_minimo IS NULL
+        OR valor_objetivo >= valor_minimo
+    ),
+    CHECK (
+        valor_objetivo IS NULL
+        OR valor_maximo IS NULL
+        OR valor_objetivo <= valor_maximo
+    ),
+    UNIQUE (especie_id, etapa_productiva_id, indicador)
+);
+
+COMMENT ON TABLE referencias_biofloc IS
+    'Rangos y objetivo de Biofloc por especie y etapa. Los valores los digita el administrador; no hay semilla.';
+COMMENT ON COLUMN referencias_biofloc.indicador IS
+    'VOLUMEN_SEDIMENTABLE o RELACION_CN, alineado a mediciones_biofloc.';
 
 -- ============================================================
 -- 7. INVENTARIO
@@ -603,6 +648,9 @@ CREATE INDEX idx_aplicaciones_biofloc_lote_fecha
 CREATE INDEX idx_mediciones_biofloc_lote_fecha
     ON mediciones_biofloc(lote_id, fecha_hora);
 
+CREATE INDEX idx_referencias_biofloc_especie_etapa
+    ON referencias_biofloc(especie_id, etapa_productiva_id);
+
 CREATE INDEX idx_movimientos_producto_fecha
     ON movimientos_inventario(producto_id, fecha_hora);
 
@@ -810,26 +858,7 @@ SELECT
 FROM lotes l;
 
 -- ============================================================
--- 19. VISTA: SUPERVIVENCIA
--- ============================================================
-
-CREATE OR REPLACE VIEW vista_supervivencia_lotes AS
-SELECT
-    lote_id,
-    codigo,
-    cantidad_sembrada,
-    poblacion_estimada,
-    ROUND(
-        (
-            poblacion_estimada::NUMERIC
-            / NULLIF(cantidad_sembrada, 0)
-        ) * 100,
-        2
-    ) AS supervivencia_porcentaje
-FROM vista_biomasa_lotes;
-
--- ============================================================
--- 20. VISTA: ÚLTIMA BIOMETRÍA
+-- 19. VISTA: ÚLTIMA BIOMETRÍA
 -- ============================================================
 
 CREATE OR REPLACE VIEW vista_ultima_biometria AS

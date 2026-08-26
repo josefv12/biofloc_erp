@@ -186,7 +186,7 @@ def main():
     log(13, "AUDITORIA", "Registro de auditoría INSERT en biofloc.auditoria", ok_audit_ins)
     log(14, "AUDITORIA", "Registro de auditoría UPDATE en biofloc.auditoria", ok_audit_upd)
 
-    # 15. Estructura de PostgreSQL sin alteración (42 BASE TABLE, 4 VIEW, 46 Total)
+    # 15. Estructura de PostgreSQL sin alteración (43 BASE TABLE, 3 VIEW, 46 Total)
     ok_struct = False
     try:
         conn = psycopg2.connect(**DB_CONF)
@@ -197,10 +197,10 @@ def main():
         conn.close()
         base_tables = rows.get("BASE TABLE", 0)
         views = rows.get("VIEW", 0)
-        ok_struct = (base_tables == 42 and views == 4 and (base_tables + views) == 46)
+        ok_struct = (base_tables == 43 and views == 3 and (base_tables + views) == 46)
     except Exception as e:
         print(f"Error consultando estructura DB: {e}")
-    log(15, "POSTGRESQL", "Estructura intacta (42 tablas + 4 vistas = 46 total)", ok_struct)
+    log(15, "POSTGRESQL", "Estructura intacta (43 tablas + 3 vistas = 46 total)", ok_struct)
 
     # 16. Limpieza de datos temporales
     ok_clean = False

@@ -29,12 +29,14 @@ export function listEquipos(params: {
   tipoEquipoId?: number;
   estadoId?: number;
   codigo?: string;
+  nombre?: string;
 } = {}): Promise<Equipo[]> {
   const query = new URLSearchParams();
   query.set("solo_activos", params.soloActivos ? "true" : "false");
   if (params.tipoEquipoId) query.set("tipo_equipo_id", String(params.tipoEquipoId));
   if (params.estadoId) query.set("estado_id", String(params.estadoId));
   if (params.codigo) query.set("codigo", params.codigo);
+  if (params.nombre) query.set("nombre", params.nombre);
   return apiFetch<Equipo[]>(`/api/v1/equipos/?${query.toString()}`);
 }
 

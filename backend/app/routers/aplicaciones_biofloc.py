@@ -15,9 +15,10 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.models.usuario import Usuario
-from app.schemas.aplicacion_biofloc import AplicacionBioflocCreate, AplicacionBioflocOut
+from app.schemas.aplicacion_biofloc import AplicacionBioflocCreate, AplicacionBioflocOut, AplicacionBioflocConStockOut
 from app.services.auth_service import get_current_user
 from app.services import aplicacion_biofloc_service as svc
+from app.services.movimiento_inventario_service import obtener_stock_producto
 
 router = APIRouter()
 
@@ -79,10 +80,13 @@ def obtener(
 # ---------------------------------------------------------------------------
 @router.post(
     "/",
-    response_model=AplicacionBioflocOut,
+    response_model=AplicacionBioflocConStockOut,
     status_code=status.HTTP_201_CREATED,
     summary="Registrar aplicación Biofloc",
-    description="Registra una nueva aplicación/tratamiento Biofloc en un lote. Acceso: ADMINISTRADOR, TECNICO, OPERARIO.",
+    description=(
+        "Registra una nueva aplicación/tratamiento Biofloc en un lote. "
+        "Si se indica producto_id y cantidad > 0, genera automáticamente un movimiento de SALIDA de inventario."
+    ),
 )
 def crear(
     data: AplicacionBioflocCreate,
@@ -90,4 +94,9 @@ def crear(
     current_user: Usuario = Depends(get_current_user),
 ):
     _require_roles(current_user, db, ROLES_PERMITIDOS)
-    return svc.crear_aplicacion_biofloc(db, data, usuario_id=current_user.id)
+    aplicacion = svc.crear_aplicacion_biofloc(db, data, usuario_id=current_user.id)
+    result = AplicacionBioflocConStockOut.model_validate(aplicacion)
+    if data.producto_id and data.cantidad and data.cantidad > 0:
+        stock = obtener_stock_producto(db, data.producto_id)
+        result.stock_restante = float(stock)
+    return result

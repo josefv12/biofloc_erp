@@ -63,6 +63,9 @@ CLAVES_INDICADORES = [
     "fca",
     "fca_disponible",
     "fca_motivo",
+    "sgr_pct_dia",
+    "densidad_kg_m3",
+    "volumen_util_m3",
     "racion_diaria_recomendada_kg",
     "numero_raciones_diarias",
 ]
@@ -136,6 +139,8 @@ NULOS_CON_MOTIVO = [
     "alimento_real_acumulado_kg",
     "racion_diaria_recomendada_kg",
     "numero_raciones_diarias",
+    "sgr_pct_dia",
+    "densidad_kg_m3",
 ]
 
 
@@ -183,7 +188,14 @@ def revisar_invariantes(nombre: str, body: dict) -> None:
     no_finitos = [
         clave
         for clave, valor in ind.items()
-        if clave not in {"fca_disponible", "fca_motivo", "fecha_ultima_biometria"}
+        if clave not in {
+            "fca_disponible",
+            "fca_motivo",
+            "fecha_ultima_biometria",
+            "unidad_talla",
+            "raciones_diarias_texto",
+            "racion_basada_en_peso",
+        }
         and not numero_finito(valor)
     ]
     check(f"{nombre}: sin NaN ni Infinity en indicadores", not no_finitos, str(no_finitos))
@@ -234,6 +246,15 @@ def revisar_invariantes(nombre: str, body: dict) -> None:
         f"{nombre}: peso promedio graficable en toda la serie",
         all(numero_finito(fila["peso_promedio_g"]) and fila["peso_promedio_g"] is not None for fila in bios),
         str([fila["peso_promedio_g"] for fila in bios]),
+    )
+    check(
+        f"{nombre}: serie de talla expuesta (sin conversión)",
+        all("talla_promedio" in fila and "unidad_talla" in fila for fila in bios),
+        str(list(bios[0].keys()) if bios else []),
+    )
+    check(
+        f"{nombre}: estadísticas incluyen talla_promedio",
+        "talla_promedio" in (body.get("estadisticas") or {}),
     )
 
     morts = body.get("mortalidades", [])

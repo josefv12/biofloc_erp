@@ -6,6 +6,7 @@
  * números seguros para graficar, agrupa por parámetro o unidad y totaliza por
  * día lo que ya viene convertido a kg.
  */
+import type { ReferenciaComparativa } from "./analisisStatus";
 import { formatDateTime } from "./format";
 import type {
   AnalisisAguaMedicion,
@@ -27,6 +28,39 @@ export type PuntoSerie = {
   etiqueta: string;
   [serie: string]: string | number | null;
 };
+
+/** Valores de referencia para comparar contra mediciones reales. Re-exportado desde analisisStatus. */
+export type { ReferenciaComparativa } from "./analisisStatus";
+
+export type PuntoComparativo = {
+  etiqueta: string;
+  real: number | null;
+  minimo: number | null;
+  maximo: number | null;
+  objetivo: number | null;
+  /** Peso esperado u otra curva de referencia temporal (biometrías). */
+  esperado?: number | null;
+  /** Ración recomendada repetida por fecha. */
+  recomendado?: number | null;
+};
+
+/**
+ * Repite min/máx/objetivo en cada fecha para dibujar líneas horizontales en Recharts.
+ * No inventa objetivo: solo incluye el campo si el backend lo entrega.
+ */
+export function prepararPuntosComparativos(
+  puntos: PuntoSerie[],
+  ref: ReferenciaComparativa,
+  realKey = "valor",
+): PuntoComparativo[] {
+  return puntos.map((punto) => ({
+    etiqueta: punto.etiqueta,
+    real: toNumber(punto[realKey] as ApiDecimal),
+    minimo: ref.minimo,
+    maximo: ref.maximo,
+    objetivo: ref.objetivo,
+  }));
+}
 
 export type SerieAguaAgrupada = {
   parametro_id: number;

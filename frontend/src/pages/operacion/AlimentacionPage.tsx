@@ -4,25 +4,24 @@ import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DataTable } from "../../components/DataTable";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { ContextoAlimentacionPanel } from "../../components/alimentacion/ContextoAlimentacionPanel";
 import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
-import {
-  createAlimentacion,
-  listAlimentaciones,
-  listProductosActivos,
-  listUnidades,
-} from "../../api/operations";
+import { createAlimentacion, listAlimentaciones, listProductosActivos, listUnidades } from "../../api/operations";
+import { getContextoAlimentacionLote } from "../../api/alimentacionReferencia";
 import { listLotes } from "../../api/production";
 import { apiErrorMessage } from "../../utils/apiError";
 import {
-  datetimeLocalToIso,
+  etiquetaProducto,
   formatDateTime,
   formatNumber,
   toDatetimeLocalValue,
+  withFechaHoraIso,
 } from "../../utils/format";
 import { can } from "../../utils/rbac";
+import { esLoteActivo, lotesActivos } from "../../utils/loteEstado";
 import type { Alimentacion, AlimentacionCreate, Producto, Unidad } from "../../types/operations";
 import type { Lote } from "../../types/production";
 
@@ -90,6 +89,9 @@ export function AlimentacionPanel({
     [unidadesQuery.data],
   );
   const lotesMap = useMemo(() => new Map(lotes.map((row) => [row.id, row])), [lotes]);
+  const enProduccion = lotesActivos(lotes);
+  const loteContexto = loteId ? lotes.find((row) => row.id === loteId) : undefined;
+  const puedeRegistrarLote = !loteId || esLoteActivo(loteContexto);
   const form = useForm({
     defaultValues: {
       lote_id: loteId ?? 0,
@@ -99,13 +101,34 @@ export function AlimentacionPanel({
       observaciones: "",
     },
   });
+  const loteFormId = form.watch("lote_id") || loteId;
+  const productoFormId = form.watch("producto_id");
+  const productoSeleccionado = productos.get(Number(productoFormId));
+  const simboloUnidad = productoSeleccionado
+    ? unidades.get(productoSeleccionado.unidad_id)?.simbolo
+    : undefined;
+  const etiquetaCantidad = simboloUnidad
+    ? `Cantidad suministrada (${simboloUnidad})`
+    : "Cantidad suministrada";
+  const contextoQuery = useQuery({
+    queryKey: ["contexto-alimentacion", loteFormId],
+    queryFn: () => getContextoAlimentacionLote(Number(loteFormId)),
+    enabled: open && Boolean(loteFormId),
+  });
+  const ref = contextoQuery.data?.referencia_activa;
+  const [stockMsg, setStockMsg] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: (data: AlimentacionCreate) => createAlimentacion(data),
-    onSuccess: async () => {
+    onSuccess: async (resp) => {
       setOpen(false);
+      if (resp.stock_restante != null) {
+        setStockMsg(`Inventario actualizado: ${resp.stock_restante.toFixed(2)} disponibles`);
+        setTimeout(() => setStockMsg(null), 6000);
+      }
       await queryClient.invalidateQueries({ queryKey: ["alimentaciones"] });
       await queryClient.invalidateQueries({ queryKey: ["analisis-lote"] });
       await queryClient.invalidateQueries({ queryKey: ["analisis-estanques"] });
+      await queryClient.invalidateQueries({ queryKey: ["contexto-alimentacion"] });
     },
     onError: (err) => setFormError(apiErrorMessage(err)),
   });
@@ -113,6 +136,11 @@ export function AlimentacionPanel({
 
   return (
     <div>
+      {stockMsg ? (
+        <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          {stockMsg}
+        </div>
+      ) : null}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-[var(--bf-muted)]">
           {compact ? "Últimas alimentaciones de este lote" : "Historial de alimentación"}
@@ -123,14 +151,14 @@ export function AlimentacionPanel({
               Ver todas
             </Link>
           ) : null}
-          {can(user?.rol, "registrarAlimentacion") ? (
+          {can(user?.rol, "registrarAlimentacion") && puedeRegistrarLote ? (
             <button
               type="button"
               className="bf-btn-primary"
               onClick={() => {
                 setFormError(null);
                 form.reset({
-                  lote_id: loteId ?? lotes[0]?.id ?? 0,
+                  lote_id: loteId ?? enProduccion[0]?.id ?? 0,
                   producto_id: productosQuery.data?.[0]?.id ?? 0,
                   fecha_hora: toDatetimeLocalValue(),
                   cantidad: "",
@@ -167,7 +195,7 @@ export function AlimentacionPanel({
               header: "Producto",
               render: (row) => {
                 const producto = productos.get(row.producto_id);
-                return producto ? `${producto.codigo} · ${producto.nombre}` : `#${row.producto_id}`;
+                return producto ? etiquetaProducto(producto.nombre, producto.codigo) : `#${row.producto_id}`;
               },
             },
             {
@@ -187,22 +215,31 @@ export function AlimentacionPanel({
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+            if (!fechaHora) return;
             mutation.mutate({
               lote_id: Number(values.lote_id),
               producto_id: Number(values.producto_id),
-              fecha_hora: datetimeLocalToIso(values.fecha_hora),
+              fecha_hora: fechaHora,
               cantidad: Number(values.cantidad),
               observaciones: values.observaciones.trim() || null,
             });
           })}
         >
           {formError ? <ErrorAlert message={formError} /> : null}
+          {contextoQuery.isLoading ? (
+            <p className="text-sm text-[var(--bf-muted)]">Calculando ración recomendada…</p>
+          ) : ref ? (
+            <ContextoAlimentacionPanel ref={ref} />
+          ) : contextoQuery.isSuccess ? (
+            <p className="text-sm text-[var(--bf-muted)]">N/D — Sin referencia configurada.</p>
+          ) : null}
           {loteId ? (
             <input type="hidden" {...form.register("lote_id", { valueAsNumber: true })} />
           ) : (
             <Field label="Lote">
               <select className="bf-input" {...form.register("lote_id", { valueAsNumber: true })}>
-                {lotes.map((row) => (
+                {enProduccion.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.codigo}
                   </option>
@@ -214,7 +251,7 @@ export function AlimentacionPanel({
             <select className="bf-input" {...form.register("producto_id", { valueAsNumber: true })}>
               {(productosQuery.data ?? []).map((row) => (
                 <option key={row.id} value={row.id}>
-                  {row.codigo} · {row.nombre}
+                  {etiquetaProducto(row.nombre, row.codigo)}
                 </option>
               ))}
             </select>
@@ -222,7 +259,7 @@ export function AlimentacionPanel({
           <Field label="Fecha y hora">
             <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
           </Field>
-          <Field label="Cantidad">
+          <Field label={etiquetaCantidad}>
             <input
               type="number"
               step="any"
@@ -235,7 +272,7 @@ export function AlimentacionPanel({
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
           </Field>
           <p className="text-xs text-[var(--bf-muted)]">
-            No se descuenta stock. No se llama a POST /movimientos-inventario.
+            El inventario se actualizará automáticamente al registrar.
           </p>
           <button
             type="submit"

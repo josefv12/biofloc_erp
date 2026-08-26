@@ -48,9 +48,11 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen bg-[var(--bf-bg)]">
-      <div className="relative hidden w-[42%] flex-col justify-between bg-[var(--bf-sidebar)] p-10 text-white lg:flex">
-        <p className="text-sm font-medium tracking-wide text-white/70">BIOFLOC ERP V1</p>
-        <div>
+      <div className="relative hidden w-[42%] overflow-hidden flex-col justify-between bg-[var(--bf-sidebar)] p-10 text-white lg:flex">
+        <div className="pointer-events-none absolute -left-16 -top-16 h-56 w-56 rounded-full bg-teal-300/15" />
+        <div className="pointer-events-none absolute -bottom-20 -right-10 h-72 w-72 rounded-full bg-emerald-400/10" />
+        <p className="relative text-sm font-medium tracking-wide text-white/70">BIOFLOC ERP V1</p>
+        <div className="relative">
           <h1 className="font-display text-4xl font-semibold leading-tight">
             Gestión de la
             <br />
@@ -61,11 +63,11 @@ export function LoginPage() {
             sistema Biofloc.
           </p>
         </div>
-        <p className="text-xs text-white/40">Fondo Emprender · uso interno de la granja</p>
+        <p className="relative text-xs text-white/40">Fondo Emprender · uso interno de la granja</p>
       </div>
 
       <div className="flex flex-1 items-center justify-center px-4 py-10">
-        <div className="w-full max-w-md rounded-2xl border border-[var(--bf-border)] bg-white p-8 shadow-[0_12px_40px_rgba(22,51,45,0.06)]">
+        <div className="w-full max-w-md rounded-3xl border border-[var(--bf-border)] bg-white p-8 shadow-[0_20px_50px_rgba(16,40,33,0.10)]">
           <p className="text-xs font-semibold uppercase tracking-wider text-[var(--bf-accent)]">
             Ingreso
           </p>

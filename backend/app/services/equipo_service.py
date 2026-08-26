@@ -35,7 +35,8 @@ def listar_equipos(db: Session,
                    solo_activos: bool = False,
                    tipo_equipo_id: Optional[int] = None,
                    estado_id: Optional[int] = None,
-                   codigo: Optional[str] = None):
+                   codigo: Optional[str] = None,
+                   nombre: Optional[str] = None):
     q = db.query(Equipo).options(joinedload(Equipo.tipo), joinedload(Equipo.estado))
     if solo_activos:
         q = q.filter(Equipo.activo == True)  # noqa: E712
@@ -45,6 +46,8 @@ def listar_equipos(db: Session,
         q = q.filter(Equipo.estado_id == estado_id)
     if codigo:
         q = q.filter(Equipo.codigo.ilike(f"%{codigo}%"))
+    if nombre:
+        q = q.filter(Equipo.nombre.ilike(f"%{nombre}%"))
     return q.order_by(Equipo.codigo.asc()).all()
 
 

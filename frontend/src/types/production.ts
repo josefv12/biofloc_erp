@@ -41,16 +41,88 @@ export type Especie = {
   nombre_cientifico: string | null;
 };
 
+export type EspecieCatalogo = Especie & {
+  activo: boolean;
+  n_referencias_produccion: number;
+  n_referencias_agua: number;
+};
+
+export type EspecieCreate = {
+  nombre_comun: string;
+  nombre_cientifico?: string | null;
+  activo?: boolean;
+};
+
+export type EspecieUpdate = {
+  nombre_comun?: string;
+  nombre_cientifico?: string | null;
+  activo?: boolean;
+};
+
 export type EtapaProductiva = {
   id: number;
   nombre: string;
   orden: number;
 };
 
+export type EtapaProductivaCatalogo = EtapaProductiva & {
+  descripcion: string | null;
+  activo: boolean;
+};
+
 export type EstadoLote = {
   id: number;
   nombre: string;
   descripcion: string | null;
+};
+
+export type EstadoLoteCatalogo = EstadoLote & {
+  activo: boolean;
+};
+
+export type ReferenciaProduccion = {
+  id: number;
+  especie_id: number;
+  etapa_productiva_id: number;
+  semana_desde: number;
+  semana_hasta: number;
+  peso_esperado_g: string | number | null;
+  tasa_alimentacion_pct: string | number | null;
+  raciones_min: number | null;
+  raciones_max: number | null;
+  fase: string | null;
+  observaciones: string | null;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReferenciaProduccionCreate = {
+  especie_id: number;
+  etapa_productiva_id: number;
+  semana_desde: number;
+  semana_hasta: number;
+  peso_esperado_g?: number | null;
+  tasa_alimentacion_pct?: number | null;
+  raciones_min?: number | null;
+  raciones_max?: number | null;
+  fase?: string | null;
+  observaciones?: string | null;
+  activo?: boolean;
+};
+
+export type ReferenciaProduccionUpdate = {
+  especie_id?: number;
+  etapa_productiva_id?: number;
+  semana_desde?: number;
+  semana_hasta?: number;
+  peso_esperado_g?: number | null;
+  tasa_alimentacion_pct?: number | null;
+  raciones_min?: number | null;
+  raciones_max?: number | null;
+  fase?: string | null;
+  observaciones?: string | null;
+  activo?: boolean;
 };
 
 export type Lote = {

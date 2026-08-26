@@ -15,6 +15,7 @@ from app.models.medicion_agua import MedicionAgua
 from app.models.tipo_aplicacion_biofloc import TipoAplicacionBiofloc
 from app.models.medicion_biofloc import MedicionBiofloc
 from app.models.aplicacion_biofloc import AplicacionBiofloc
+from app.models.referencia_biofloc import ReferenciaBiofloc
 # Inventario CORE (Fase 6)
 from app.models.categoria_inventario import CategoriaInventario
 from app.models.unidad import Unidad
@@ -41,7 +42,7 @@ __all__ = [
     "Especie", "EtapaProductiva", "EstadoLote", "Lote",
     "Biometria", "Mortalidad", "Alimentacion", "Cosecha",
     "ParametroAgua", "ReferenciaAgua", "ReferenciaProduccion", "MedicionAgua",
-    "TipoAplicacionBiofloc", "MedicionBiofloc", "AplicacionBiofloc",
+    "TipoAplicacionBiofloc", "MedicionBiofloc", "AplicacionBiofloc", "ReferenciaBiofloc",
     # Inventario
     "CategoriaInventario", "Unidad", "Producto",
     "TipoMovimientoInventario", "MovimientoInventario",

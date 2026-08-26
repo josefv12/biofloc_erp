@@ -27,6 +27,7 @@ export const actions = {
   registrarBiofloc: ["ADMINISTRADOR", "TECNICO", "OPERARIO"],
   registrarAlimentacion: ["ADMINISTRADOR", "TECNICO", "OPERARIO"],
   escribirCatalogo: ["ADMINISTRADOR", "TECNICO"],
+  escribirCatalogoMaestro: ["ADMINISTRADOR"],
   escribirEquipo: ["ADMINISTRADOR", "TECNICO"],
   registrarMantenimiento: ["ADMINISTRADOR", "TECNICO", "OPERARIO"],
   registrarFalla: ["ADMINISTRADOR", "TECNICO", "OPERARIO"],
@@ -41,6 +42,7 @@ export const actions = {
   registrarGasto: ["ADMINISTRADOR", "TECNICO", "OPERARIO"],
   registrarVenta: ["ADMINISTRADOR", "TECNICO", "OPERARIO"],
   verCatalogos: ["ADMINISTRADOR", "TECNICO", "OPERARIO"],
+  gestionarUsuarios: ["ADMINISTRADOR"],
 } as const;
 
 export type Accion = keyof typeof actions;

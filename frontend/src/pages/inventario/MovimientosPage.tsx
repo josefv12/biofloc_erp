@@ -8,6 +8,8 @@ import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
+import { listUsuarios } from "../../api/users";
+import { StatusBadge } from "../../components/StatusBadge";
 import {
   createMovimientoInventario,
   listMovimientosInventario,
@@ -18,6 +20,7 @@ import {
 import { apiErrorMessage } from "../../utils/apiError";
 import {
   datetimeLocalToIso,
+  etiquetaProducto,
   formatCop,
   formatDateTime,
   formatNumber,
@@ -29,7 +32,7 @@ import type { MovimientoInventario, MovimientoInventarioCreate } from "../../typ
 type MovimientoForm = {
   producto_id: number;
   tipo_movimiento_id: number;
-  cantidad: number;
+  cantidad: string;
   fecha_hora: string;
   referencia_tipo: string;
   referencia_id: string;
@@ -46,6 +49,7 @@ export function MovimientosPage() {
   const tipoId = Number(params.get("tipo_id") ?? "") || undefined;
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [busquedaProducto, setBusquedaProducto] = useState("");
   const puedeRegistrar = can(user?.rol, "registrarMovimiento");
 
   const movimientosQuery = useQuery({
@@ -61,6 +65,12 @@ export function MovimientosPage() {
     queryFn: listTiposMovimientoInventario,
   });
   const stockQuery = useQuery({ queryKey: ["productos-stock"], queryFn: listProductosStock });
+  const usuariosQuery = useQuery({
+    queryKey: ["usuarios", "movimientos"],
+    queryFn: () => listUsuarios(false),
+    enabled: can(user?.rol, "gestionarUsuarios"),
+    retry: false,
+  });
 
   const productos = useMemo(
     () => new Map((productosQuery.data ?? []).map((row) => [row.id, row])),
@@ -71,6 +81,18 @@ export function MovimientosPage() {
     () => new Map((stockQuery.data ?? []).map((row) => [row.producto_id, row])),
     [stockQuery.data],
   );
+  const usuarios = useMemo(
+    () => new Map((usuariosQuery.data ?? []).map((row) => [row.id, row])),
+    [usuariosQuery.data],
+  );
+  const productosFiltrados = useMemo(() => {
+    const q = busquedaProducto.trim().toLowerCase();
+    const rows = productosQuery.data ?? [];
+    if (!q) return rows;
+    return rows.filter(
+      (row) => row.nombre.toLowerCase().includes(q) || row.codigo.toLowerCase().includes(q),
+    );
+  }, [productosQuery.data, busquedaProducto]);
 
   const form = useForm<MovimientoForm>();
   const mutation = useMutation({
@@ -92,7 +114,7 @@ export function MovimientosPage() {
     form.reset({
       producto_id: productoId ?? productosQuery.data?.[0]?.id ?? 0,
       tipo_movimiento_id: tiposQuery.data?.[0]?.id ?? 0,
-      cantidad: 0.001,
+      cantidad: "",
       fecha_hora: toDatetimeLocalValue(),
       referencia_tipo: "",
       referencia_id: "",
@@ -119,6 +141,15 @@ export function MovimientosPage() {
 
       <div className="mb-4 flex flex-wrap gap-3">
         <label className="text-sm">
+          <span className="mb-1 block text-[var(--bf-muted)]">Buscar producto</span>
+          <input
+            className="bf-input"
+            value={busquedaProducto}
+            placeholder="Buscar por nombre…"
+            onChange={(event) => setBusquedaProducto(event.target.value)}
+          />
+        </label>
+        <label className="text-sm">
           <span className="mb-1 block text-[var(--bf-muted)]">Producto</span>
           <select
             className="bf-input"
@@ -131,9 +162,9 @@ export function MovimientosPage() {
             }}
           >
             <option value="">Todos</option>
-            {(productosQuery.data ?? []).map((row) => (
+            {productosFiltrados.map((row) => (
               <option key={row.id} value={row.id}>
-                {row.codigo} · {row.nombre}
+                {etiquetaProducto(row.nombre, row.codigo)}
               </option>
             ))}
           </select>
@@ -170,6 +201,7 @@ export function MovimientosPage() {
           rows={movimientosQuery.data}
           rowKey={(row: MovimientoInventario) => row.id}
           empty="No hay movimientos."
+          maxVisibleRows={10}
           columns={[
             { key: "fecha", header: "Fecha/hora", render: (row) => formatDateTime(row.fecha_hora) },
             {
@@ -177,13 +209,29 @@ export function MovimientosPage() {
               header: "Producto",
               render: (row) => {
                 const producto = productos.get(row.producto_id);
-                return producto ? `${producto.codigo} · ${producto.nombre}` : `#${row.producto_id}`;
+                if (!producto) return `#${row.producto_id}`;
+                return (
+                  <span>
+                    {producto.nombre}
+                    <span className="block text-[11px] text-[var(--bf-muted)]">Código: {producto.codigo}</span>
+                  </span>
+                );
               },
             },
             {
               key: "tipo",
               header: "Tipo",
-              render: (row) => tipos.get(row.tipo_movimiento_id)?.nombre ?? `#${row.tipo_movimiento_id}`,
+              render: (row) => {
+                const tipo = tipos.get(row.tipo_movimiento_id);
+                if (!tipo) return `#${row.tipo_movimiento_id}`;
+                const esEntrada = tipo.afecta_stock === 1;
+                return (
+                  <StatusBadge
+                    label={tipo.nombre}
+                    tone={esEntrada ? "ok" : "danger"}
+                  />
+                );
+              },
             },
             {
               key: "cantidad",
@@ -201,7 +249,10 @@ export function MovimientosPage() {
                   ? `${row.referencia_tipo}${row.referencia_id != null ? ` #${row.referencia_id}` : ""}`
                   : "—",
             },
-            { key: "usuario", header: "Usuario", render: (row) => `#${row.registrado_por}` },
+            { key: "usuario", header: "Usuario", render: (row) => {
+              if (row.registrado_por === user?.id && user?.nombre) return user.nombre;
+              return usuarios.get(row.registrado_por)?.nombre ?? `#${row.registrado_por}`;
+            } },
             {
               key: "costo",
               header: "Costo total",
@@ -219,10 +270,15 @@ export function MovimientosPage() {
             const refId = values.referencia_id.trim();
             const cu = values.costo_unitario.trim();
             const ct = values.costo_total.trim();
+            const cantidad = Number(values.cantidad);
+            if (!Number.isFinite(cantidad) || cantidad <= 0) {
+              setFormError("Ingrese una cantidad mayor que 0.");
+              return;
+            }
             mutation.mutate({
               producto_id: Number(values.producto_id),
               tipo_movimiento_id: Number(values.tipo_movimiento_id),
-              cantidad: Number(values.cantidad),
+              cantidad,
               fecha_hora: values.fecha_hora ? datetimeLocalToIso(values.fecha_hora) : null,
               referencia_tipo: values.referencia_tipo.trim() || null,
               referencia_id: refId === "" ? null : Number(refId),
@@ -237,7 +293,7 @@ export function MovimientosPage() {
             <select className="bf-input" {...form.register("producto_id", { valueAsNumber: true })}>
               {(productosQuery.data ?? []).map((row) => (
                 <option key={row.id} value={row.id}>
-                  {row.codigo} · {row.nombre}
+                  {etiquetaProducto(row.nombre, row.codigo)}
                 </option>
               ))}
             </select>

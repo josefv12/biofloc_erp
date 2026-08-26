@@ -1,22 +1,7 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Bell,
-  ChevronDown,
-  Droplets,
-  FileBarChart,
-  LayoutDashboard,
-  Library,
-  LogOut,
-  Menu,
-  Package,
-  User,
-  Wallet,
-  Waves,
-  Wrench,
-  X,
-} from "lucide-react";
+import { Bell, LogOut, Menu, User, X } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { listAlarmas, listEstadosAlarma } from "../api/alarms";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -27,44 +12,41 @@ type NavItem = {
   to: string;
   label: string;
   end?: boolean;
-};
-
-type NavGroup = {
-  id: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-  items?: NavItem[];
-  to?: string;
+  adminOnly?: boolean;
   catalogOnly?: boolean;
 };
 
-const NAV: NavGroup[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
+type NavSection = {
+  id: string;
+  label: string;
+  items: NavItem[];
+};
+
+const NAV: NavSection[] = [
   {
-    id: "produccion",
-    label: "Producción",
-    icon: Waves,
+    id: "general",
+    label: "General",
     items: [
-      { to: "/produccion/estanques", label: "Estanques" },
-      { to: "/produccion/lotes", label: "Lotes" },
+      { to: "/dashboard", label: "Dashboard" },
+      { to: "/alarmas", label: "Alarmas" },
     ],
   },
   {
-    id: "operacion",
-    label: "Operación",
-    icon: Droplets,
+    id: "produccion",
+    label: "Producción",
     items: [
-      { to: "/operacion/agua", label: "Agua" },
-      { to: "/operacion/biofloc", label: "Biofloc" },
-      { to: "/operacion/alimentacion", label: "Alimentación" },
+      { to: "/produccion/estanques", label: "Estanques" },
+      { to: "/produccion/lotes", label: "Lotes" },
+      { to: "/produccion/biometrias", label: "Biometrías" },
+      { to: "/produccion/mortalidades", label: "Mortalidades" },
+      { to: "/produccion/cosechas", label: "Cosechas" },
     ],
   },
   {
     id: "inventario",
     label: "Inventario",
-    icon: Package,
     items: [
-      { to: "/inventario", label: "Stock y productos", end: true },
+      { to: "/inventario", label: "Productos", end: true },
       { to: "/inventario/movimientos", label: "Movimientos" },
       { to: "/compras", label: "Compras" },
     ],
@@ -72,50 +54,106 @@ const NAV: NavGroup[] = [
   {
     id: "finanzas",
     label: "Finanzas",
-    icon: Wallet,
     items: [
-      { to: "/finanzas/gastos", label: "Gastos" },
       { to: "/finanzas/ventas", label: "Ventas" },
+      { to: "/finanzas/gastos", label: "Gastos" },
     ],
   },
   {
     id: "equipos",
     label: "Equipos",
-    icon: Wrench,
     items: [
       { to: "/equipos", label: "Equipos", end: true },
-      { to: "/equipos/mantenimientos", label: "Mantenimiento y fallas" },
+      { to: "/equipos/mantenimientos", label: "Mantenimientos" },
+      { to: "/equipos/mantenimientos?tab=fallas", label: "Fallas" },
       { to: "/energia", label: "Energía" },
     ],
   },
-  { id: "alarmas", label: "Alarmas", icon: Bell, to: "/alarmas" },
-  { id: "reportes", label: "Reportes", icon: FileBarChart, to: "/reportes" },
-  { id: "catalogos", label: "Catálogos", icon: Library, to: "/catalogos", catalogOnly: true },
+  {
+    id: "reportes",
+    label: "Análisis / Reportes",
+    items: [{ to: "/reportes", label: "Reportes" }],
+  },
+  {
+    id: "admin",
+    label: "Administración",
+    items: [
+      { to: "/catalogos", label: "Catálogos", catalogOnly: true },
+      { to: "/admin/usuarios", label: "Usuarios", adminOnly: true },
+    ],
+  },
 ];
+
+type Crumb = { label: string; to?: string };
+
+const CRUMBS: { prefix: string; title: string; trail: Crumb[] }[] = [
+  { prefix: "/dashboard", title: "Dashboard", trail: [{ label: "General" }, { label: "Dashboard" }] },
+  { prefix: "/perfil", title: "Perfil", trail: [{ label: "Cuenta" }, { label: "Perfil" }] },
+  { prefix: "/produccion/estanques/", title: "Ficha del estanque", trail: [{ label: "Producción", to: "/produccion/estanques" }, { label: "Estanques", to: "/produccion/estanques" }, { label: "Ficha" }] },
+  { prefix: "/produccion/estanques", title: "Estanques", trail: [{ label: "Producción" }, { label: "Estanques" }] },
+  { prefix: "/produccion/lotes/", title: "Ficha del lote", trail: [{ label: "Producción", to: "/produccion/lotes" }, { label: "Lotes", to: "/produccion/lotes" }, { label: "Ficha" }] },
+  { prefix: "/produccion/lotes", title: "Lotes", trail: [{ label: "Producción" }, { label: "Lotes" }] },
+  { prefix: "/produccion/biometrias", title: "Biometrías", trail: [{ label: "Producción" }, { label: "Biometrías" }] },
+  { prefix: "/produccion/mortalidades", title: "Mortalidades", trail: [{ label: "Producción" }, { label: "Mortalidades" }] },
+  { prefix: "/produccion/cosechas", title: "Cosechas", trail: [{ label: "Producción" }, { label: "Cosechas" }] },
+  { prefix: "/operacion/agua", title: "Agua", trail: [{ label: "Operación" }, { label: "Agua" }] },
+  { prefix: "/operacion/biofloc", title: "Biofloc", trail: [{ label: "Operación" }, { label: "Biofloc" }] },
+  { prefix: "/operacion/alimentacion", title: "Alimentación", trail: [{ label: "Operación" }, { label: "Alimentación" }] },
+  { prefix: "/inventario/movimientos", title: "Movimientos", trail: [{ label: "Inventario" }, { label: "Movimientos" }] },
+  { prefix: "/inventario", title: "Productos", trail: [{ label: "Inventario" }, { label: "Productos" }] },
+  { prefix: "/compras/", title: "Detalle de compra", trail: [{ label: "Inventario", to: "/compras" }, { label: "Compras", to: "/compras" }, { label: "Detalle" }] },
+  { prefix: "/compras", title: "Compras", trail: [{ label: "Inventario" }, { label: "Compras" }] },
+  { prefix: "/finanzas/ventas/", title: "Detalle de venta", trail: [{ label: "Finanzas", to: "/finanzas/ventas" }, { label: "Ventas", to: "/finanzas/ventas" }, { label: "Detalle" }] },
+  { prefix: "/finanzas/ventas", title: "Ventas", trail: [{ label: "Finanzas" }, { label: "Ventas" }] },
+  { prefix: "/finanzas/gastos", title: "Gastos", trail: [{ label: "Finanzas" }, { label: "Gastos" }] },
+  { prefix: "/finanzas", title: "Finanzas", trail: [{ label: "Finanzas" }] },
+  { prefix: "/equipos/mantenimientos", title: "Mantenimientos", trail: [{ label: "Equipos" }, { label: "Mantenimientos" }] },
+  { prefix: "/equipos", title: "Equipos", trail: [{ label: "Equipos" }] },
+  { prefix: "/energia", title: "Energía", trail: [{ label: "Equipos" }, { label: "Energía" }] },
+  { prefix: "/alarmas/", title: "Alarma", trail: [{ label: "General", to: "/alarmas" }, { label: "Alarmas", to: "/alarmas" }, { label: "Detalle" }] },
+  { prefix: "/alarmas", title: "Alarmas", trail: [{ label: "General" }, { label: "Alarmas" }] },
+  { prefix: "/reportes", title: "Reportes", trail: [{ label: "Análisis" }, { label: "Reportes" }] },
+  { prefix: "/catalogos", title: "Catálogos", trail: [{ label: "Administración" }, { label: "Catálogos" }] },
+  { prefix: "/admin/usuarios", title: "Usuarios", trail: [{ label: "Administración" }, { label: "Usuarios" }] },
+];
+
+function moduleFromPath(pathname: string, search: string): { title: string; trail: Crumb[] } {
+  if (pathname.startsWith("/equipos/mantenimientos") && search.includes("tab=fallas")) {
+    return { title: "Fallas", trail: [{ label: "Equipos" }, { label: "Fallas" }] };
+  }
+  const match = CRUMBS.find((row) => pathname.startsWith(row.prefix));
+  return match ?? { title: "Biofloc ERP", trail: [{ label: "Inicio" }] };
+}
 
 function linkClass(active: boolean): string {
   return [
-    "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+    "flex items-center rounded-xl px-3 py-2 text-sm transition-all duration-150",
     active
-      ? "bg-white/12 font-medium text-white"
-      : "text-white/75 hover:bg-white/8 hover:text-white",
+      ? "bg-white/12 font-semibold text-white shadow-[inset_3px_0_0_#5eead4]"
+      : "text-white/68 hover:bg-white/8 hover:text-white",
   ].join(" ");
 }
 
 export function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmSalir, setConfirmSalir] = useState(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    produccion: true,
-    operacion: true,
-    inventario: true,
-    finanzas: true,
-    equipos: true,
-  });
+  const modulo = moduleFromPath(location.pathname, location.search);
 
-  const visibleNav = NAV.filter((group) => !group.catalogOnly || can(user?.rol, "verCatalogos"));
+  const visibleNav = useMemo(
+    () =>
+      NAV.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => {
+          if (item.adminOnly && !can(user?.rol, "gestionarUsuarios")) return false;
+          if (item.catalogOnly && !can(user?.rol, "verCatalogos")) return false;
+          return true;
+        }),
+      })).filter((section) => section.items.length > 0),
+    [user?.rol],
+  );
 
   const estadosQuery = useQuery({
     queryKey: ["estados-alarma"],
@@ -129,52 +167,61 @@ export function AppLayout() {
   });
   const pendientes = pendientesQuery.data?.length ?? 0;
 
-  function toggleGroup(id: string) {
-    setOpenGroups((current) => ({ ...current, [id]: !current[id] }));
-  }
-
   return (
     <div className="min-h-screen bg-[var(--bf-bg)]">
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[var(--bf-border)] bg-[var(--bf-header)] px-3 sm:px-5">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-[var(--bf-border)] bg-[color-mix(in_srgb,var(--bf-header)_86%,transparent)] px-3 backdrop-blur-md sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
-            className="rounded-md p-2 text-[var(--bf-ink)] lg:hidden"
+            className="rounded-full p-2 text-[var(--bf-ink)] lg:hidden"
             onClick={() => setSidebarOpen(true)}
             aria-label="Abrir menú"
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="leading-tight">
-            <p className="font-display text-sm font-semibold tracking-wide text-[var(--bf-ink)]">
-              Biofloc ERP
+          <div className="min-w-0 leading-tight">
+            <p className="truncate font-display text-sm font-semibold tracking-wide text-[var(--bf-ink)]">
+              {modulo.title}
             </p>
-            <p className="text-[11px] text-[var(--bf-muted)]">Piscicultura · V1</p>
+            <nav className="hidden truncate text-[11px] text-[var(--bf-muted)] sm:block">
+              {modulo.trail.map((crumb, index) => (
+                <span key={`${crumb.label}-${index}`}>
+                  {index > 0 ? " / " : null}
+                  {crumb.to ? (
+                    <Link to={crumb.to} className="hover:text-[var(--bf-ink)] hover:underline">
+                      {crumb.label}
+                    </Link>
+                  ) : (
+                    crumb.label
+                  )}
+                </span>
+              ))}
+            </nav>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
-            className="relative rounded-md p-2 text-[var(--bf-muted)] hover:bg-[var(--bf-chip)] hover:text-[var(--bf-ink)]"
+            className="relative rounded-full p-2 text-[var(--bf-muted)] transition-colors hover:bg-[var(--bf-chip)] hover:text-[var(--bf-ink)]"
             onClick={() => navigate("/alarmas?estado=PENDIENTE")}
             aria-label={pendientes > 0 ? `Alarmas pendientes: ${pendientes}` : "Alarmas"}
-            title="Alarmas pendientes"
+            title="Notificaciones"
           >
             <Bell className="h-5 w-5" />
             {pendientes > 0 ? (
-              <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-amber-700 px-1 text-center text-[10px] font-semibold leading-4 text-white">
+              <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-amber-600 px-1 text-center text-[10px] font-semibold leading-4 text-white shadow-sm">
                 {pendientes}
               </span>
             ) : null}
           </button>
           <div className="hidden items-center gap-2 sm:flex">
-            <span className="max-w-[180px] truncate text-sm text-[var(--bf-ink)]">{user?.nombre}</span>
+            <span className="max-w-[160px] truncate text-sm text-[var(--bf-ink)]">{user?.nombre}</span>
             <StatusBadge label={user?.rol ?? "—"} tone="info" />
           </div>
           <button
             type="button"
-            className="rounded-md p-2 text-[var(--bf-muted)] hover:bg-[var(--bf-chip)] hover:text-[var(--bf-ink)]"
+            className="rounded-full p-2 text-[var(--bf-muted)] transition-colors hover:bg-[var(--bf-chip)] hover:text-[var(--bf-ink)]"
             onClick={() => navigate("/perfil")}
             aria-label="Perfil"
             title="Perfil"
@@ -192,7 +239,7 @@ export function AppLayout() {
         {sidebarOpen ? (
           <button
             type="button"
-            className="fixed inset-0 z-30 bg-[var(--bf-ink)]/40 lg:hidden"
+            className="fixed inset-0 z-30 bg-[var(--bf-ink)]/45 backdrop-blur-[2px] lg:hidden"
             aria-label="Cerrar menú"
             onClick={() => setSidebarOpen(false)}
           />
@@ -200,69 +247,62 @@ export function AppLayout() {
 
         <aside
           className={[
-            "fixed inset-y-0 left-0 z-40 flex w-60 flex-col bg-[var(--bf-sidebar)] pt-14 lg:static lg:z-0 lg:min-h-[calc(100vh-3.5rem)] lg:pt-0",
+            "fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-[var(--bf-sidebar)] lg:static lg:z-0 lg:min-h-[calc(100vh-3.5rem)]",
             sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-            "transition-transform",
+            "transition-transform duration-200",
           ].join(" ")}
         >
-          <div className="flex items-center justify-between px-3 py-3 lg:hidden">
-            <span className="text-sm text-white/80">Menú</span>
-            <button type="button" className="p-1 text-white" onClick={() => setSidebarOpen(false)} aria-label="Cerrar">
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-5">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-teal-300/20 text-sm font-bold text-teal-100">
+                B
+              </span>
+              <div>
+                <p className="font-display text-sm font-semibold tracking-wide text-white">Biofloc ERP</p>
+                <p className="text-[11px] text-white/50">Producción piscícola</p>
+              </div>
+            </div>
+            <button type="button" className="p-1 text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar">
               <X className="h-5 w-5" />
             </button>
           </div>
-          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-            {visibleNav.map((group) => {
-              const Icon = group.icon;
-              if (group.to && !group.items) {
-                return (
-                  <NavLink
-                    key={group.id}
-                    to={group.to}
-                    onClick={() => setSidebarOpen(false)}
-                    className={({ isActive }) => linkClass(isActive)}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                    {group.label}
-                  </NavLink>
-                );
-              }
-
-              const opened = openGroups[group.id] ?? true;
-              return (
-                <div key={group.id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-white/80 hover:bg-white/8"
-                    onClick={() => toggleGroup(group.id)}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                    <span className="flex-1">{group.label}</span>
-                    <ChevronDown className={`h-4 w-4 transition ${opened ? "rotate-0" : "-rotate-90"}`} />
-                  </button>
-                  {opened ? (
-                    <div className="mb-1 ml-4 space-y-0.5 border-l border-white/10 pl-2">
-                      {group.items?.map((item) => (
-                        <NavLink
-                          key={item.to}
-                          to={item.to}
-                          end={item.end}
-                          onClick={() => setSidebarOpen(false)}
-                          className={({ isActive }) => linkClass(isActive)}
-                        >
-                          {item.label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  ) : null}
+          <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
+            {visibleNav.map((section) => (
+              <div key={section.id}>
+                <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  {section.label}
+                </p>
+                <div className="space-y-0.5">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      onClick={() => setSidebarOpen(false)}
+                      className={({ isActive }) => {
+                        const esFallas = item.to.includes("tab=fallas");
+                        const enFallas =
+                          location.pathname.startsWith("/equipos/mantenimientos") &&
+                          location.search.includes("tab=fallas");
+                        const active = esFallas
+                          ? enFallas
+                          : item.to === "/equipos/mantenimientos"
+                            ? isActive && !enFallas
+                            : isActive;
+                        return linkClass(active);
+                      }}
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </nav>
-          <p className="px-4 pb-4 text-[11px] text-white/40">Fondo Emprender · tilapia Biofloc</p>
+          <p className="px-4 pb-4 text-[11px] text-white/35">Control de granja · V1</p>
         </aside>
 
-        <main className="min-h-[calc(100vh-3.5rem)] min-w-0 flex-1 px-4 py-6 sm:px-8">
+        <main className="min-h-[calc(100vh-3.5rem)] min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-10">
           <Outlet />
         </main>
       </div>

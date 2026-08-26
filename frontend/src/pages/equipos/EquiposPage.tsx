@@ -50,7 +50,7 @@ export function EquiposPage() {
   const [params, setParams] = useSearchParams();
   const tipoId = Number(params.get("tipo_id") ?? "") || undefined;
   const estadoId = Number(params.get("estado_id") ?? "") || undefined;
-  const codigo = params.get("codigo") ?? "";
+  const nombre = params.get("nombre") ?? "";
   const incluirInactivos = params.get("inactivos") === "1";
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Equipo | null>(null);
@@ -62,13 +62,13 @@ export function EquiposPage() {
   const tiposQuery = useQuery({ queryKey: ["tipos-equipo"], queryFn: () => listTiposEquipo(false) });
   const estadosQuery = useQuery({ queryKey: ["estados-equipo"], queryFn: () => listEstadosEquipo(false) });
   const equiposQuery = useQuery({
-    queryKey: ["equipos", tipoId, estadoId, codigo, incluirInactivos],
+    queryKey: ["equipos", tipoId, estadoId, nombre, incluirInactivos],
     queryFn: () =>
       listEquipos({
         soloActivos: !incluirInactivos,
         tipoEquipoId: tipoId,
         estadoId,
-        codigo: codigo.trim() || undefined,
+        nombre: nombre.trim() || undefined,
       }),
   });
 
@@ -173,12 +173,12 @@ export function EquiposPage() {
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block text-[var(--bf-muted)]">Código</span>
+          <span className="mb-1 block text-[var(--bf-muted)]">Nombre</span>
           <input
             className="bf-input"
-            value={codigo}
-            placeholder="Buscar código"
-            onChange={(e) => setParam("codigo", e.target.value)}
+            value={nombre}
+            placeholder="Buscar equipo por nombre"
+            onChange={(e) => setParam("nombre", e.target.value)}
           />
         </label>
         <label className="text-sm">

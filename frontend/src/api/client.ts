@@ -39,6 +39,9 @@ function defaultMessage(status: number): string {
     case 422:
       return "Los datos enviados no son válidos.";
     default:
+      if (status >= 500) {
+        return "Ocurrió un error interno al procesar la operación.";
+      }
       return "No se pudo completar la operación.";
   }
 }
@@ -77,6 +80,9 @@ function parseDetail(payload: unknown, status: number): string {
   }
 
   if (looksLikeInternalError(message)) {
+    if (import.meta.env.DEV) {
+      console.error("[biofloc] detalle técnico filtrado", { status, message });
+    }
     return defaultMessage(status);
   }
   return message;
@@ -125,6 +131,10 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   if (!response.ok) {
+    const sinCuerpo = payload == null;
+    if (sinCuerpo && (response.status === 0 || response.status >= 500)) {
+      throw new ApiError("No se pudo conectar con el servidor.", 0);
+    }
     throw new ApiError(parseDetail(payload, response.status), response.status);
   }
 

@@ -17,6 +17,42 @@ export type ReferenciaAgua = {
   activo: boolean;
 };
 
+export type IndicadorBiofloc = "VOLUMEN_SEDIMENTABLE" | "RELACION_CN";
+
+export type ReferenciaBiofloc = {
+  id: number;
+  especie_id: number;
+  etapa_productiva_id: number;
+  indicador: IndicadorBiofloc;
+  valor_minimo: string | number | null;
+  valor_objetivo: string | number | null;
+  valor_maximo: string | number | null;
+  unidad: string | null;
+  observaciones: string | null;
+  activo: boolean;
+};
+
+export type ReferenciaBioflocCreate = {
+  especie_id: number;
+  etapa_productiva_id: number;
+  indicador: IndicadorBiofloc;
+  valor_minimo?: number | null;
+  valor_objetivo?: number | null;
+  valor_maximo?: number | null;
+  unidad?: string | null;
+  observaciones?: string | null;
+  activo?: boolean;
+};
+
+export type ReferenciaBioflocUpdate = {
+  valor_minimo?: number | null;
+  valor_objetivo?: number | null;
+  valor_maximo?: number | null;
+  unidad?: string | null;
+  observaciones?: string | null;
+  activo?: boolean;
+};
+
 export type MedicionAgua = {
   id: number;
   lote_id: number;
@@ -75,6 +111,7 @@ export type AplicacionBiofloc = {
   observaciones: string | null;
   registrado_por: number;
   created_at: string;
+  stock_restante?: number | null;
 };
 
 export type AplicacionBioflocCreate = {
@@ -96,6 +133,7 @@ export type Alimentacion = {
   observaciones: string | null;
   registrado_por: number;
   created_at: string;
+  stock_restante?: number | null;
 };
 
 export type AlimentacionCreate = {

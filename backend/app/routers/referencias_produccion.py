@@ -1,22 +1,29 @@
-"""Router GET /api/v1/referencias-produccion
+"""Router /api/v1/referencias-produccion
 
-Solo consulta. No siembra valores. No POST/PUT en esta fase.
+Catálogo maestro de producción. Tabla DDL existente; no se duplica.
 
-RBAC: GET ADMINISTRADOR, TECNICO, OPERARIO.
+RBAC:
+- GET  ADMINISTRADOR, TECNICO, OPERARIO
+- POST/PUT ADMINISTRADOR
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.database import get_db
 from app.models.usuario import Usuario
 from app.models.rol import Rol
-from app.schemas.referencia_produccion import ReferenciaProduccionOut
+from app.schemas.referencia_produccion import (
+    ReferenciaProduccionCreate,
+    ReferenciaProduccionOut,
+    ReferenciaProduccionUpdate,
+)
 from app.services.auth_service import get_current_user
 from app.services import referencia_produccion_service as svc
 
 router = APIRouter()
 ROLES_LECTURA = {"ADMINISTRADOR", "TECNICO", "OPERARIO"}
+ROLES_ESCRITURA = {"ADMINISTRADOR"}
 
 
 def _require_roles(usuario: Usuario, db: Session, roles_permitidos: set[str]):
@@ -55,3 +62,26 @@ def obtener(
 ):
     _require_roles(current_user, db, ROLES_LECTURA)
     return svc.obtener_referencia_produccion(db, referencia_id)
+
+
+@router.post("/", response_model=ReferenciaProduccionOut, status_code=status.HTTP_201_CREATED)
+def crear(
+    data: ReferenciaProduccionCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    _require_roles(current_user, db, ROLES_ESCRITURA)
+    return svc.crear_referencia_produccion(db, data, usuario_id=current_user.id)
+
+
+@router.put("/{referencia_id}", response_model=ReferenciaProduccionOut)
+def actualizar(
+    referencia_id: int,
+    data: ReferenciaProduccionUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    _require_roles(current_user, db, ROLES_ESCRITURA)
+    return svc.actualizar_referencia_produccion(
+        db, referencia_id, data, usuario_id=current_user.id
+    )

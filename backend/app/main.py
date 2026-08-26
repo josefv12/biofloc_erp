@@ -48,6 +48,13 @@ from app.routers import (
     reportes,
     analisis,
     referencias_produccion,
+    especies,
+    etapas_productivas,
+    estados_lote,
+    estados_estanque,
+    referencias_biofloc,
+    usuarios,
+    alimentacion_referencia,
 )
 
 settings = get_settings()
@@ -103,6 +110,18 @@ app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboar
 app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["Reportes"])
 app.include_router(analisis.router, prefix="/api/v1/analisis", tags=["Análisis"])
 app.include_router(referencias_produccion.router, prefix="/api/v1/referencias-produccion", tags=["Referencias Producción"])
+app.include_router(especies.router, prefix="/api/v1/especies", tags=["Especies"])
+app.include_router(etapas_productivas.router, prefix="/api/v1/etapas-productivas", tags=["Etapas Productivas"])
+app.include_router(estados_lote.router, prefix="/api/v1/estados-lote", tags=["Estados Lote"])
+app.include_router(estados_estanque.router, prefix="/api/v1/estados-estanque", tags=["Estados Estanque"])
+app.include_router(referencias_biofloc.router, prefix="/api/v1/referencias-biofloc", tags=["Referencias Biofloc"])
+app.include_router(usuarios.router, prefix="/api/v1/usuarios", tags=["Usuarios"])
+app.include_router(usuarios.roles_router, prefix="/api/v1/roles", tags=["Roles"])
+app.include_router(
+    alimentacion_referencia.router,
+    prefix="/api/v1/referencias-alimentacion",
+    tags=["Referencia Alimentación"],
+)
 
 
 # ---------------------------------------------------------------------------

@@ -1,31 +1,61 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getAnalisisLote } from "../../api/analisis";
+import { ReferenciaVsLoteReal } from "../../components/alimentacion/ReferenciaVsLoteReal";
+import {
+  CamposAlimentacionRecomendada,
+  etiquetaPesoUtilizado,
+} from "../../components/alimentacion/ContextoAlimentacionPanel";
 import { RealReferenceCard } from "../../components/analisis/RealReferenceCard";
+import { ProduccionDashboard } from "../../components/ficha/ProduccionDashboard";
+import { etiquetaRangoSemanas, etiquetaRacionesCatalogo } from "../../utils/semanaReferencia";
 import { CategoryBarChart } from "../../components/charts/CategoryBarChart";
 import { ChartCard } from "../../components/charts/ChartCard";
-import { TimeSeriesChart, type LineaReferencia } from "../../components/charts/TimeSeriesChart";
+import { ComparativeLineChart } from "../../components/charts/ComparativeLineChart";
+import { TimeSeriesChart } from "../../components/charts/TimeSeriesChart";
 import { DataTable } from "../../components/DataTable";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { KpiCard } from "../../components/KpiCard";
 import { LoadingState } from "../../components/LoadingState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { apiErrorMessage } from "../../utils/apiError";
-import { formatCop, formatDateTime, formatNumber } from "../../utils/format";
+import { formatCop, formatDate, formatDateTime, formatNumber } from "../../utils/format";
 import {
   agruparAguaPorParametro,
   prepararBiofloc,
+  prepararPuntosComparativos,
   toNumber,
   totalizarAlimentoKgPorDia,
 } from "../../utils/series";
-import type { AnalisisLote, AnalisisStats } from "../../types/analisis";
+import {
+  buscarEvaluacion,
+  colorSerieRealEvaluacion,
+  etiquetaCumplimiento,
+  referenciaDesdeEvaluacion,
+  tituloRecomendacion,
+  toneCumplimiento,
+  cumplimientoPorRango,
+} from "../../utils/analisisStatus";
+import type { PuntoComparativo } from "../../utils/series";
+import type { AnalisisLote, AnalisisStats, ReferenciaAlimentacionActiva } from "../../types/analisis";
+import {
+  FCA_DEFINICION,
+  FCA_ESPERADO_ND,
+  FCA_HINT_ECONOMICO,
+  FCA_LABEL,
+  FCA_SERIE_DESCRIPCION,
+  FCA_SERIE_TITULO,
+  fcaHintDisponible,
+  fcaHintNoDisponible,
+} from "../../utils/fcaPresentacion";
 
 type SeccionId = "resumen" | "produccion" | "agua" | "biofloc" | "alimentacion" | "referencia";
 
 const SECCIONES: { id: SeccionId; label: string }[] = [
   { id: "resumen", label: "Resumen" },
   { id: "produccion", label: "Producción" },
-  { id: "agua", label: "Agua" },
+  { id: "agua", label: "Calidad de agua" },
   { id: "biofloc", label: "Biofloc" },
   { id: "alimentacion", label: "Alimentación" },
   { id: "referencia", label: "Real vs referencia" },
@@ -34,6 +64,7 @@ const SECCIONES: { id: SeccionId; label: string }[] = [
 /** Traducción de los códigos técnicos que envía el backend en `pendientes`. */
 const MOTIVOS: Record<string, string> = {
   SIN_BIOMETRIA: "Sin biometría registrada.",
+  SIN_TALLA: "Sin talla registrada.",
   SIN_PESO_INICIAL_LOTE: "El lote no registra peso inicial promedio.",
   DIAS_CULTIVO_CERO: "El lote se sembró hoy: todavía no hay días de cultivo.",
   SIN_ALIMENTO_REAL_REGISTRADO: "Sin alimentación registrada.",
@@ -42,10 +73,11 @@ const MOTIVOS: Record<string, string> = {
   SIN_BIOMASA_INICIAL: "Sin biomasa inicial disponible.",
   SIN_BIOMASA_FINAL: "Sin biomasa final disponible.",
   GANANCIA_BIOMASA_NO_POSITIVA: "La biomasa no creció respecto a la siembra.",
-  SIN_REFERENCIA_PRODUCCION_APLICABLE: "No hay referencia de producción para esta semana.",
+  SIN_REFERENCIA_PRODUCCION_APLICABLE: "N/D — Sin referencia configurada.",
   REFERENCIA_SIN_TASA_ALIMENTACION: "La referencia no define tasa de alimentación.",
   REFERENCIA_SIN_PESO_ESPERADO: "La referencia no define peso esperado.",
-  SIN_CONFIGURACION_DE_RACIONES: "No existe todavía una configuración de raciones diarias.",
+  SIN_CONFIGURACION_DE_RACIONES: "N/D — Sin referencia configurada.",
+  RACIONES_EN_RANGO: "La referencia indica un rango de raciones; no se usa un único número.",
   OBJETIVO_CERO: "El objetivo es 0: no se calcula diferencia porcentual.",
   SERIE_VACIA: "Sin datos en la serie.",
   SERIE_CON_UN_SOLO_PUNTO: "Una sola medición: no permite analizar evolución.",
@@ -56,6 +88,14 @@ const MOTIVOS: Record<string, string> = {
     "La alimentación registrada no conserva un costo unitario imputable al lote.",
   UTILIDAD_NO_DISPONIBLE_POR_COSTOS_INCOMPLETOS:
     "No se calcula utilidad ni margen porque los costos del lote no están completos.",
+  COSECHA_SIN_PESO_REGISTRADO: "Hay cosecha sin peso registrado: no se inventa biomasa cosechada.",
+  SGR_REQUIERE_PESOS_POSITIVOS_Y_DIAS: "SGR requiere peso inicial > 0, peso actual > 0 y días > 0.",
+  SIN_VOLUMEN_UTIL_ESTANQUE: "N/D — sin volumen útil del estanque.",
+  POBLACION_NEGATIVA_HISTORICA:
+    "Este lote tiene población negativa por registros históricos (mortalidad y/o cosecha mayores que lo sembrado). No se corrige automáticamente.",
+  SIN_REGLA_DE_AGREGACION_DE_FCA:
+    "Actualmente no existe una regla oficial para agregar el FCA de varios lotes.",
+  SIN_REFERENCIA_FCA: "FCA esperado: sin referencia oficial configurada.",
 };
 
 const ETIQUETAS_PENDIENTES: Record<string, string> = {
@@ -64,9 +104,12 @@ const ETIQUETAS_PENDIENTES: Record<string, string> = {
   ganancia_peso_g: "Ganancia de peso",
   ganancia_diaria_g: "Ganancia diaria",
   alimento_real_acumulado_kg: "Alimento real acumulado",
-  fca: "FCA",
+  fca: "FCA acumulado",
+  sgr_pct_dia: "SGR",
+  densidad_kg_m3: "Densidad",
   racion_diaria_recomendada_kg: "Ración diaria recomendada",
   numero_raciones_diarias: "Raciones por día",
+  poblacion_estimada: "Población estimada",
 };
 
 function motivoTexto(codigo: string | null | undefined): string | undefined {
@@ -94,7 +137,7 @@ function Indicador({
   return (
     <KpiCard
       label={label}
-      value={`${formatNumber(numero, { maximumFractionDigits: digitos })}${sufijo ? ` ${sufijo}` : ""}`}
+      value={`${formatNumber(numero, { minimumFractionDigits: digitos, maximumFractionDigits: digitos })}${sufijo ? ` ${sufijo}` : ""}`}
       hint={motivoTexto(motivo)}
     />
   );
@@ -102,7 +145,7 @@ function Indicador({
 
 function Panel({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
+    <section className="rounded-2xl border border-[var(--bf-border)] bg-white p-4 shadow-[0_1px_2px_rgba(16,40,33,0.04)]">
       <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
         {title}
       </h3>
@@ -121,7 +164,7 @@ function Definicion({ termino, texto }: { termino: string; texto: string }) {
   );
 }
 
-function Fila({ termino, valor }: { termino: string; valor: string }) {
+function Fila({ termino, valor }: { termino: string; valor: ReactNode }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-[var(--bf-muted)]">{termino}</dt>
@@ -130,10 +173,31 @@ function Fila({ termino, valor }: { termino: string; valor: string }) {
   );
 }
 
-export function LoteAnalisisPanel({ loteId }: { loteId: number }) {
-  const [seccion, setSeccion] = useState<SeccionId>("resumen");
+const SECCION_IDS = new Set<string>(SECCIONES.map((item) => item.id));
+
+export function LoteAnalisisPanel({
+  loteId,
+  seccionFija,
+  modoOperativo: modoOperativoProp,
+}: {
+  loteId: number;
+  seccionFija?: SeccionId;
+  /** Fuerza vista comparativa sin gráficas históricas "vs tiempo". */
+  modoOperativo?: boolean;
+}) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const seccionParam = searchParams.get("seccion");
+  const seccion: SeccionId =
+    seccionFija ??
+    (seccionParam && SECCION_IDS.has(seccionParam) ? (seccionParam as SeccionId) : "resumen");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+
+  function setSeccion(siguiente: SeccionId) {
+    const params = new URLSearchParams(searchParams);
+    params.set("seccion", siguiente);
+    setSearchParams(params, { replace: true });
+  }
   const rango = { fechaDesde: desde || undefined, fechaHasta: hasta || undefined };
   const query = useQuery({
     queryKey: ["analisis-lote", loteId, desde, hasta],
@@ -141,14 +205,20 @@ export function LoteAnalisisPanel({ loteId }: { loteId: number }) {
   });
 
   const data = query.data;
+  /** Solo la ficha del estanque restringe series históricas; seccionFija no implica eso. */
+  const modoOperativo = modoOperativoProp ?? false;
+  const embebido = Boolean(seccionFija) || modoOperativo;
 
   return (
     <div className="space-y-4">
+      {embebido ? null : (
       <p className="text-sm text-[var(--bf-muted)]">
-        Los indicadores, las series históricas y las estadísticas las calcula el API. Este panel solo ordena,
-        formatea y grafica: no recalcula biomasa, población, supervivencia, FCA, ganancia ni ración.
+        Los indicadores y las series las calcula el API. Este panel solo ordena, formatea y grafica: no
+        recalcula biomasa, población, supervivencia, FCA acumulado, ganancia ni ración.
       </p>
+      )}
 
+      {embebido ? null : (
       <section className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs text-[var(--bf-muted)]">
@@ -189,7 +259,9 @@ export function LoteAnalisisPanel({ loteId }: { loteId: number }) {
             "El rango recorta solo las series mostradas; los indicadores se calculan con todo el ciclo."}
         </p>
       </section>
+      )}
 
+      {embebido ? null : (
       <div className="flex flex-wrap gap-2">
         {SECCIONES.map((item) => (
           <button
@@ -206,6 +278,7 @@ export function LoteAnalisisPanel({ loteId }: { loteId: number }) {
           </button>
         ))}
       </div>
+      )}
 
       {query.isLoading ? <LoadingState label="Cargando análisis…" /> : null}
       {query.isError ? <ErrorAlert message={apiErrorMessage(query.error)} /> : null}
@@ -213,10 +286,12 @@ export function LoteAnalisisPanel({ loteId }: { loteId: number }) {
       {data ? (
         <>
           {seccion === "resumen" ? <SeccionResumen data={data} /> : null}
-          {seccion === "produccion" ? <SeccionProduccion data={data} /> : null}
-          {seccion === "agua" ? <SeccionAgua data={data} /> : null}
-          {seccion === "biofloc" ? <SeccionBiofloc data={data} /> : null}
-          {seccion === "alimentacion" ? <SeccionAlimentacion data={data} /> : null}
+          {seccion === "produccion" ? (
+            <SeccionProduccion data={data} modoOperativo={modoOperativo} />
+          ) : null}
+          {seccion === "agua" ? <SeccionAgua data={data} modoOperativo={modoOperativo} /> : null}
+          {seccion === "biofloc" ? <SeccionBiofloc data={data} modoOperativo={modoOperativo} /> : null}
+          {seccion === "alimentacion" ? <SeccionAlimentacion data={data} modoOperativo={modoOperativo} /> : null}
           {seccion === "referencia" ? <SeccionReferencia data={data} /> : null}
         </>
       ) : null}
@@ -237,6 +312,20 @@ function SeccionResumen({ data }: { data: AnalisisLote }) {
         <KpiCard label="Mortalidad acumulada" value={formatNumber(ind.mortalidad_acumulada)} />
         <Indicador label="Supervivencia %" valor={ind.supervivencia_porcentaje} digitos={2} />
         <Indicador label="Mortalidad %" valor={ind.mortalidad_porcentaje} digitos={2} />
+        <KpiCard label="Días de cultivo" value={formatNumber(ind.dias_cultivo)} />
+        <KpiCard label="Semana" value={formatNumber(ind.semana_cultivo)} />
+        <Indicador
+          label="Biomasa inicial (kg)"
+          valor={ind.biomasa_inicial_kg}
+          digitos={2}
+          motivo={data.pendientes.biomasa_inicial_kg}
+        />
+        <Indicador
+          label="Biomasa actual (kg)"
+          valor={ind.biomasa_actual_kg}
+          digitos={2}
+          motivo={data.pendientes.biomasa_actual_kg}
+        />
         <Indicador
           label="Peso promedio (g)"
           valor={ind.peso_promedio_g}
@@ -244,40 +333,18 @@ function SeccionResumen({ data }: { data: AnalisisLote }) {
           motivo={ind.peso_promedio_g === null ? "SIN_BIOMETRIA" : undefined}
         />
         <KpiCard
-          label="Días de cultivo"
-          value={formatNumber(ind.dias_cultivo)}
-          hint={ind.semana_cultivo === 0 ? "Día de la siembra" : `Semana ${ind.semana_cultivo}`}
-        />
-        <Indicador
-          label="Biomasa inicial (kg)"
-          valor={ind.biomasa_inicial_kg}
-          digitos={3}
-          motivo={data.pendientes.biomasa_inicial_kg}
-        />
-        <Indicador
-          label="Biomasa actual (kg)"
-          valor={ind.biomasa_actual_kg}
-          digitos={3}
-          motivo={data.pendientes.biomasa_actual_kg}
-        />
-        <Indicador
-          label="Ganancia de peso (g)"
-          valor={ind.ganancia_peso_g}
-          digitos={3}
-          motivo={data.pendientes.ganancia_peso_g}
-        />
-        <Indicador
-          label="Ganancia diaria (g/día)"
-          valor={ind.ganancia_diaria_g}
-          digitos={4}
-          motivo={data.pendientes.ganancia_diaria_g}
-        />
-        <Indicador label="FCA" valor={ind.fca} digitos={4} motivo={ind.fca_motivo} />
-        <Indicador
-          label="Alimento real acumulado (kg)"
-          valor={ind.alimento_real_acumulado_kg}
-          digitos={3}
-          motivo={data.pendientes.alimento_real_acumulado_kg}
+          label={FCA_LABEL}
+          value={
+            ind.fca == null
+              ? "N/D"
+              : formatNumber(ind.fca, { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+          }
+          hint={
+            ind.fca == null
+              ? fcaHintNoDisponible(ind.fca_motivo)
+              : fcaHintDisponible(data.lote.fecha_cierre)
+          }
+          title={FCA_HINT_ECONOMICO}
         />
         <Indicador
           label="Ración diaria recomendada (kg)"
@@ -285,37 +352,24 @@ function SeccionResumen({ data }: { data: AnalisisLote }) {
           digitos={3}
           motivo={data.pendientes.racion_diaria_recomendada_kg}
         />
-        <Indicador
-          label="Raciones por día"
-          valor={ind.numero_raciones_diarias}
-          digitos={0}
-          motivo={data.pendientes.numero_raciones_diarias}
-        />
+        {ind.raciones_diarias_texto ? (
+          <KpiCard
+            label="Raciones por día"
+            value={etiquetaRacionesCatalogo(
+              data.referencia_alimentacion?.raciones_min,
+              data.referencia_alimentacion?.raciones_max,
+              ind.raciones_diarias_texto,
+            )}
+          />
+        ) : (
+          <Indicador
+            label="Raciones por día"
+            valor={ind.numero_raciones_diarias}
+            digitos={0}
+            motivo={data.pendientes.numero_raciones_diarias}
+          />
+        )}
       </div>
-
-      <Panel title="Productividad" hint="Cuánto produce el lote. Todos los valores llegan calculados por el backend.">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Indicador label="Biomasa actual (kg)" valor={data.productividad.biomasa_actual_kg} digitos={3} motivo={data.productividad.motivos.biomasa_actual_kg} />
-          <Indicador label="Ganancia de biomasa (kg)" valor={data.productividad.ganancia_biomasa_kg} digitos={3} motivo={data.productividad.motivos.ganancia_biomasa_kg} />
-          <Indicador label="Peso cosechado (kg)" valor={data.productividad.peso_cosechado_kg} digitos={3} />
-          <KpiCard label="Peces cosechados" value={formatNumber(data.productividad.peces_cosechados)} />
-          <Indicador label="Ganancia individual (g)" valor={data.productividad.ganancia_peso_g} digitos={3} />
-          <Indicador label="Ganancia diaria (g/día)" valor={data.productividad.ganancia_diaria_g} digitos={4} />
-          <Indicador label="Supervivencia (%)" valor={data.productividad.supervivencia_porcentaje} digitos={2} />
-          <Indicador label="Mortalidad (%)" valor={data.productividad.mortalidad_porcentaje} digitos={2} />
-        </div>
-      </Panel>
-
-      <Panel title="Eficiencia" hint="Qué recursos utiliza para producir. FCA usa exclusivamente alimento real convertible a kg.">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Indicador label="FCA" valor={data.eficiencia.fca} digitos={4} motivo={data.eficiencia.fca_motivo} />
-          <Indicador label="Alimento real (kg)" valor={data.eficiencia.alimento_real_acumulado_kg} digitos={3} />
-          <Indicador label="Ganancia de biomasa (kg)" valor={data.eficiencia.ganancia_biomasa_kg} digitos={3} />
-          <Indicador label="Desviación de peso (%)" valor={data.eficiencia.desviacion_peso_porcentaje} digitos={2} motivo={data.eficiencia.desviacion_peso_porcentaje === null ? "SIN_REFERENCIA_PRODUCCION_APLICABLE" : undefined} />
-          <Indicador label="Costo por kg" valor={data.eficiencia.costo_por_kg} motivo={data.eficiencia.costo_por_kg_motivo} />
-          <Indicador label="Costo de alimentación" valor={data.eficiencia.costo_alimentacion} motivo={data.eficiencia.costo_alimentacion_motivo} />
-        </div>
-      </Panel>
 
       <Panel title="Finanzas del lote" hint="Ingresos y gastos directamente vinculados al lote; no se prorratean costos de granja.">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -327,11 +381,14 @@ function SeccionResumen({ data }: { data: AnalisisLote }) {
       </Panel>
 
       {pendientes.length > 0 ? (
-        <Panel
-          title="Indicadores no disponibles"
-          hint="El backend explica por qué no se puede calcular cada uno. No se muestran ceros en su lugar."
-        >
-          <ul className="space-y-2 text-sm">
+        <details className="rounded-2xl border border-[var(--bf-border)] bg-white p-4">
+          <summary className="cursor-pointer font-display text-sm font-semibold text-[var(--bf-ink)]">
+            Indicadores no disponibles
+          </summary>
+          <p className="mt-1 text-xs text-[var(--bf-muted)]">
+            El backend explica por qué no se puede calcular cada uno. No se muestran ceros en su lugar.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm">
             {pendientes.map(([clave, razon]) => (
               <li key={clave} className="flex flex-wrap justify-between gap-2">
                 <span className="font-medium text-[var(--bf-ink)]">{ETIQUETAS_PENDIENTES[clave] ?? clave}</span>
@@ -339,17 +396,21 @@ function SeccionResumen({ data }: { data: AnalisisLote }) {
               </li>
             ))}
           </ul>
-        </Panel>
+        </details>
       ) : null}
 
-      <Panel title="Definiciones del cálculo" hint={`Zona horaria del backend: ${data.definiciones.zona_horaria}.`}>
-        <dl className="space-y-2 text-xs text-[var(--bf-muted)]">
+      <details className="rounded-2xl border border-[var(--bf-border)] bg-white p-4">
+        <summary className="cursor-pointer font-display text-sm font-semibold text-[var(--bf-ink)]">
+          Definiciones del cálculo
+        </summary>
+        <p className="mt-1 text-xs text-[var(--bf-muted)]">Zona horaria del backend: {data.definiciones.zona_horaria}.</p>
+        <dl className="mt-3 space-y-2 text-xs text-[var(--bf-muted)]">
           <Definicion termino="Días de cultivo" texto={data.definiciones.dias_cultivo} />
           <Definicion termino="Semana de cultivo" texto={data.definiciones.semana_cultivo} />
           <Definicion termino="Unidad de masa" texto={data.definiciones.unidad_masa_productiva} />
           <Definicion termino="Población histórica" texto={data.definiciones.poblacion_as_of} />
           <Definicion termino="Serie de biomasa" texto={data.definiciones.serie_biomasa} />
-          <Definicion termino="Serie de FCA" texto={data.definiciones.serie_fca} />
+          <Definicion termino="Serie de FCA acumulado" texto={data.definiciones.serie_fca} />
           <Definicion termino="Alimento convertible" texto={data.definiciones.alimento_convertible_kg} />
           <Definicion termino="Estadísticas" texto={data.definiciones.estadisticas} />
           <Definicion termino="Mediana" texto={data.definiciones.mediana} />
@@ -358,16 +419,16 @@ function SeccionResumen({ data }: { data: AnalisisLote }) {
           <Definicion termino="Estado analítico" texto={data.definiciones.estado_analitico} />
           <Definicion termino="Cumplimiento de rango" texto={data.definiciones.cumplimiento_rango} />
           <Definicion termino="Recomendaciones" texto={data.definiciones.recomendaciones} />
-          <Definicion termino="FCA" texto={data.definiciones.fca} />
+          <Definicion termino="FCA acumulado" texto={data.definiciones.fca} />
           <Definicion termino="Ración recomendada" texto={data.definiciones.racion_diaria_recomendada_kg} />
           <Definicion termino="Filtros de fecha" texto={data.definiciones.filtros_fecha} />
         </dl>
-      </Panel>
+      </details>
     </div>
   );
 }
 
-function SeccionProduccion({ data }: { data: AnalisisLote }) {
+function SeccionProduccion({ data, modoOperativo = false }: { data: AnalisisLote; modoOperativo?: boolean }) {
   const est = data.estadisticas;
 
   const puntosPeso = useMemo(
@@ -380,6 +441,21 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
     [data.biometrias],
   );
   const hayEsperado = puntosPeso.some((punto) => punto.esperado !== null);
+  const puntosTalla = useMemo(
+    () =>
+      data.biometrias
+        .filter((fila) => fila.talla_promedio != null)
+        .map((fila) => ({
+          etiqueta: formatDateTime(fila.fecha_hora),
+          talla: toNumber(fila.talla_promedio),
+          unidad: fila.unidad_talla,
+        })),
+    [data.biometrias],
+  );
+  const unidadesTalla = useMemo(
+    () => new Set(puntosTalla.map((punto) => punto.unidad ?? "")),
+    [puntosTalla],
+  );
   const puntosCrecimiento = useMemo(
     () =>
       data.serie_crecimiento.map((fila) => ({
@@ -405,6 +481,7 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
       data.serie_poblacion.map((fila) => ({
         etiqueta: formatDateTime(fila.fecha_hora),
         poblacion: fila.poblacion_estimada,
+        mortalidad: fila.mortalidad_acumulada,
         supervivencia: toNumber(fila.supervivencia_porcentaje),
       })),
     [data.serie_poblacion],
@@ -430,11 +507,71 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
     [data.serie_fca],
   );
   const fcaSinDato = data.serie_fca.filter((fila) => !fila.fca_disponible);
+  const evalPeso = buscarEvaluacion(data.evaluaciones, "peso_promedio_g");
+  const colorRealPeso = colorSerieRealEvaluacion(evalPeso);
+  const puntosComparativosPeso = useMemo(
+    (): PuntoComparativo[] =>
+      puntosPeso.map((punto) => ({
+        etiqueta: punto.etiqueta,
+        real: punto.peso,
+        esperado: punto.esperado,
+        minimo: null,
+        maximo: null,
+        objetivo: null,
+      })),
+    [puntosPeso],
+  );
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Indicador
+          label="Ganancia de peso (g)"
+          valor={data.indicadores.ganancia_peso_g}
+          digitos={3}
+          motivo={data.pendientes.ganancia_peso_g}
+        />
+        <Indicador
+          label="Ganancia diaria (g/día)"
+          valor={data.indicadores.ganancia_diaria_g}
+          digitos={4}
+          motivo={data.pendientes.ganancia_diaria_g}
+        />
+        <Indicador
+          label="SGR (%/día)"
+          valor={data.indicadores.sgr_pct_dia}
+          digitos={2}
+          motivo={data.pendientes.sgr_pct_dia}
+        />
+        <Indicador
+          label="Desviación de peso (%)"
+          valor={data.eficiencia.desviacion_peso_porcentaje}
+          digitos={2}
+          motivo={data.eficiencia.desviacion_peso_porcentaje === null ? "SIN_REFERENCIA_PRODUCCION_APLICABLE" : undefined}
+        />
+        <Indicador
+          label="Ganancia de biomasa (kg)"
+          valor={data.productividad.ganancia_biomasa_kg}
+          digitos={2}
+          motivo={data.productividad.motivos.ganancia_biomasa_kg}
+        />
+        <Indicador label="Peso cosechado (kg)" valor={data.productividad.peso_cosechado_kg} digitos={3} />
+        <Indicador
+          label={data.indicadores.unidad_talla ? `Talla promedio (${data.indicadores.unidad_talla})` : "Talla promedio"}
+          valor={data.indicadores.talla_promedio}
+          digitos={2}
+          motivo={data.indicadores.talla_promedio === null ? "SIN_TALLA" : undefined}
+        />
+        <Indicador
+          label="Densidad (kg/m³)"
+          valor={data.indicadores.densidad_kg_m3}
+          digitos={2}
+          motivo={data.pendientes.densidad_kg_m3}
+        />
+      </div>
+
       <ChartCard
-        title="Peso promedio vs peso esperado"
+        title="Peso real vs peso esperado"
         unidad="g"
         descripcion={
           hayEsperado
@@ -445,17 +582,47 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
         vacio={puntosPeso.length === 0}
         vacioMensaje="Sin biometrías en el rango: no hay curva de peso."
       >
-        <TimeSeriesChart
-          data={puntosPeso}
-          series={
-            hayEsperado
-              ? [
-                  { key: "peso", nombre: "Peso real (g)" },
-                  { key: "esperado", nombre: "Peso esperado (g)", color: "#b45309" },
-                ]
-              : [{ key: "peso", nombre: "Peso real (g)" }]
-          }
+        <ComparativeLineChart
+          data={puntosComparativosPeso}
           unidad="g"
+          colorReal={colorRealPeso}
+          digitos={2}
+          mostrarBandaRango={false}
+        />
+      </ChartCard>
+
+      {modoOperativo ? (
+        <>
+          <p className="text-xs text-[var(--bf-muted)]" title={FCA_HINT_ECONOMICO}>
+            {FCA_LABEL}: {FCA_DEFINICION} No hay FCA esperado oficial.
+          </p>
+          <ComparacionAlimentacion data={data} />
+        </>
+      ) : null}
+
+      {!modoOperativo ? (
+      <>
+      <ChartCard
+        title="Talla promedio vs tiempo"
+        unidad={est.talla_promedio.unidad}
+        descripcion={
+          unidadesTalla.size > 1
+            ? "Hay tallas con unidades distintas. No se mezclan en una sola gráfica ni se convierten."
+            : "Talla tal como se registró en cada biometría. No hay conversión de unidades."
+        }
+        stats={unidadesTalla.size > 1 ? undefined : est.talla_promedio}
+        vacio={puntosTalla.length === 0 || unidadesTalla.size > 1}
+        vacioMensaje={
+          puntosTalla.length === 0
+            ? "N/D — no existen mediciones de talla registradas."
+            : "Sin datos suficientes para graficar: unidades de talla distintas."
+        }
+      >
+        <TimeSeriesChart
+          data={puntosTalla}
+          series={[{ key: "talla", nombre: "Talla promedio" }]}
+          unidad={est.talla_promedio.unidad}
+          digitos={2}
         />
       </ChartCard>
 
@@ -479,7 +646,11 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
         descripcion="Cada punto usa la población reconstruida a esa fecha, no la población actual."
         stats={est.biomasa_kg}
         vacio={puntosBiomasa.length === 0}
-        vacioMensaje="Sin biometrías en el rango: el backend no puede calcular biomasa por fecha."
+        vacioMensaje={`Serie histórica de biomasa no disponible. Biomasa actual: ${
+          data.indicadores.biomasa_actual_kg == null
+            ? `N/D (${data.pendientes.biomasa_actual_kg ?? "SIN_BIOMETRIA"})`
+            : `${formatNumber(data.indicadores.biomasa_actual_kg, { maximumFractionDigits: 3 })} kg`
+        }.`}
       >
         <TimeSeriesChart
           data={puntosBiomasa}
@@ -496,17 +667,20 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
       </ChartCard>
 
       <ChartCard
-        title="Población estimada vs tiempo"
+        title="Población estimada y mortalidad acumulada"
         unidad="peces"
-        descripcion="Un punto por evento productivo: siembra, mortalidad, cosecha y biometría."
+        descripcion="Series históricas del backend. No se reconstruye población en el cliente."
         stats={est.poblacion_estimada}
         digitos={0}
         vacio={puntosPoblacion.length === 0}
-        vacioMensaje="Sin eventos productivos en el rango."
+        vacioMensaje="El backend no entrega serie histórica de población para este rango."
       >
         <TimeSeriesChart
           data={puntosPoblacion}
-          series={[{ key: "poblacion", nombre: "Población estimada" }]}
+          series={[
+            { key: "poblacion", nombre: "Población estimada" },
+            { key: "mortalidad", nombre: "Mortalidad acumulada", color: "#b45309" },
+          ]}
           unidad="peces"
           digitos={0}
         />
@@ -515,11 +689,11 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
       <ChartCard
         title="Supervivencia vs tiempo"
         unidad="%"
-        descripcion="Población de cada fecha sobre la cantidad sembrada. No se repite el valor actual en fechas anteriores."
+        descripcion="Población de cada fecha sobre la cantidad sembrada. Si solo hay un punto, el KPI de supervivencia está en Resumen."
         stats={est.supervivencia_porcentaje}
         digitos={2}
-        vacio={puntosPoblacion.length === 0}
-        vacioMensaje="Sin eventos productivos en el rango."
+        vacio={puntosPoblacion.filter((punto) => punto.supervivencia !== null).length === 0}
+        vacioMensaje="Sin serie de supervivencia. Supervivencia actual se muestra como KPI, no se inventa una curva."
       >
         <TimeSeriesChart
           data={puntosPoblacion}
@@ -548,28 +722,30 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
       </ChartCard>
 
       <ChartCard
-        title="FCA vs tiempo"
-        descripcion="Alimento real acumulado sobre ganancia de biomasa acumulada en cada biometría. Solo se dibujan los puntos donde el cálculo es válido."
+        title={FCA_SERIE_TITULO}
+        descripcion={FCA_SERIE_DESCRIPCION}
         stats={est.fca}
         digitos={4}
         vacio={puntosFca.filter((punto) => punto.fca !== null).length === 0}
         vacioMensaje={
           fcaSinDato.length > 0
-            ? `FCA no disponible en el rango: ${motivoTexto(fcaSinDato[fcaSinDato.length - 1].fca_motivo)}`
-            : "Sin puntos con FCA calculable."
+            ? `FCA acumulado no disponible en el rango: ${motivoTexto(fcaSinDato[fcaSinDato.length - 1].fca_motivo)}`
+            : "Sin puntos con FCA acumulado calculable."
         }
       >
         <TimeSeriesChart
           data={puntosFca.filter((punto) => punto.fca !== null)}
-          series={[{ key: "fca", nombre: "FCA" }]}
+          series={[{ key: "fca", nombre: FCA_LABEL }]}
           digitos={4}
         />
       </ChartCard>
+      </>
+      ) : null}
 
-      {fcaSinDato.length > 0 ? (
+      {!modoOperativo && fcaSinDato.length > 0 ? (
         <Panel
-          title="Puntos sin FCA"
-          hint="El backend indica por qué cada punto no es calculable. No se sustituye por el FCA final."
+          title="Puntos sin FCA acumulado"
+          hint="El backend indica por qué cada punto no es calculable. No se sustituye por el FCA acumulado final. No es un FCA de intervalo."
         >
           <DataTable
             rows={fcaSinDato}
@@ -601,7 +777,7 @@ function SeccionProduccion({ data }: { data: AnalisisLote }) {
   );
 }
 
-function SeccionAgua({ data }: { data: AnalisisLote }) {
+function SeccionAgua({ data, modoOperativo = false }: { data: AnalisisLote; modoOperativo?: boolean }) {
   const grupos = useMemo(() => agruparAguaPorParametro(data.agua_serie), [data.agua_serie]);
   const statsPorParametro = useMemo(() => {
     const mapa = new Map<number, AnalisisStats>();
@@ -616,77 +792,93 @@ function SeccionAgua({ data }: { data: AnalisisLote }) {
     }
     return { mapa, meta };
   }, [data.estadisticas.agua]);
+  const tarjetasAgua = data.evaluaciones.filter((ev) => /^agua:\d+$/.test(ev.indicador));
+  const historial = [...data.agua_serie].reverse();
 
   return (
     <div className="space-y-4">
+      {tarjetasAgua.length > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {tarjetasAgua.map((ev) => (
+            <RealReferenceCard key={ev.indicador} evaluacion={ev} />
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-[var(--bf-muted)]">N/D — Sin medición.</p>
+      )}
+
       <Panel
-        title="Última medición por parámetro"
-        hint="El rango proviene de referencias_agua para la especie y etapa del lote. Sin referencia no hay rango y el estado queda sin determinar."
+        title="Historial de mediciones de agua"
+        hint="Solo este lote. Más reciente primero. El rango es el de referencias_agua para la especie y etapa del lote."
       >
         <DataTable
-          rows={data.agua}
-          rowKey={(row) => row.parametro_id}
+          rows={historial}
+          rowKey={(row) => row.id}
           empty="Sin mediciones de agua."
+          maxVisibleRows={10}
           columns={[
+            { key: "fecha", header: "Fecha", render: (row) => formatDateTime(row.fecha_hora) },
             { key: "parametro", header: "Parámetro" },
             {
               key: "valor",
               header: "Valor",
               render: (row) => `${formatNumber(row.valor, { maximumFractionDigits: 4 })} ${row.unidad}`,
             },
-            {
-              key: "rango",
-              header: "Rango",
-              render: (row) =>
-                row.valor_minimo == null && row.valor_maximo == null
-                  ? "Sin referencia"
-                  : `${row.valor_minimo == null ? "—" : formatNumber(row.valor_minimo, { maximumFractionDigits: 4 })} – ${
-                      row.valor_maximo == null ? "—" : formatNumber(row.valor_maximo, { maximumFractionDigits: 4 })
-                    } ${row.unidad}`,
-            },
+            { key: "unidad", header: "Unidad", render: (row) => row.unidad },
             {
               key: "estado",
               header: "Estado",
               render: (row) =>
                 row.fuera_de_rango == null ? (
-                  <span className="text-[var(--bf-muted)]">Sin referencia</span>
+                  <StatusBadge label="N/D — Sin referencia configurada" tone="neutral" />
                 ) : row.fuera_de_rango ? (
-                  <StatusBadge label="Fuera del rango" tone="danger" />
+                  <StatusBadge label={etiquetaCumplimiento("FUERA_RANGO")} tone="danger" />
                 ) : (
-                  <StatusBadge label="Dentro del rango" tone="ok" />
+                  <StatusBadge label={etiquetaCumplimiento("DENTRO_RANGO")} tone="ok" />
                 ),
             },
-            { key: "fecha", header: "Fecha", render: (row) => formatDateTime(row.fecha_hora) },
+            {
+              key: "usuario",
+              header: "Usuario",
+              render: (row) => row.registrado_por_nombre || (row.registrado_por != null ? `#${row.registrado_por}` : "—"),
+            },
           ]}
         />
       </Panel>
 
       {grupos.length === 0 ? (
+        modoOperativo ? (
+          <p className="text-sm text-[var(--bf-muted)]">Sin mediciones de agua en el ciclo.</p>
+        ) : (
         <ChartCard title="Parámetros de agua" vacio vacioMensaje="Sin mediciones de agua en el rango.">
           <span />
         </ChartCard>
+        )
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
-          {grupos.map((grupo) => {
+          {grupos
+            .filter((grupo) => grupo.puntos.length >= 1)
+            .map((grupo) => {
             const stats = statsPorParametro.mapa.get(grupo.parametro_id) ?? null;
             const meta = statsPorParametro.meta.get(grupo.parametro_id);
-            const referencias: LineaReferencia[] = [];
-            if (grupo.valorMinimo !== null) {
-              referencias.push({
-                valor: grupo.valorMinimo,
-                etiqueta: `Mín ${formatNumber(grupo.valorMinimo, { maximumFractionDigits: 4 })}`,
-              });
-            }
-            if (grupo.valorMaximo !== null) {
-              referencias.push({
-                valor: grupo.valorMaximo,
-                etiqueta: `Máx ${formatNumber(grupo.valorMaximo, { maximumFractionDigits: 4 })}`,
-              });
-            }
+            const evalParam = buscarEvaluacion(data.evaluaciones, `agua:${grupo.parametro_id}`);
+            const ref = {
+              minimo: grupo.valorMinimo ?? toNumber(evalParam?.minimo),
+              maximo: grupo.valorMaximo ?? toNumber(evalParam?.maximo),
+              objetivo: toNumber(evalParam?.objetivo),
+            };
+            const puntosComparativos = prepararPuntosComparativos(grupo.puntos, ref);
+            const evalBadge =
+              evalParam && evalParam.cumplimiento_rango !== "NO_EVALUABLE" ? (
+                <StatusBadge
+                  label={etiquetaCumplimiento(evalParam.cumplimiento_rango)}
+                  tone={toneCumplimiento(evalParam.cumplimiento_rango)}
+                />
+              ) : null;
             return (
               <ChartCard
                 key={grupo.parametro_id}
-                title={grupo.parametro}
+                title={`${grupo.parametro} real vs referencia`}
                 unidad={grupo.unidad}
                 descripcion={
                   meta?.conRef && meta.fuera !== null
@@ -695,16 +887,18 @@ function SeccionAgua({ data }: { data: AnalisisLote }) {
                           ? "."
                           : ` (${formatNumber(meta.pct, { maximumFractionDigits: 2 })} %).`
                       }`
-                    : "Sin referencia para esta especie y etapa: no se dibuja rango ni se evalúa el estado."
+                    : meta?.conRef
+                      ? "Comparación de mediciones contra el rango de referencia configurado."
+                      : "N/D — Sin referencia configurada para esta especie y etapa."
                 }
-                stats={stats}
+                stats={modoOperativo ? undefined : stats}
                 digitos={4}
               >
-                <TimeSeriesChart
-                  data={grupo.puntos}
-                  series={[{ key: "valor", nombre: grupo.parametro }]}
+                {evalBadge ? <div className="mb-2">{evalBadge}</div> : null}
+                <ComparativeLineChart
+                  data={puntosComparativos}
                   unidad={grupo.unidad}
-                  referencias={referencias}
+                  colorReal={colorSerieRealEvaluacion(evalParam)}
                   digitos={4}
                 />
               </ChartCard>
@@ -716,45 +910,96 @@ function SeccionAgua({ data }: { data: AnalisisLote }) {
   );
 }
 
-function SeccionBiofloc({ data }: { data: AnalisisLote }) {
+function SeccionBiofloc({ data, modoOperativo = false }: { data: AnalisisLote; modoOperativo?: boolean }) {
   const serie = useMemo(() => prepararBiofloc(data.biofloc_serie), [data.biofloc_serie]);
   const est = data.estadisticas;
   const ultima = data.biofloc;
+  const evalVolumen = buscarEvaluacion(data.evaluaciones, "volumen_sedimentable");
+  const unidadVolumen = evalVolumen?.unidad || ultima?.unidad || est.volumen_sedimentable.unidad;
+  const puntosComparativos = useMemo(
+    () => prepararPuntosComparativos(serie.puntosVolumen, referenciaDesdeEvaluacion(evalVolumen)),
+    [serie.puntosVolumen, evalVolumen],
+  );
+  const historialBiofloc = [...data.biofloc_serie].reverse();
+
+  const descripcionVolumen = evalVolumen
+    ? evalVolumen.explicacion
+    : ultima
+      ? "N/D — Sin referencia configurada para esta especie y etapa."
+      : "N/D — Sin medición de sólidos sedimentables en el rango.";
 
   return (
     <div className="space-y-4">
+      {evalVolumen ? <RealReferenceCard evaluacion={evalVolumen} /> : null}
+
+      {(!modoOperativo || serie.puntosVolumen.length >= 1) ? (
       <ChartCard
-        title="Volumen sedimentable vs tiempo"
-        unidad={est.volumen_sedimentable.unidad}
-        descripcion="Unidad tal como la entrega el API. No se define rango objetivo en esta fase."
-        stats={est.volumen_sedimentable}
+        title="Sólidos sedimentables real vs referencia"
+        unidad={unidadVolumen}
+        descripcion={descripcionVolumen}
+        stats={modoOperativo ? undefined : est.volumen_sedimentable}
         digitos={2}
         vacio={serie.puntosVolumen.length === 0}
-        vacioMensaje="Sin mediciones de biofloc en el rango."
+        vacioMensaje={ultima ? "Sin puntos en el rango seleccionado." : "N/D — Sin medición"}
       >
-        <TimeSeriesChart
-          data={serie.puntosVolumen}
-          series={[{ key: "valor", nombre: "Volumen sedimentable" }]}
-          unidad={est.volumen_sedimentable.unidad}
+        <ComparativeLineChart
+          data={puntosComparativos}
+          unidad={unidadVolumen}
+          colorReal={colorSerieRealEvaluacion(evalVolumen)}
           digitos={2}
         />
       </ChartCard>
+      ) : null}
 
-      <ChartCard
-        title="Relación C:N vs tiempo"
-        descripcion="Solo mediciones que registran relación C:N. No hay C:N objetivo, rango ni recomendación de carbono."
-        stats={est.relacion_cn}
-        digitos={3}
-        vacio={serie.puntosCn.length === 0}
-        vacioMensaje="Ninguna medición del rango registra relación C:N."
+      <Panel
+        title="Historial de mediciones Biofloc"
+        hint="Mediciones de sólidos sedimentables de este lote. No incluye aplicaciones."
       >
-        <TimeSeriesChart
-          data={serie.puntosCn}
-          series={[{ key: "valor", nombre: "Relación C:N" }]}
-          digitos={3}
+        <DataTable
+          rows={historialBiofloc}
+          rowKey={(row) => row.id}
+          empty="N/D — Sin medición."
+          columns={[
+            { key: "fecha", header: "Fecha", render: (row) => formatDateTime(row.fecha_hora) },
+            { key: "parametro", header: "Parámetro", render: () => "Sólidos sedimentables" },
+            {
+              key: "valor",
+              header: "Valor",
+              render: (row) =>
+                `${formatNumber(row.volumen_sedimentable, { maximumFractionDigits: 2 })} ${row.unidad}`,
+            },
+            { key: "unidad", header: "Unidad", render: (row) => row.unidad },
+            {
+              key: "estado",
+              header: "Estado",
+              render: (row) => {
+                const valor = toNumber(row.volumen_sedimentable);
+                const estado = cumplimientoPorRango(
+                  valor,
+                  toNumber(evalVolumen?.minimo),
+                  toNumber(evalVolumen?.maximo),
+                );
+                if (estado === "NO_EVALUABLE") {
+                  return <StatusBadge label="N/D — Sin referencia configurada" tone="neutral" />;
+                }
+                return (
+                  <StatusBadge
+                    label={etiquetaCumplimiento(estado)}
+                    tone={toneCumplimiento(estado)}
+                  />
+                );
+              },
+            },
+            {
+              key: "usuario",
+              header: "Usuario",
+              render: (row) => row.registrado_por_nombre || (row.registrado_por != null ? `#${row.registrado_por}` : "—"),
+            },
+          ]}
         />
-      </ChartCard>
+      </Panel>
 
+      {!modoOperativo ? (
       <Panel title="Última medición de biofloc">
         {ultima ? (
           <dl className="space-y-2 text-sm">
@@ -762,25 +1007,180 @@ function SeccionBiofloc({ data }: { data: AnalisisLote }) {
               termino="Volumen sedimentable"
               valor={`${formatNumber(ultima.volumen_sedimentable, { maximumFractionDigits: 2 })} ${ultima.unidad}`}
             />
-            <Fila
-              termino="Relación C:N"
-              valor={
-                ultima.relacion_cn == null
-                  ? "N/D"
-                  : formatNumber(ultima.relacion_cn, { maximumFractionDigits: 3 })
-              }
-            />
+            {evalVolumen ? (
+              <>
+                {evalVolumen.objetivo !== null ? (
+                  <Fila
+                    termino="Objetivo"
+                    valor={`${formatNumber(evalVolumen.objetivo, { maximumFractionDigits: 2 })} ${evalVolumen.unidad ?? ultima.unidad}`}
+                  />
+                ) : null}
+                {evalVolumen.minimo !== null || evalVolumen.maximo !== null ? (
+                  <Fila
+                    termino="Rango"
+                    valor={`${evalVolumen.minimo == null ? "—" : formatNumber(evalVolumen.minimo, { maximumFractionDigits: 2 })} – ${
+                      evalVolumen.maximo == null ? "—" : formatNumber(evalVolumen.maximo, { maximumFractionDigits: 2 })
+                    } ${evalVolumen.unidad ?? ultima.unidad}`}
+                  />
+                ) : null}
+                {evalVolumen.cumplimiento_rango !== "NO_EVALUABLE" ? (
+                  <Fila
+                    termino="Estado"
+                    valor={
+                      <StatusBadge
+                        label={etiquetaCumplimiento(evalVolumen.cumplimiento_rango)}
+                        tone={toneCumplimiento(evalVolumen.cumplimiento_rango)}
+                      />
+                    }
+                  />
+                ) : null}
+              </>
+            ) : (
+              <Fila termino="Referencia" valor="N/D — Sin referencia configurada" />
+            )}
             <Fila termino="Fecha" valor={formatDateTime(ultima.fecha_hora)} />
           </dl>
         ) : (
-          <p className="text-sm text-[var(--bf-muted)]">Sin medición registrada.</p>
+          <p className="text-sm text-[var(--bf-muted)]">N/D — Sin medición</p>
         )}
       </Panel>
+      ) : null}
     </div>
   );
 }
 
-function SeccionAlimentacion({ data }: { data: AnalisisLote }) {
+/** Alimentación real vs recomendada — solo comparación, sin gráficas históricas de acumulado. */
+function puntosAlimentacionComparativa(data: AnalisisLote): PuntoComparativo[] {
+  const serie = data.serie_alimentacion_comparativa ?? [];
+  return serie.map((punto) => ({
+    etiqueta: formatDate(punto.fecha),
+    real: toNumber(punto.real_kg),
+    recomendado: toNumber(punto.recomendada_kg),
+    minimo: null,
+    maximo: null,
+    objetivo: null,
+  }));
+}
+
+function ReferenciaAlimentacionSemana({ ref }: { ref: ReferenciaAlimentacionActiva }) {
+  const pesoUtilizado = etiquetaPesoUtilizado(ref.peso_utilizado);
+  return (
+    <Panel
+      title="Referencia de producción y alimentación (semana actual)"
+      hint={`Semana ${ref.semana_productiva}${ref.fase ? ` · Fase: ${ref.fase}` : ""}. La tasa y las raciones vienen de la referencia; la ración usa población viva y peso operativo.`}
+    >
+      <CamposAlimentacionRecomendada ref={ref} />
+      {pesoUtilizado ? <p className="mt-3 text-xs text-[var(--bf-muted)]">{pesoUtilizado}.</p> : null}
+    </Panel>
+  );
+}
+
+function FilaDato({ termino, valor }: { termino: string; valor: string }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">{termino}</dt>
+      <dd className="mt-0.5 font-medium text-[var(--bf-ink)]">{valor}</dd>
+    </div>
+  );
+}
+
+function ComparacionAlimentacion({ data }: { data: AnalisisLote }) {
+  const ind = data.indicadores;
+  const puntosRealVsRecomendado = useMemo(() => puntosAlimentacionComparativa(data), [data]);
+  const evalAlimentacion = buscarEvaluacion(data.evaluaciones, "alimentacion_diaria_kg");
+  const colorReal = colorSerieRealEvaluacion(evalAlimentacion);
+  const ultimoPunto = (data.serie_alimentacion_comparativa ?? []).at(-1);
+  const ultimaAlimentacion = data.alimentacion_real.length
+    ? data.alimentacion_real[data.alimentacion_real.length - 1]
+    : null;
+
+  return (
+    <div className="space-y-4">
+      {data.referencia_alimentacion ? <ReferenciaVsLoteReal data={data} Panel={Panel} /> : null}
+      {data.referencia_alimentacion ? (
+        <ReferenciaAlimentacionSemana ref={data.referencia_alimentacion} />
+      ) : (
+        <Panel title="Referencia de producción y alimentación (semana actual)">
+          <p className="text-sm text-[var(--bf-muted)]">N/D — Sin referencia configurada.</p>
+        </Panel>
+      )}
+
+      {puntosRealVsRecomendado.length >= 2 ? (
+        <ChartCard
+          title="Alimentación real vs recomendada"
+          unidad="kg"
+          descripcion="Suma diaria real frente a la ración recomendada recalculada por semana, población y peso."
+          vacio={puntosRealVsRecomendado.length === 0}
+          vacioMensaje="Sin alimentaciones convertibles a kg."
+        >
+          <ComparativeLineChart
+            data={puntosRealVsRecomendado}
+            unidad="kg"
+            colorReal={colorReal}
+            digitos={3}
+            mostrarBandaRango={false}
+          />
+        </ChartCard>
+      ) : (
+        <Panel title="Alimentación real vs recomendada" hint="Comparación puntual: menos de dos días con alimentación.">
+          <dl className="grid gap-4 sm:grid-cols-2 text-sm">
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">REAL</dt>
+              <dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">
+                {ultimaAlimentacion
+                  ? `${formatNumber(ultimaAlimentacion.cantidad, { maximumFractionDigits: 3 })} ${ultimaAlimentacion.unidad}`
+                  : "N/D — Sin medición"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">RECOMENDADA</dt>
+              <dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">
+                {ind.racion_diaria_recomendada_kg == null
+                  ? "N/D"
+                  : `${formatNumber(ind.racion_diaria_recomendada_kg, { maximumFractionDigits: 3 })} kg`}
+              </dd>
+            </div>
+          </dl>
+        </Panel>
+      )}
+
+      {ultimoPunto && ultimoPunto.recomendada_kg != null ? (
+        <Panel title="Desviación del último día registrado">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+            <FilaDato
+              termino="Real"
+              valor={`${formatNumber(ultimoPunto.real_kg, { maximumFractionDigits: 3 })} kg`}
+            />
+            <FilaDato
+              termino="Recomendada"
+              valor={`${formatNumber(ultimoPunto.recomendada_kg, { maximumFractionDigits: 3 })} kg`}
+            />
+            <FilaDato
+              termino="Desviación"
+              valor={
+                ultimoPunto.desviacion_kg != null
+                  ? `${formatNumber(ultimoPunto.desviacion_kg, { maximumFractionDigits: 3 })} kg`
+                  : "N/D"
+              }
+            />
+            <FilaDato
+              termino="Desviación %"
+              valor={
+                ultimoPunto.desviacion_porcentaje != null
+                  ? `${formatNumber(ultimoPunto.desviacion_porcentaje, { maximumFractionDigits: 2 })} %`
+                  : "N/D"
+              }
+            />
+          </dl>
+        </Panel>
+      ) : null}
+
+      {evalAlimentacion ? <RealReferenceCard evaluacion={evalAlimentacion} /> : null}
+    </div>
+  );
+}
+
+function SeccionAlimentacion({ data, modoOperativo = false }: { data: AnalisisLote; modoOperativo?: boolean }) {
   const ind = data.indicadores;
 
   const puntosAcumulado = useMemo(
@@ -792,10 +1192,16 @@ function SeccionAlimentacion({ data }: { data: AnalisisLote }) {
     [data.alimentacion_real],
   );
   const diasKg = useMemo(() => totalizarAlimentoKgPorDia(data.alimentacion_real), [data.alimentacion_real]);
+  const puntosRealVsRecomendado = useMemo(() => puntosAlimentacionComparativa(data), [data]);
+  const evalAlimentacion = buscarEvaluacion(data.evaluaciones, "alimentacion_diaria_kg");
+  const colorRealAlim = colorSerieRealEvaluacion(evalAlimentacion);
   const noConvertibles = useMemo(
     () => [...new Set(data.alimentacion_real.filter((fila) => !fila.convertible_a_kg).map((fila) => fila.unidad))],
     [data.alimentacion_real],
   );
+  const ultimaAlimentacion = data.alimentacion_real.length
+    ? data.alimentacion_real[data.alimentacion_real.length - 1]
+    : null;
 
   return (
     <div className="space-y-4">
@@ -807,13 +1213,121 @@ function SeccionAlimentacion({ data }: { data: AnalisisLote }) {
           motivo={data.pendientes.alimento_real_acumulado_kg}
         />
         <Indicador
-          label="Ración diaria recomendada (kg)"
-          valor={ind.racion_diaria_recomendada_kg}
+          label="Biomasa productiva (kg)"
+          valor={data.eficiencia.ganancia_biomasa_kg}
           digitos={3}
-          motivo={data.pendientes.racion_diaria_recomendada_kg}
+          motivo={data.eficiencia.ganancia_biomasa_kg == null ? data.productividad.motivos.ganancia_biomasa_kg : undefined}
         />
-        <Indicador label="FCA" valor={ind.fca} digitos={4} motivo={ind.fca_motivo} />
+        <Indicador label="Costo por kg" valor={data.eficiencia.costo_por_kg} motivo={data.eficiencia.costo_por_kg_motivo} />
+        <Indicador
+          label="Costo de alimentación"
+          valor={data.eficiencia.costo_alimentacion}
+          motivo={data.eficiencia.costo_alimentacion_motivo}
+        />
       </div>
+
+      {modoOperativo ? (
+        <>
+          {data.referencia_alimentacion ? <ReferenciaVsLoteReal data={data} Panel={Panel} /> : null}
+          {data.referencia_alimentacion ? (
+            <ReferenciaAlimentacionSemana ref={data.referencia_alimentacion} />
+          ) : (
+            <Panel title="Referencia de producción y alimentación (semana actual)">
+              <p className="text-sm text-[var(--bf-muted)]">N/D — Sin referencia configurada.</p>
+            </Panel>
+          )}
+          {evalAlimentacion ? <RealReferenceCard evaluacion={evalAlimentacion} /> : null}
+          {puntosRealVsRecomendado.length >= 2 ? (
+            <ChartCard
+              title="Alimentación real vs recomendada"
+              unidad="kg"
+              descripcion="Suma diaria real frente a la ración recomendada recalculada por semana, población y peso."
+              vacio={puntosRealVsRecomendado.length === 0}
+              vacioMensaje="Sin alimentaciones convertibles a kg en el rango."
+            >
+              <ComparativeLineChart
+                data={puntosRealVsRecomendado}
+                unidad="kg"
+                colorReal={colorRealAlim}
+                digitos={3}
+                mostrarBandaRango={false}
+              />
+            </ChartCard>
+          ) : (
+            <Panel
+              title="Alimentación real vs recomendada"
+              hint="Comparación puntual: un solo día con alimentación registrada."
+            >
+              <dl className="grid gap-4 sm:grid-cols-2 text-sm">
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">REAL</dt>
+                  <dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">
+                    {ultimaAlimentacion
+                      ? `${formatNumber(ultimaAlimentacion.cantidad, { maximumFractionDigits: 3 })} ${ultimaAlimentacion.unidad}`
+                      : "N/D — Sin medición"}
+                  </dd>
+                  <dd className="text-xs text-[var(--bf-muted)]">
+                    {ultimaAlimentacion
+                      ? `Fecha: ${formatDateTime(ultimaAlimentacion.fecha_hora)}`
+                      : "Sin alimentación registrada"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">RECOMENDADO</dt>
+                  <dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">
+                    {ind.racion_diaria_recomendada_kg == null
+                      ? "N/D"
+                      : `${formatNumber(ind.racion_diaria_recomendada_kg, { maximumFractionDigits: 3 })} kg`}
+                  </dd>
+                  <dd className="text-xs text-[var(--bf-muted)]">
+                    {ind.racion_diaria_recomendada_kg == null
+                      ? motivoTexto(data.pendientes.racion_diaria_recomendada_kg) ?? "Sin referencia actual"
+                      : `Referencia actual · semana ${ind.semana_productiva_alimentacion ?? ind.semana_cultivo}`}
+                  </dd>
+                </div>
+              </dl>
+            </Panel>
+          )}
+        </>
+      ) : (
+        <>
+      <Panel
+        title="Real vs recomendado (comparación actual)"
+        hint="Último día de alimentación registrado contra la ración recomendada vigente. No se reconstruye una ración histórica."
+      >
+        <dl className="grid gap-4 sm:grid-cols-2 text-sm">
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">REAL</dt>
+            <dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">
+              {ultimaAlimentacion
+                ? `${formatNumber(ultimaAlimentacion.cantidad, { maximumFractionDigits: 3 })} ${ultimaAlimentacion.unidad}`
+                : "N/D"}
+            </dd>
+            <dd className="text-xs text-[var(--bf-muted)]">
+              {ultimaAlimentacion
+                ? `Fecha: ${formatDateTime(ultimaAlimentacion.fecha_hora)}`
+                : "Sin alimentación registrada"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">RECOMENDADO</dt>
+            <dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">
+              {ind.racion_diaria_recomendada_kg == null
+                ? "N/D"
+                : `${formatNumber(ind.racion_diaria_recomendada_kg, { maximumFractionDigits: 3 })} kg`}
+            </dd>
+            <dd className="text-xs text-[var(--bf-muted)]">
+              {ind.racion_diaria_recomendada_kg == null
+                ? motivoTexto(data.pendientes.racion_diaria_recomendada_kg) ?? "Sin referencia actual"
+                : `Referencia actual · semana ${ind.semana_productiva_alimentacion ?? ind.semana_cultivo}`}
+            </dd>
+          </div>
+        </dl>
+      </Panel>
+      <p className="text-xs text-[var(--bf-muted)]">
+        La ración recomendada es el indicador vigente del lote, no una serie histórica. No se dibuja sobre
+        alimentaciones pasadas.
+      </p>
 
       <ChartCard
         title="Alimento real acumulado (kg)"
@@ -883,7 +1397,7 @@ function SeccionAlimentacion({ data }: { data: AnalisisLote }) {
             {
               key: "producto",
               header: "Producto",
-              render: (row) => `${row.producto_codigo} — ${row.producto_nombre}`,
+              render: (row) => `${row.producto_nombre} (${row.producto_codigo})`,
             },
             {
               key: "cantidad",
@@ -909,6 +1423,8 @@ function SeccionAlimentacion({ data }: { data: AnalisisLote }) {
           ]}
         />
       </Panel>
+        </>
+      )}
     </div>
   );
 }
@@ -924,10 +1440,13 @@ function SeccionReferencia({ data }: { data: AnalisisLote }) {
         hint="El backend entrega valores, desviaciones, cumplimiento y explicación. Fuera de rango no equivale a ALERTA o CRÍTICO sin zonas de severidad aprobadas."
       >
         <div className="grid gap-4 lg:grid-cols-2">
-          {data.evaluaciones.map((evaluacion) => (
-            <RealReferenceCard key={evaluacion.indicador} evaluacion={evaluacion} />
-          ))}
+          {data.evaluaciones
+            .filter((evaluacion) => evaluacion.indicador !== "fca")
+            .map((evaluacion) => (
+              <RealReferenceCard key={evaluacion.indicador} evaluacion={evaluacion} />
+            ))}
         </div>
+        <p className="mt-3 text-xs text-[var(--bf-muted)]">{FCA_ESPERADO_ND}</p>
       </Panel>
 
       {data.recomendaciones.length > 0 ? (
@@ -943,9 +1462,9 @@ function SeccionReferencia({ data }: { data: AnalisisLote }) {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium text-[var(--bf-ink)]">
-                    {recomendacion.indicador}
+                    {tituloRecomendacion(recomendacion.indicador, data.evaluaciones, data.agua)}
                   </span>
-                  <StatusBadge label="Fuera del rango" tone="danger" />
+                  <StatusBadge label={etiquetaCumplimiento(recomendacion.cumplimiento_rango)} tone={toneCumplimiento(recomendacion.cumplimiento_rango)} />
                 </div>
                 <p className="mt-2 text-xs text-[var(--bf-muted)]">
                   {recomendacion.motivo}
@@ -962,7 +1481,7 @@ function SeccionReferencia({ data }: { data: AnalisisLote }) {
       <Panel title="Referencia de producción" hint={data.definiciones.referencia_produccion}>
         {referencia ? (
           <dl className="space-y-2 text-sm">
-            <Fila termino="Semanas que cubre" valor={`${referencia.semana_desde} – ${referencia.semana_hasta}`} />
+            <Fila termino="Semanas que cubre" valor={etiquetaRangoSemanas(referencia.semana_desde, referencia.semana_hasta)} />
             <Fila termino="Semana actual del lote" valor={String(ind.semana_cultivo)} />
             <Fila
               termino="Peso esperado"
@@ -983,7 +1502,7 @@ function SeccionReferencia({ data }: { data: AnalisisLote }) {
           </dl>
         ) : (
           <p className="text-sm text-[var(--bf-muted)]">
-            Sin referencia aplicable para la semana {ind.semana_cultivo}. No se asume ningún valor esperado.
+            Sin referencia aplicable para la semana {ind.semana_cultivo}. N/D — Sin referencia configurada.
           </p>
         )}
       </Panel>
@@ -1068,4 +1587,131 @@ function SeccionReferencia({ data }: { data: AnalisisLote }) {
 
     </div>
   );
+}
+
+const TITULOS_HISTORICOS_PROHIBIDOS = [
+  "talla promedio vs tiempo",
+  "crecimiento vs tiempo",
+  "biomasa vs tiempo",
+  "volumen sedimentable vs tiempo",
+  "relación c:n vs tiempo",
+  "población estimada y mortalidad acumulada",
+  "supervivencia vs tiempo",
+  "evolución del fca acumulado",
+  "fca vs tiempo",
+  "mortalidad registrada y acumulada",
+  "alimento real acumulado",
+  "alimento real por día",
+  "peso promedio vs tiempo",
+];
+
+export type SeccionOperativa = "resumen" | "produccion" | "agua" | "biofloc";
+
+function RecomendacionesOperativas({ data }: { data: AnalisisLote }) {
+  if (data.recomendaciones.length === 0) return null;
+  return (
+    <section className="mt-6">
+      <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-accent)]">
+        Recomendaciones
+      </h2>
+      <ul className="space-y-3">
+        {data.recomendaciones.map((recomendacion) => (
+          <li
+            key={recomendacion.indicador}
+            className="rounded-2xl border border-[var(--bf-border)] bg-white p-4 text-sm shadow-[0_1px_2px_rgba(16,40,33,0.04)]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium text-[var(--bf-ink)]">
+                {tituloRecomendacion(recomendacion.indicador, data.evaluaciones, data.agua)}
+              </span>
+              <StatusBadge
+                label={etiquetaCumplimiento(recomendacion.cumplimiento_rango)}
+                tone={toneCumplimiento(recomendacion.cumplimiento_rango)}
+              />
+            </div>
+            <p className="mt-2 text-xs text-[var(--bf-muted)]">{recomendacion.motivo}</p>
+            <p className="mt-2 text-[var(--bf-ink)]">{recomendacion.recomendacion}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Indicadores del lote en la ficha del estanque, separados por sección. */
+export function VistaOperativaAnalisis({
+  loteId,
+  seccion = "resumen",
+}: {
+  loteId: number;
+  seccion?: SeccionOperativa;
+}) {
+  const query = useQuery({
+    queryKey: ["analisis-lote", loteId, "", ""],
+    queryFn: () => getAnalisisLote(loteId),
+    refetchOnMount: "always",
+  });
+
+  useEffect(() => {
+    if (query.isError) {
+      void query.refetch();
+    }
+    // Una sola recuperación al montar: si el API volvió tras un corte, no dejar el error pegado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loteId]);
+
+  if (query.isLoading) {
+    return <LoadingState label="Cargando comparaciones del lote…" />;
+  }
+  if (query.isError) {
+    return (
+      <div className="space-y-3 px-6 py-6">
+        <ErrorAlert message={apiErrorMessage(query.error)} />
+        <button type="button" className="bf-btn-secondary" onClick={() => void query.refetch()}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+  if (!query.data) {
+    return null;
+  }
+
+  const data = query.data;
+  const recsAgua = data.recomendaciones.filter((item) => item.indicador.startsWith("agua:"));
+  const recsBiofloc = data.recomendaciones.filter(
+    (item) =>
+      item.indicador.startsWith("biofloc") ||
+      item.indicador.includes("volumen") ||
+      item.indicador.includes("cn"),
+  );
+
+  return (
+    <div className="-mx-1">
+      {seccion === "resumen" ? (
+        <section className="px-6 py-6">
+          <SeccionResumen data={data} />
+        </section>
+      ) : null}
+      {seccion === "produccion" ? <ProduccionDashboard data={data} /> : null}
+      {seccion === "agua" ? (
+        <section className="px-6 py-6">
+          <SeccionAgua data={data} modoOperativo />
+          <RecomendacionesOperativas data={{ ...data, recomendaciones: recsAgua }} />
+        </section>
+      ) : null}
+      {seccion === "biofloc" ? (
+        <section className="px-6 py-6">
+          <SeccionBiofloc data={data} modoOperativo />
+          <RecomendacionesOperativas data={{ ...data, recomendaciones: recsBiofloc }} />
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+/** Verificación estática: la ficha operativa no debe renderizar títulos históricos prohibidos. */
+export function tituloPermitidoEnFichaOperativa(titulo: string): boolean {
+  const normalizado = titulo.trim().toLowerCase();
+  return !TITULOS_HISTORICOS_PROHIBIDOS.some((prohibido) => normalizado.includes(prohibido));
 }

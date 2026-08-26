@@ -413,9 +413,9 @@ def main() -> int:
     eq("población actual 2000−30−100", ind["poblacion_estimada"], 1870)
     eq("biomasa actual 1870×30/1000", dec(ind["biomasa_actual_kg"]), Decimal("56.100"))
     eq("alimento real 2+3+5 kg + 1500 g", dec(ind["alimento_real_acumulado_kg"]), Decimal("11.500"))
-    eq("FCA 11.5/(56.1−10)", dec(ind["fca"]), Decimal("0.2495"))
-    eq("semana de cultivo actual", ind["semana_cultivo"], 3)
-    eq("supervivencia 1870/2000", dec(ind["supervivencia_porcentaje"]), Decimal("93.50"))
+    eq("FCA 11.5/(56.1+1.5−10)", dec(ind["fca"]), Decimal("0.2416"))
+    eq("semana de cultivo actual", ind["semana_cultivo"], 4)
+    eq("supervivencia (2000−30)/2000", dec(ind["supervivencia_porcentaje"]), Decimal("98.50"))
     eq("mortalidad 30/2000", dec(ind["mortalidad_porcentaje"]), Decimal("1.50"))
     eq("ración 56.100×3/100", dec(ind["racion_diaria_recomendada_kg"]), Decimal("1.683"))
 
@@ -431,7 +431,7 @@ def main() -> int:
        [Decimal("2.000"), Decimal("2.000"), Decimal("2.000")])
     eq("diferencia porcentual", [dec(p["diferencia_peso_pct"]) for p in bios],
        [Decimal("25.00"), Decimal("11.11"), Decimal("7.14")])
-    eq("referencias por semana resueltas", [f["semana_cultivo"] for f in b["referencias_por_semana"]], [1, 2, 3])
+    eq("referencias por semana resueltas", [f["semana_cultivo"] for f in b["referencias_por_semana"]], [1, 2, 3, 4])
     check(
         "cada semana usa su propia referencia",
         len({f["referencia_id"] for f in b["referencias_por_semana"]}) == 3,
@@ -454,7 +454,7 @@ def main() -> int:
     eq("supervivencia as-of",
        [dec(p["supervivencia_porcentaje"]) for p in pobl],
        [Decimal("100.00"), Decimal("99.50"), Decimal("99.50"), Decimal("98.50"),
-        Decimal("93.50"), Decimal("93.50"), Decimal("93.50")])
+        Decimal("98.50"), Decimal("98.50"), Decimal("98.50")])
     eq("mortalidad acumulada en la serie de mortalidades",
        [(p["cantidad"], p["acumulada"], dec(p["mortalidad_porcentaje"])) for p in b["mortalidades"]],
        [(10, 10, Decimal("0.50")), (20, 30, Decimal("1.50"))])
@@ -466,7 +466,7 @@ def main() -> int:
     eq("biomasa por fecha", [dec(p["biomasa_kg"]) for p in biomasa],
        [Decimal("19.900"), Decimal("37.400"), Decimal("56.100")])
     eq("ganancia de biomasa por fecha", [dec(p["ganancia_biomasa_kg"]) for p in biomasa],
-       [Decimal("9.900"), Decimal("27.400"), Decimal("46.100")])
+       [Decimal("9.900"), Decimal("28.900"), Decimal("47.600")])
     check(
         "biomasa histórica no repite la biomasa actual",
         dec(biomasa[0]["biomasa_kg"]) != dec(ind["biomasa_actual_kg"]),
@@ -493,7 +493,7 @@ def main() -> int:
        [dec(p["alimento_real_acumulado_kg"]) for p in fca],
        [Decimal("2.000"), Decimal("5.000"), Decimal("10.000")])
     eq("FCA histórico calculado por punto", [dec(p["fca"]) for p in fca],
-       [Decimal("0.2020"), Decimal("0.1825"), Decimal("0.2169")])
+       [Decimal("0.2020"), Decimal("0.1730"), Decimal("0.2101")])
     check("FCA histórico no arrastra el FCA final",
           dec(fca[-1]["fca"]) != dec(ind["fca"]),
           f'ultimo={fca[-1]["fca"]} actual={ind["fca"]}')
@@ -545,7 +545,7 @@ def main() -> int:
         f = r.json()
         eq("fecha_desde recorta la serie de peso", [p["id"] for p in f["biometrias"]], [bio3])
         eq("fecha_desde no recorta indicadores",
-           dec(f["indicadores"]["fca"]), Decimal("0.2495"))
+           dec(f["indicadores"]["fca"]), Decimal("0.2416"))
         eq("as-of se mantiene completo tras filtrar",
            dec(f["serie_fca"][0]["alimento_real_acumulado_kg"]), Decimal("10.000"))
         eq("biomasa filtrada conserva su valor as-of",
@@ -625,10 +625,10 @@ def main() -> int:
         check("comparativo incluye el estanque con lote activo", fila is not None)
         if fila:
             eq("comparativo: biomasa del lote activo", dec(fila["biomasa_actual_kg"]), Decimal("56.100"))
-            eq("comparativo: FCA del lote activo", dec(fila["fca"]), Decimal("0.2495"))
+            eq("comparativo: FCA del lote activo", dec(fila["fca"]), Decimal("0.2416"))
             eq("comparativo: población y semana",
-               (fila["poblacion_estimada"], fila["semana_cultivo"]), (1870, 3))
-            eq("comparativo: supervivencia", dec(fila["supervivencia_porcentaje"]), Decimal("93.50"))
+               (fila["poblacion_estimada"], fila["semana_cultivo"]), (1870, 4))
+            eq("comparativo: supervivencia", dec(fila["supervivencia_porcentaje"]), Decimal("98.50"))
             eq("comparativo: agua 2 parámetros, 1 con referencia, 1 fuera de rango",
                (fila["agua_parametros_medidos"], fila["agua_parametros_con_referencia"],
                 fila["agua_parametros_fuera_de_rango"]), (2, 1, 1))

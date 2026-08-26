@@ -10,7 +10,7 @@ import { useAuth } from "../../auth/AuthProvider";
 import { listProductos, listProductosStock } from "../../api/inventory";
 import { createCompra, listCompras } from "../../api/purchases";
 import { apiErrorMessage } from "../../utils/apiError";
-import { formatCop, formatDate, formatNumber } from "../../utils/format";
+import { etiquetaProducto, formatCop, formatDate, formatNumber } from "../../utils/format";
 import { can } from "../../utils/rbac";
 import type { Compra, CompraCreate, DetalleCompraIn } from "../../types/purchases";
 
@@ -221,7 +221,7 @@ export function ComprasPage() {
                         <option value="">Seleccione</option>
                         {(productosQuery.data ?? []).map((row) => (
                           <option key={row.id} value={row.id}>
-                            {row.codigo} · {row.nombre}
+                            {etiquetaProducto(row.nombre, row.codigo)}
                           </option>
                         ))}
                       </select>

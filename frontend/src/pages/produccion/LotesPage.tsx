@@ -9,9 +9,10 @@ import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useAuth } from "../../auth/AuthProvider";
-import { createLote, listEstanques, listLotes, updateLote } from "../../api/production";
+import { createLote, listEstadosLote, listEstanques, listEspecies, listEtapasProductivas, listLotes, updateLote } from "../../api/production";
+import { pathFichaEstanque } from "./fichaPaths";
 import { apiErrorMessage } from "../../utils/apiError";
-import { formatDate, formatNumber, uniqueById } from "../../utils/format";
+import { formatDate, formatNumber } from "../../utils/format";
 import { can } from "../../utils/rbac";
 import type { Lote, LoteCreate, LoteUpdate } from "../../types/production";
 
@@ -51,30 +52,40 @@ export function LotesPage() {
     queryKey: ["estanques", true],
     queryFn: () => listEstanques(false),
   });
+  const especiesQuery = useQuery({
+    queryKey: ["especies", "catalog"],
+    queryFn: () => listEspecies(false),
+  });
+  const etapasQuery = useQuery({
+    queryKey: ["etapas-productivas", "catalog"],
+    queryFn: () => listEtapasProductivas(false),
+  });
+  const estadosQuery = useQuery({
+    queryKey: ["estados-lote", "catalog"],
+    queryFn: () => listEstadosLote(false),
+  });
 
   const estanques = useMemo(() => {
     const map = new Map((estanquesQuery.data ?? []).map((row) => [row.id, row]));
     return map;
   }, [estanquesQuery.data]);
 
-  const especies = useMemo(
-    () => uniqueById((lotesQuery.data ?? []).map((row) => row.especie)),
-    [lotesQuery.data],
-  );
-  const etapas = useMemo(
-    () => uniqueById((lotesQuery.data ?? []).map((row) => row.etapa_productiva)),
-    [lotesQuery.data],
-  );
-  const estados = useMemo(
-    () => uniqueById((lotesQuery.data ?? []).map((row) => row.estado)),
-    [lotesQuery.data],
-  );
+  const especies = (especiesQuery.data ?? []).filter((row) => row.activo);
+  const etapasActivas = (etapasQuery.data ?? []).filter((row) => row.activo);
+  const estadosActivos = (estadosQuery.data ?? []).filter((row) => row.activo);
+  const etapas = etapasQuery.data ?? [];
+  const estados = estadosQuery.data ?? [];
 
   const catalogoAltaOk =
-    especies.length > 0 && etapas.length > 0 && estados.length > 0 && (estanquesQuery.data?.length ?? 0) > 0;
+    especies.length > 0 &&
+    etapasActivas.length > 0 &&
+    estadosActivos.length > 0 &&
+    (estanquesQuery.data?.length ?? 0) > 0;
 
   const createForm = useForm<LoteCreateForm>();
   const editForm = useForm<LoteEditForm>();
+  const especieSeleccionadaId = createForm.watch("especie_id");
+  const especieSeleccionada = especies.find((row) => row.id === Number(especieSeleccionadaId));
 
   const createMut = useMutation({
     mutationFn: (data: LoteCreate) => createLote(data),
@@ -100,14 +111,14 @@ export function LotesPage() {
     setFormError(null);
     createForm.reset({
       codigo: "",
-      estanque_id: estanquesQuery.data?.[0]?.id ?? 0,
-      especie_id: especies[0]?.id ?? 0,
-      etapa_productiva_id: etapas[0]?.id ?? 0,
-      estado_id: estados[0]?.id ?? 0,
+      estanque_id: 0,
+      especie_id: 0,
+      etapa_productiva_id: 0,
+      estado_id: 0,
       fecha_siembra: new Date().toISOString().slice(0, 10),
       fecha_cierre: "",
       cantidad_sembrada: "",
-      peso_inicial_promedio_g: "",
+      peso_inicial_promedio_g: "1.0",
       observaciones: "",
     });
     setCreating(true);
@@ -126,10 +137,15 @@ export function LotesPage() {
 
   function onCreate(values: LoteCreateForm) {
     if (!catalogoAltaOk) {
-      setFormError("El formulario de alta requiere un catálogo que la API no expone.");
+      setFormError("Registre al menos una especie activa, una etapa, un estado de lote y un estanque.");
       return;
     }
     const peso = values.peso_inicial_promedio_g.trim();
+    const pesoNum = peso === "" ? null : Number(peso);
+    if (pesoNum != null && pesoNum <= 0) {
+      setFormError("El peso inicial debe ser mayor que 0.");
+      return;
+    }
     createMut.mutate({
       codigo: values.codigo.trim(),
       estanque_id: Number(values.estanque_id),
@@ -139,7 +155,7 @@ export function LotesPage() {
       fecha_siembra: values.fecha_siembra,
       fecha_cierre: values.fecha_cierre || null,
       cantidad_sembrada: Number(values.cantidad_sembrada),
-      peso_inicial_promedio_g: peso === "" ? null : Number(peso),
+      peso_inicial_promedio_g: pesoNum,
       observaciones: values.observaciones.trim() || null,
     });
   }
@@ -157,8 +173,8 @@ export function LotesPage() {
     });
   }
 
-  const etapasEdicion = editing ? uniqueById([...etapas, editing.etapa_productiva]) : etapas;
-  const estadosEdicion = editing ? uniqueById([...estados, editing.estado]) : estados;
+  const etapasEdicion = etapas;
+  const estadosEdicion = estados;
 
   return (
     <div>
@@ -188,14 +204,24 @@ export function LotesPage() {
         <DataTable
           rows={lotesQuery.data}
           rowKey={(row) => row.id}
-          empty="No hay lotes para mostrar."
-          onRowClick={(row) => navigate(`/produccion/lotes/${row.id}`)}
+          empty="Sin lotes registrados."
+          onRowClick={(row) => navigate(pathFichaEstanque(row.estanque_id, { loteId: row.id }))}
           columns={[
             { key: "codigo", header: "Código" },
             {
               key: "estanque",
               header: "Estanque",
-              render: (row) => estanques.get(row.estanque_id)?.codigo ?? `#${row.estanque_id}`,
+              render: (row) => (
+                <span
+                  className="font-medium text-[var(--bf-accent)] hover:underline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    navigate(pathFichaEstanque(row.estanque_id, { loteId: row.id }));
+                  }}
+                >
+                  {estanques.get(row.estanque_id)?.codigo ?? `#${row.estanque_id}`}
+                </span>
+              ),
             },
             {
               key: "especie",
@@ -259,7 +285,7 @@ export function LotesPage() {
         }}
       >
         {!catalogoAltaOk ? (
-          <ErrorAlert message="El formulario de alta requiere un catálogo que la API no expone. No hay GET de especies, etapas_productivas ni estados_lote; solo se reutilizan valores anidados de lotes ya existentes, más estanques listados." />
+          <ErrorAlert message="Para crear un lote hacen falta especies activas, etapas productivas, estados de lote y al menos un estanque. El administrador registra las especies en Catálogos → Producción." />
         ) : (
           <form className="space-y-3" onSubmit={createForm.handleSubmit(onCreate)}>
             {formError ? <ErrorAlert message={formError} /> : null}
@@ -267,7 +293,8 @@ export function LotesPage() {
               <input className="bf-input" {...createForm.register("codigo", { required: true })} />
             </Field>
             <Field label="Estanque">
-              <select className="bf-input" {...createForm.register("estanque_id", { valueAsNumber: true })}>
+              <select className="bf-input" {...createForm.register("estanque_id", { valueAsNumber: true, required: true })}>
+                <option value="">Seleccione un estanque</option>
                 {(estanquesQuery.data ?? []).map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.codigo} · {row.nombre}
@@ -276,7 +303,8 @@ export function LotesPage() {
               </select>
             </Field>
             <Field label="Especie">
-              <select className="bf-input" {...createForm.register("especie_id", { valueAsNumber: true })}>
+              <select className="bf-input" {...createForm.register("especie_id", { valueAsNumber: true, required: true })}>
+                <option value="">Seleccione una especie</option>
                 {especies.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.nombre_comun}
@@ -284,9 +312,24 @@ export function LotesPage() {
                 ))}
               </select>
             </Field>
+            {especieSeleccionada ? (
+              <p className="text-xs text-[var(--bf-muted)]">
+                Referencias de {especieSeleccionada.nombre_comun}:{" "}
+                {especieSeleccionada.n_referencias_produccion > 0
+                  ? `✓ Producción: ${formatNumber(especieSeleccionada.n_referencias_produccion)}`
+                  : "⚠ Producción: sin referencias"}
+                {" · "}
+                {especieSeleccionada.n_referencias_agua > 0
+                  ? `✓ Agua: ${formatNumber(especieSeleccionada.n_referencias_agua)}`
+                  : "⚠ Agua: sin referencias"}
+                {" · "}
+                ⚠ Biofloc: sin referencias. La siembra no se bloquea por falta de referencias.
+              </p>
+            ) : null}
             <Field label="Etapa">
-              <select className="bf-input" {...createForm.register("etapa_productiva_id", { valueAsNumber: true })}>
-                {etapas.map((row) => (
+              <select className="bf-input" {...createForm.register("etapa_productiva_id", { valueAsNumber: true, required: true })}>
+                <option value="">Seleccione una etapa</option>
+                {etapasActivas.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.nombre}
                   </option>
@@ -294,8 +337,9 @@ export function LotesPage() {
               </select>
             </Field>
             <Field label="Estado">
-              <select className="bf-input" {...createForm.register("estado_id", { valueAsNumber: true })}>
-                {estados.map((row) => (
+              <select className="bf-input" {...createForm.register("estado_id", { valueAsNumber: true, required: true })}>
+                <option value="">Seleccione un estado</option>
+                {estadosActivos.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.nombre}
                   </option>
@@ -303,7 +347,7 @@ export function LotesPage() {
               </select>
             </Field>
             <p className="text-xs text-[var(--bf-muted)]">
-              Especie, etapa y estado salen de lotes ya listados. La API no expone esos catálogos.
+              La especie sale del catálogo activo. El administrador define las referencias en Catálogos.
             </p>
             <Field label="Fecha de siembra">
               <input type="date" className="bf-input" {...createForm.register("fecha_siembra", { required: true })} />
@@ -319,8 +363,9 @@ export function LotesPage() {
                 {...createForm.register("cantidad_sembrada", { required: true, valueAsNumber: true })}
               />
             </Field>
-            <Field label="Peso inicial promedio en gramos (opcional)">
-              <input type="number" step="any" min="0" className="bf-input" {...createForm.register("peso_inicial_promedio_g")} />
+            <Field label="Peso inicial promedio (g)">
+              <input type="number" step="any" min="0.01" className="bf-input" placeholder="1.0" {...createForm.register("peso_inicial_promedio_g", { required: true })} />
+              <p className="mt-1 text-xs text-[var(--bf-muted)]">Peso promedio de los alevinos al momento de la siembra. Típicamente ~1 g.</p>
             </Field>
             <Field label="Observaciones">
               <textarea className="bf-input min-h-20" {...createForm.register("observaciones")} />

@@ -8,23 +8,30 @@ import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
+import { StatusBadge } from "../../components/StatusBadge";
 import {
   createAplicacionBiofloc,
   createMedicionBiofloc,
   listAplicacionesBiofloc,
   listMedicionesBiofloc,
   listProductosActivos,
+  listReferenciasBiofloc,
   listTiposAplicacionBiofloc,
 } from "../../api/operations";
-import { listLotes } from "../../api/production";
+import { getLote, listLotes } from "../../api/production";
+import { listUsuarios } from "../../api/users";
 import { apiErrorMessage } from "../../utils/apiError";
 import {
-  datetimeLocalToIso,
+  etiquetaProducto,
   formatDateTime,
   formatNumber,
   toDatetimeLocalValue,
+  withFechaHoraIso,
 } from "../../utils/format";
 import { can } from "../../utils/rbac";
+import { esLoteActivo, lotesActivos } from "../../utils/loteEstado";
+import { cumplimientoPorRango, etiquetaCumplimiento, toneCumplimiento } from "../../utils/analisisStatus";
+import { toNumber } from "../../utils/series";
 import type {
   AplicacionBiofloc,
   AplicacionBioflocCreate,
@@ -134,12 +141,29 @@ export function MedicionesBioflocPanel({
     queryKey: ["mediciones-biofloc", loteId],
     queryFn: () => listMedicionesBiofloc(loteId),
   });
+  const loteQuery = useQuery({
+    queryKey: ["lote", loteId],
+    queryFn: () => getLote(loteId!),
+    enabled: Boolean(loteId),
+  });
+  const refsQuery = useQuery({
+    queryKey: ["referencias-biofloc", loteQuery.data?.especie_id, loteQuery.data?.etapa_productiva_id],
+    queryFn: () =>
+      listReferenciasBiofloc({
+        especie_id: loteQuery.data!.especie_id,
+        etapa_productiva_id: loteQuery.data!.etapa_productiva_id,
+        indicador: "VOLUMEN_SEDIMENTABLE",
+        solo_activos: true,
+      }),
+    enabled: Boolean(loteQuery.data),
+  });
+  const refVolumen = refsQuery.data?.[0];
   const form = useForm({
     defaultValues: {
       lote_id: loteId ?? 0,
       fecha_hora: toDatetimeLocalValue(),
-      volumen_sedimentable: 0,
-      unidad: "mL/L",
+      volumen_sedimentable: "",
+      unidad: "",
       relacion_cn: "",
       observaciones: "",
     },
@@ -155,7 +179,16 @@ export function MedicionesBioflocPanel({
     onError: (err) => setFormError(apiErrorMessage(err)),
   });
   const lotesMap = useMemo(() => new Map(lotes.map((row) => [row.id, row])), [lotes]);
+  const enProduccion = lotesActivos(lotes);
+  const loteContexto = loteId ? lotes.find((row) => row.id === loteId) : undefined;
+  const puedeRegistrarLote = !loteId || esLoteActivo(loteContexto);
+  const usuariosQuery = useQuery({ queryKey: ["usuarios"], queryFn: () => listUsuarios(false) });
+  const usuarios = useMemo(
+    () => new Map((usuariosQuery.data ?? []).map((row) => [row.id, row.nombre])),
+    [usuariosQuery.data],
+  );
   const rows = compact ? (query.data ?? []).slice(0, 5) : (query.data ?? []);
+  const unidadCatalogo = query.data?.[0]?.unidad ?? "";
 
   return (
     <div>
@@ -164,14 +197,14 @@ export function MedicionesBioflocPanel({
         loteId={loteId}
         allHref={`/operacion/biofloc?lote_id=${loteId ?? ""}`}
         onCreate={
-          can(user?.rol, "registrarBiofloc")
+          can(user?.rol, "registrarBiofloc") && puedeRegistrarLote
             ? () => {
                 setFormError(null);
                 form.reset({
-                  lote_id: loteId ?? lotes[0]?.id ?? 0,
+                  lote_id: loteId ?? enProduccion[0]?.id ?? 0,
                   fecha_hora: toDatetimeLocalValue(),
-                  volumen_sedimentable: 0,
-                  unidad: "mL/L",
+                  volumen_sedimentable: "",
+                  unidad: unidadCatalogo,
                   relacion_cn: "",
                   observaciones: "",
                 });
@@ -212,6 +245,27 @@ export function MedicionesBioflocPanel({
               render: (row) =>
                 row.relacion_cn == null ? "—" : formatNumber(row.relacion_cn, { maximumFractionDigits: 3 }),
             },
+            {
+              key: "estado",
+              header: "Estado",
+              render: (row) => {
+                if (!loteId) return "Seleccione un lote";
+                const estado = cumplimientoPorRango(
+                  toNumber(row.volumen_sedimentable),
+                  refVolumen ? toNumber(refVolumen.valor_minimo) : null,
+                  refVolumen ? toNumber(refVolumen.valor_maximo) : null,
+                );
+                if (estado === "NO_EVALUABLE") {
+                  return <StatusBadge label="N/D — Sin referencia configurada" tone="neutral" />;
+                }
+                return <StatusBadge label={etiquetaCumplimiento(estado)} tone={toneCumplimiento(estado)} />;
+              },
+            },
+            {
+              key: "usuario",
+              header: "Usuario",
+              render: (row: MedicionBiofloc) => usuarios.get(row.registrado_por) ?? `#${row.registrado_por}`,
+            },
             { key: "obs", header: "Observaciones", render: (row) => row.observaciones || "—" },
           ]}
         />
@@ -220,10 +274,12 @@ export function MedicionesBioflocPanel({
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+            if (!fechaHora) return;
             const cn = values.relacion_cn.trim();
             mutation.mutate({
               lote_id: Number(values.lote_id),
-              fecha_hora: datetimeLocalToIso(values.fecha_hora),
+              fecha_hora: fechaHora,
               volumen_sedimentable: Number(values.volumen_sedimentable),
               unidad: values.unidad.trim() || "mL/L",
               relacion_cn: cn === "" ? null : Number(cn),
@@ -237,7 +293,7 @@ export function MedicionesBioflocPanel({
           ) : (
             <Field label="Lote">
               <select className="bf-input" {...form.register("lote_id", { valueAsNumber: true })}>
-                {lotes.map((row) => (
+                {enProduccion.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.codigo}
                   </option>
@@ -259,7 +315,9 @@ export function MedicionesBioflocPanel({
           </Field>
           <Field label="Unidad">
             <input className="bf-input" {...form.register("unidad")} />
-            <p className="mt-1 text-xs text-[var(--bf-muted)]">El API usa por defecto mL/L.</p>
+            <p className="mt-1 text-xs text-[var(--bf-muted)]">
+              Use la unidad del catálogo o de la última medición. No se asume mL/L si el registro usa otra.
+            </p>
           </Field>
           <Field label="Relación C/N (opcional)">
             <input type="number" step="any" min="0" className="bf-input" {...form.register("relacion_cn")} />
@@ -289,6 +347,7 @@ export function AplicacionesBioflocPanel({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [stockMsg, setStockMsg] = useState<string | null>(null);
   const tiposQuery = useQuery({
     queryKey: ["tipos-aplicacion-biofloc"],
     queryFn: () => listTiposAplicacionBiofloc(true),
@@ -307,6 +366,9 @@ export function AplicacionesBioflocPanel({
     [productosQuery.data],
   );
   const lotesMap = useMemo(() => new Map(lotes.map((row) => [row.id, row])), [lotes]);
+  const enProduccion = lotesActivos(lotes);
+  const loteContexto = loteId ? lotes.find((row) => row.id === loteId) : undefined;
+  const puedeRegistrarLote = !loteId || esLoteActivo(loteContexto);
   const form = useForm({
     defaultValues: {
       lote_id: loteId ?? 0,
@@ -320,9 +382,14 @@ export function AplicacionesBioflocPanel({
   });
   const mutation = useMutation({
     mutationFn: (data: AplicacionBioflocCreate) => createAplicacionBiofloc(data),
-    onSuccess: async () => {
+    onSuccess: async (resp) => {
       setOpen(false);
+      if (resp.stock_restante != null) {
+        setStockMsg(`Inventario actualizado: ${resp.stock_restante.toFixed(2)} disponibles`);
+        setTimeout(() => setStockMsg(null), 6000);
+      }
       await queryClient.invalidateQueries({ queryKey: ["aplicaciones-biofloc"] });
+      await queryClient.invalidateQueries({ queryKey: ["stock"] });
     },
     onError: (err) => setFormError(apiErrorMessage(err)),
   });
@@ -330,16 +397,21 @@ export function AplicacionesBioflocPanel({
 
   return (
     <div>
+      {stockMsg ? (
+        <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          {stockMsg}
+        </div>
+      ) : null}
       <PanelToolbar
         compact={compact}
         loteId={loteId}
         allHref={`/operacion/biofloc?lote_id=${loteId ?? ""}&tab=aplicaciones`}
         onCreate={
-          can(user?.rol, "registrarBiofloc")
+          can(user?.rol, "registrarBiofloc") && puedeRegistrarLote
             ? () => {
                 setFormError(null);
                 form.reset({
-                  lote_id: loteId ?? lotes[0]?.id ?? 0,
+                  lote_id: loteId ?? enProduccion[0]?.id ?? 0,
                   tipo_aplicacion_id: tiposQuery.data?.[0]?.id ?? 0,
                   producto_id: "",
                   fecha_hora: toDatetimeLocalValue(),
@@ -401,13 +473,15 @@ export function AplicacionesBioflocPanel({
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+            if (!fechaHora) return;
             const producto = values.producto_id.trim();
             const cantidad = values.cantidad.trim();
             mutation.mutate({
               lote_id: Number(values.lote_id),
               tipo_aplicacion_id: Number(values.tipo_aplicacion_id),
               producto_id: producto === "" ? null : Number(producto),
-              fecha_hora: datetimeLocalToIso(values.fecha_hora),
+              fecha_hora: fechaHora,
               cantidad: cantidad === "" ? null : Number(cantidad),
               unidad: values.unidad.trim() || null,
               observaciones: values.observaciones.trim() || null,
@@ -420,7 +494,7 @@ export function AplicacionesBioflocPanel({
           ) : (
             <Field label="Lote">
               <select className="bf-input" {...form.register("lote_id", { valueAsNumber: true })}>
-                {lotes.map((row) => (
+                {enProduccion.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.codigo}
                   </option>
@@ -442,7 +516,7 @@ export function AplicacionesBioflocPanel({
               <option value="">Ninguno</option>
               {(productosQuery.data ?? []).map((row) => (
                 <option key={row.id} value={row.id}>
-                  {row.codigo} · {row.nombre}
+                  {etiquetaProducto(row.nombre, row.codigo)}
                 </option>
               ))}
             </select>

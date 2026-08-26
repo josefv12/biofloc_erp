@@ -49,6 +49,149 @@ def login(correo, password):
 def db():
     return psycopg2.connect(**DB_CONF)
 
+
+def purge_audit_agua_biofloc_leftovers(cur):
+    """Borra residuos de esta suite por prefijo, no solo por IDs de la corrida actual."""
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'referencias_agua'
+          AND registro_id IN (
+            SELECT ra.id
+            FROM biofloc.referencias_agua ra
+            JOIN biofloc.parametros_agua p ON p.id = ra.parametro_id
+            WHERE p.nombre LIKE 'AUDIT_PARAM_%%'
+          )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.referencias_agua
+        WHERE parametro_id IN (
+            SELECT id FROM biofloc.parametros_agua WHERE nombre LIKE 'AUDIT_PARAM_%%'
+        )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'mediciones_agua'
+          AND registro_id IN (
+            SELECT m.id
+            FROM biofloc.mediciones_agua m
+            JOIN biofloc.parametros_agua p ON p.id = m.parametro_id
+            WHERE p.nombre LIKE 'AUDIT_PARAM_%%'
+          )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.mediciones_agua
+        WHERE parametro_id IN (
+            SELECT id FROM biofloc.parametros_agua WHERE nombre LIKE 'AUDIT_PARAM_%%'
+        )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'parametros_agua'
+          AND registro_id IN (
+            SELECT id FROM biofloc.parametros_agua WHERE nombre LIKE 'AUDIT_PARAM_%%'
+          )
+        """
+    )
+    cur.execute("DELETE FROM biofloc.parametros_agua WHERE nombre LIKE 'AUDIT_PARAM_%%'")
+
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'aplicaciones_biofloc'
+          AND registro_id IN (
+            SELECT a.id FROM biofloc.aplicaciones_biofloc a
+            JOIN biofloc.lotes l ON l.id = a.lote_id
+            WHERE l.codigo LIKE 'LOT-AUDIT-%%'
+          )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.aplicaciones_biofloc
+        WHERE lote_id IN (SELECT id FROM biofloc.lotes WHERE codigo LIKE 'LOT-AUDIT-%%')
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'mediciones_biofloc'
+          AND registro_id IN (
+            SELECT m.id FROM biofloc.mediciones_biofloc m
+            JOIN biofloc.lotes l ON l.id = m.lote_id
+            WHERE l.codigo LIKE 'LOT-AUDIT-%%'
+          )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.mediciones_biofloc
+        WHERE lote_id IN (SELECT id FROM biofloc.lotes WHERE codigo LIKE 'LOT-AUDIT-%%')
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'mediciones_agua'
+          AND registro_id IN (
+            SELECT m.id FROM biofloc.mediciones_agua m
+            JOIN biofloc.lotes l ON l.id = m.lote_id
+            WHERE l.codigo LIKE 'LOT-AUDIT-%%'
+          )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.mediciones_agua
+        WHERE lote_id IN (SELECT id FROM biofloc.lotes WHERE codigo LIKE 'LOT-AUDIT-%%')
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'lotes'
+          AND registro_id IN (SELECT id FROM biofloc.lotes WHERE codigo LIKE 'LOT-AUDIT-%%')
+        """
+    )
+    cur.execute("DELETE FROM biofloc.lotes WHERE codigo LIKE 'LOT-AUDIT-%%'")
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE tabla = 'estanques'
+          AND registro_id IN (SELECT id FROM biofloc.estanques WHERE codigo LIKE 'EST-AUDIT-%%')
+        """
+    )
+    cur.execute("DELETE FROM biofloc.estanques WHERE codigo LIKE 'EST-AUDIT-%%'")
+    cur.execute(
+        """
+        DELETE FROM biofloc.auditoria
+        WHERE detalle::text LIKE '%%AUDIT_PARAM_%%'
+           OR detalle::text LIKE '%%EST-AUDIT-%%'
+           OR detalle::text LIKE '%%LOT-AUDIT-%%'
+        """
+    )
+
+
+def leftover_audit_agua_biofloc(cur) -> int:
+    cur.execute(
+        """
+        SELECT
+          (SELECT COUNT(*) FROM biofloc.parametros_agua WHERE nombre LIKE 'AUDIT_PARAM_%%') +
+          (SELECT COUNT(*) FROM biofloc.estanques WHERE codigo LIKE 'EST-AUDIT-%%') +
+          (SELECT COUNT(*) FROM biofloc.lotes WHERE codigo LIKE 'LOT-AUDIT-%%')
+        """
+    )
+    return int(cur.fetchone()[0])
+
+
 # ==============================================================================
 def main():
     print("=" * 75)
@@ -406,15 +549,16 @@ def main():
         rows = dict(cur.fetchall())
         cur.close(); conn.close()
         base = rows.get("BASE TABLE", 0); views = rows.get("VIEW", 0)
-        ok_struct = base == 42 and views == 4
+        ok_struct = base == 43 and views == 3
         detail_struct = f"BASE TABLE={base}, VIEW={views}, TOTAL={base+views}"
     except Exception as e:
         detail_struct = str(e)
-    log(18, "POSTGRESQL", "Conteo: 42 BASE TABLE + 4 VIEW = 46 total", ok_struct, detail_struct)
+    log(18, "POSTGRESQL", "Conteo: 43 BASE TABLE + 3 VIEW = 46 total", ok_struct, detail_struct)
 
     # ── [19] BASE.METADATA.CREATE_ALL ────────────────────────────────────────
     import subprocess, pathlib
-    backend_dir = pathlib.Path("backend")
+    repo_root = pathlib.Path(__file__).resolve().parents[2]
+    backend_dir = repo_root / "backend"
     result = subprocess.run(
         ["findstr", "/s", "/r", "create_all", str(backend_dir / "app")],
         capture_output=True, text=True
@@ -425,7 +569,7 @@ def main():
 
     # ── [20] SQL FUENTE INTACTO ─────────────────────────────────────────────
     import hashlib
-    sql_path = pathlib.Path("database/biofloc_erp_v1_1_schema_final.sql")
+    sql_path = repo_root / "database" / "biofloc_erp_v1_1_schema_final.sql"
     sha = hashlib.md5(sql_path.read_bytes()).hexdigest()
     log(20, "SQL", f"SQL fuente existe y es legible (MD5={sha[:12]}…)", sql_path.exists(),
         "No modificado durante la auditoría")
@@ -552,13 +696,17 @@ def main():
         for eid in created_estanques:
             cur.execute("DELETE FROM biofloc.auditoria WHERE tabla='estanques' AND registro_id=%s;", (eid,))
             cur.execute("DELETE FROM biofloc.estanques WHERE id=%s;", (eid,))
+        purge_audit_agua_biofloc_leftovers(cur)
+        leftover_n = leftover_audit_agua_biofloc(cur)
         conn.commit(); cur.close(); conn.close()
-        ok_clean = True
+        ok_clean = leftover_n == 0
     except Exception as e:
         print(f"Error limpieza: {e}")
+        leftover_n = -1
     log(25, "LIMPIEZA", "Eliminación total de todos los datos de prueba", ok_clean,
         f"aplics={created_aplics}, meds_bio={created_meds_bio}, meds_agua={created_meds_agua}, "
-        f"refs={created_ref_ids}, params={created_param_ids}, lotes={created_lotes}, estanques={created_estanques}")
+        f"refs={created_ref_ids}, params={created_param_ids}, lotes={created_lotes}, estanques={created_estanques}, "
+        f"leftover={leftover_n}")
 
     # ═══ RESUMEN FINAL ════════════════════════════════════════════════════════
     print("-" * 75)

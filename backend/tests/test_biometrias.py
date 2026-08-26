@@ -66,17 +66,14 @@ def auth_header(token):
 # ---------------------------------------------------------------------------
 # PRE-REQUISITO: obtener un lote_id valido de la BD
 # ---------------------------------------------------------------------------
+from lote_operativo import asegurar_lote, limpiar_fixtures
+
 def obtener_lote_valido():
     try:
-        conn = psycopg2.connect(**DB_CONF)
-        cur = conn.cursor()
-        cur.execute("SELECT id, fecha_siembra FROM biofloc.lotes LIMIT 1;")
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return row  # (id, fecha_siembra)
+        row = asegurar_lote()
+        return (row[0], row[1])
     except Exception as e:
-        print(f"  [WARN] No se pudo conectar a PostgreSQL: {e}")
+        print(f"  [WARN] No se pudo resolver un lote operativo: {e}")
         return None
 
 # ---------------------------------------------------------------------------
@@ -296,9 +293,9 @@ def test_postgresql_integridad():
             "tipos_estanque", "unidades_medida", "usuarios",
             "vista_biomasa_lotes", "tipos_mantenimiento", "alarmas", "ventas",
             "vista_ultima_biometria", "categorias_inventario", "detalles_venta",
-            "vista_supervivencia_lotes", "tipos_movimiento_inventario", "mantenimientos",
+            "tipos_movimiento_inventario", "mantenimientos",
             "unidades", "vista_stock_productos", "categorias_gasto", "referencias_produccion",
-            "detalles_compra", "gastos", "referencias_agua", "tipos_aplicacion_biofloc",
+            "detalles_compra", "gastos", "referencias_agua", "referencias_biofloc", "tipos_aplicacion_biofloc",
             "estados_equipo", "compras", "mediciones_biofloc", "niveles_alarma",
             "tipos_alarma", "eventos_energia", "estados_alarma", "productos", "fallas"
         }
@@ -396,5 +393,7 @@ if __name__ == "__main__":
 
     # Limpiar datos de prueba
     limpiar_datos_prueba()
+    leftover = limpiar_fixtures()
+    print(f"  [CLEAN] LEFTOVER TEST_FIXTURE={leftover}")
 
-    sys.exit(0 if passed == total else 1)
+    sys.exit(0 if passed == total and leftover == 0 else 1)

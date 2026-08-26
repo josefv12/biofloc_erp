@@ -34,6 +34,7 @@ from env_tests import (
     ADMIN_USER, ADMIN_PASS, TECNICO_USER, TECNICO_PASS,
     OPERARIO_USER, OPERARIO_PASS, DB_CONF, ADM_CRED, TEC_CRED, OPE_CRED,
 )
+from lote_operativo import asegurar_lote, limpiar_fixtures
 
 BASE = "http://127.0.0.1:8000"
 HEADERS_JSON = {"Content-Type": "application/json"}
@@ -105,13 +106,16 @@ def t05_sin_jwt_403():
     log(5, "GET gastos sin JWT -> 403", ok, f"status={r.status_code}")
 
 def t05b_resolver_lote_real(admin_tok):
-    """Obtener lote existente por API y guardar su id."""
-    r = requests.get(f"{BASE}/api/v1/lotes/", headers=h(admin_tok))
-    ok = r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 1
-    if ok:
-        T["lote_real"] = r.json()[0]["id"]
-    log("5b", f"Resuelto lote_real id={T['lote_real']}", ok,
-        f"status={r.status_code} n={len(r.json()) if r.status_code==200 else '?'}")
+    """Obtener o crear un lote operativo aislado [TEST_FIXTURE]/[DEMO]."""
+    try:
+        T["lote_real"] = asegurar_lote(admin_tok)[0]
+        ok = True
+    except Exception as exc:  # noqa: BLE001
+        ok = False
+        T["lote_real"] = None
+        log("5b", "Resuelto lote_real", False, str(exc)[:200])
+        return
+    log("5b", f"Resuelto lote_real id={T['lote_real']}", ok)
 
 def t05c_resolver_cat_otros(admin_tok):
     """Resolver categoría semilla OTROS por API (no hardcodear id)."""
@@ -422,8 +426,9 @@ def main():
         cur.execute("SELECT count(*) FROM biofloc.auditoria WHERE detalle::text LIKE %s", (f"%{PREF}%",))
         restos_aud = cur.fetchone()[0]
         cur.close(); conn.close()
-        ok_clean = restos_gastos == 0 and restos_cat == 0 and restos_aud == 0
-        log(24, f"Limpieza 0 residuales gastos={restos_gastos} cat={restos_cat} audit={restos_aud}",
+        leftover_fx = limpiar_fixtures()
+        ok_clean = restos_gastos == 0 and restos_cat == 0 and restos_aud == 0 and leftover_fx == 0
+        log(24, f"Limpieza 0 residuales gastos={restos_gastos} cat={restos_cat} audit={restos_aud} fixture={leftover_fx}",
             ok_clean, "")
     except Exception as e:
         ok_clean = False

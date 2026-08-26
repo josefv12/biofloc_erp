@@ -1,9 +1,9 @@
 """
 Router para /api/v1/referencias-agua
 
-Roles y permisos:
+Roles y permisos (catálogo maestro de producción):
 - ADMINISTRADOR : GET, POST, PUT
-- TECNICO       : GET, POST, PUT
+- TECNICO       : GET
 - OPERARIO      : GET
 """
 from fastapi import APIRouter, Depends, status, HTTPException
@@ -19,7 +19,7 @@ from app.services import referencia_agua_service as svc
 router = APIRouter()
 
 ROLES_LECTURA = {"ADMINISTRADOR", "TECNICO", "OPERARIO"}
-ROLES_ESCRITURA = {"ADMINISTRADOR", "TECNICO"}
+ROLES_ESCRITURA = {"ADMINISTRADOR"}
 
 
 def _require_roles(usuario: Usuario, db: Session, roles_permitidos: set[str]):
@@ -88,7 +88,7 @@ def obtener(
     response_model=ReferenciaAguaOut,
     status_code=status.HTTP_201_CREATED,
     summary="Registrar referencia de agua",
-    description="Crea un nuevo rango/referencia de parámetro de agua. Acceso: ADMINISTRADOR, TECNICO.",
+    description="Crea un nuevo rango/referencia de parámetro de agua. Acceso: ADMINISTRADOR.",
 )
 def crear(
     data: ReferenciaAguaCreate,
@@ -106,7 +106,7 @@ def crear(
     "/{referencia_id}",
     response_model=ReferenciaAguaOut,
     summary="Actualizar referencia de agua",
-    description="Actualiza los valores o el estado de una referencia de agua existente. Acceso: ADMINISTRADOR, TECNICO.",
+    description="Actualiza los valores o el estado de una referencia de agua existente. Acceso: ADMINISTRADOR.",
 )
 def actualizar(
     referencia_id: int,

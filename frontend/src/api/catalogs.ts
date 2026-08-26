@@ -6,6 +6,9 @@ import type { CategoriaInventario, TipoMovimientoInventario } from "../types/inv
 import type {
   ParametroAgua,
   ReferenciaAgua,
+  ReferenciaBiofloc,
+  ReferenciaBioflocCreate,
+  ReferenciaBioflocUpdate,
   TipoAplicacionBiofloc,
   Unidad,
 } from "../types/operations";
@@ -33,6 +36,16 @@ export type ParametroAguaUpdate = {
   nombre?: string;
   unidad?: string;
   descripcion?: string | null;
+  activo?: boolean;
+};
+
+export type ReferenciaAguaCreate = {
+  especie_id: number;
+  etapa_productiva_id: number;
+  parametro_id: number;
+  valor_minimo?: number | null;
+  valor_maximo?: number | null;
+  observaciones?: string | null;
   activo?: boolean;
 };
 
@@ -95,8 +108,20 @@ export function updateParametroAgua(id: number, data: ParametroAguaUpdate): Prom
   return apiFetch<ParametroAgua>(`/api/v1/parametros-agua/${id}`, { method: "PUT", body: data });
 }
 
+export function createReferenciaAgua(data: ReferenciaAguaCreate): Promise<ReferenciaAgua> {
+  return apiFetch<ReferenciaAgua>("/api/v1/referencias-agua/", { method: "POST", body: data });
+}
+
 export function updateReferenciaAgua(id: number, data: ReferenciaAguaUpdate): Promise<ReferenciaAgua> {
   return apiFetch<ReferenciaAgua>(`/api/v1/referencias-agua/${id}`, { method: "PUT", body: data });
+}
+
+export function createReferenciaBiofloc(data: ReferenciaBioflocCreate): Promise<ReferenciaBiofloc> {
+  return apiFetch<ReferenciaBiofloc>("/api/v1/referencias-biofloc/", { method: "POST", body: data });
+}
+
+export function updateReferenciaBiofloc(id: number, data: ReferenciaBioflocUpdate): Promise<ReferenciaBiofloc> {
+  return apiFetch<ReferenciaBiofloc>(`/api/v1/referencias-biofloc/${id}`, { method: "PUT", body: data });
 }
 
 export function createTipoAplicacionBiofloc(data: NombreDescripcionActivoCreate): Promise<TipoAplicacionBiofloc> {

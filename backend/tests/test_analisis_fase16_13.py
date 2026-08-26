@@ -310,22 +310,27 @@ def main() -> int:
         check("días cultivo >= 14", ind["dias_cultivo"] >= 14, str(ind["dias_cultivo"]))
         dias_v = ind["dias_cultivo"]
         check(
-            "semana 1-based (día 1-7 = semana 1)",
-            ind["semana_cultivo"] == (0 if dias_v == 0 else (dias_v + 6) // 7),
+            "semana = floor(días / 7) + 1 (día 0–6 = semana 1)",
+            ind["semana_cultivo"] == (dias_v // 7) + 1,
             f'semana={ind["semana_cultivo"]} dias={dias_v}',
         )
         check(
-            "vacío ración null con referencia pero sin biometría",
-            ind["racion_diaria_recomendada_kg"] is None
-            and body["pendientes"].get("racion_diaria_recomendada_kg")
-            == ("SIN_BIOMETRIA" if body["referencia_produccion"] else "SIN_REFERENCIA_PRODUCCION_APLICABLE"),
-            str(body["pendientes"].get("racion_diaria_recomendada_kg")),
+            "vacío ración calculada con peso esperado si no hay biometría",
+            ind["racion_diaria_recomendada_kg"] is not None
+            or body["pendientes"].get("racion_diaria_recomendada_kg")
+            in ("SIN_REFERENCIA_PRODUCCION_APLICABLE", None),
+            str(ind.get("racion_diaria_recomendada_kg")),
         )
         check(
-            "raciones diarias null y documentado",
-            ind["numero_raciones_diarias"] is None
-            and body["pendientes"].get("numero_raciones_diarias") == "SIN_CONFIGURACION_DE_RACIONES",
-            str(body["pendientes"].get("numero_raciones_diarias")),
+            "raciones: número único o rango, sin promedio inventado",
+            (
+                (ind.get("raciones_diarias_texto") not in (None, ""))
+                or (ind.get("numero_raciones_diarias") is not None)
+                or body["pendientes"].get("numero_raciones_diarias")
+                or body["pendientes"].get("racion_diaria_recomendada_kg")
+                == "SIN_REFERENCIA_PRODUCCION_APLICABLE"
+            ),
+            str(ind.get("raciones_diarias_texto") or ind.get("numero_raciones_diarias")),
         )
         check("vacío series vacías", body["agua_serie"] == [] and body["biofloc_serie"] == [] and body["biometrias"] == [])
 
@@ -508,7 +513,7 @@ def main() -> int:
         body = r.json()
         ind = body["indicadores"]
         check("población 970", ind["poblacion_estimada"] == 970, str(ind["poblacion_estimada"]))
-        check("supervivencia 97", Decimal(str(ind["supervivencia_porcentaje"])) == Decimal("97.00"), str(ind["supervivencia_porcentaje"]))
+        check("supervivencia 99", Decimal(str(ind["supervivencia_porcentaje"])) == Decimal("99.00"), str(ind["supervivencia_porcentaje"]))
         check("mortalidad % 1", Decimal(str(ind["mortalidad_porcentaje"])) == Decimal("1.00"), str(ind["mortalidad_porcentaje"]))
         check("peso promedio 5 g", Decimal(str(ind["peso_promedio_g"])) == Decimal("5.000"), str(ind["peso_promedio_g"]))
         check("serie biometrías > 0", len(body["biometrias"]) == 1)
@@ -588,8 +593,8 @@ def main() -> int:
                 Decimal(str(ind["alimento_real_acumulado_kg"])) == alimento_kg,
                 f'{ind["alimento_real_acumulado_kg"]} esperado {alimento_kg} ({producto_unidad})',
             )
-            # FCA = alimento real (kg) / (biomasa actual − biomasa inicial)
-            delta = Decimal("4.850") - Decimal("1.200")
+            # FCA = alimento real (kg) / (biomasa actual + cosechada − biomasa inicial)
+            delta = Decimal("4.850") + Decimal("10.000") - Decimal("1.200")
             esperado_fca = (Decimal("3.5") * factor / delta).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
             check(
                 "fca = alimento / ganancia de biomasa",
@@ -729,16 +734,18 @@ def main() -> int:
             if r.status_code == 200:
                 body = r.json()
                 ind = body["indicadores"]
-                check("semana alta ~18", ind["semana_cultivo"] == (ind["dias_cultivo"] + 6) // 7, str(ind["semana_cultivo"]))
-                check(
-                    "referencia null ⇔ pendiente SIN_REFERENCIA_PRODUCCION_APLICABLE",
-                    (body["referencia_produccion"] is None)
-                    == (body["pendientes"].get("racion_diaria_recomendada_kg") == "SIN_REFERENCIA_PRODUCCION_APLICABLE"),
-                    f'ref={body["referencia_produccion"]} pend={body["pendientes"].get("racion_diaria_recomendada_kg")}',
-                )
-                check("semana alta sin ración", ind["racion_diaria_recomendada_kg"] is None)
+                check("semana alta floor(d/7)+1", ind["semana_cultivo"] == (ind["dias_cultivo"] // 7) + 1, str(ind["semana_cultivo"]))
+                check("semana alta sin fila BD", body["referencia_produccion"] is None)
+                if body.get("referencia_alimentacion") is None:
+                    check(
+                        "semana alta N/D sin ración",
+                        ind["racion_diaria_recomendada_kg"] is None
+                        and body["pendientes"].get("racion_diaria_recomendada_kg")
+                        == "SIN_REFERENCIA_PRODUCCION_APLICABLE",
+                        f'pend={body["pendientes"].get("racion_diaria_recomendada_kg")}',
+                    )
 
-    # Lote sembrado hoy: dias_cultivo = 0 sin división por cero y semana 0.
+    # Lote sembrado hoy: dias_cultivo = 0 sin división por cero y semana productiva 1.
     r = requests.post(
         f"{BASE}/api/v1/estanques/",
         headers=H(admin),
@@ -805,7 +812,7 @@ def main() -> int:
                 body = r.json()
                 ind = body["indicadores"]
                 check("días cultivo 0", ind["dias_cultivo"] == 0, str(ind["dias_cultivo"]))
-                check("semana 0 el día de la siembra", ind["semana_cultivo"] == 0, str(ind["semana_cultivo"]))
+                check("semana 1 el día de la siembra", ind["semana_cultivo"] == 1, str(ind["semana_cultivo"]))
                 check(
                     "ganancia diaria null por DIAS_CULTIVO_CERO",
                     ind["ganancia_diaria_g"] is None

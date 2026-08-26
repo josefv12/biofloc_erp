@@ -18,7 +18,7 @@ Pruebas:
 12. Auditoría en PostgreSQL (INSERT en biofloc.auditoria)
 13. Integridad de FK (registrado_por, lote_id)
 14. GET /health
-15. Conteo y validación de estructura (42 tablas, 4 vistas, 46 total)
+15. Conteo y validación de estructura (43 tablas, 3 vistas, 46 total)
 16. Limpieza total de datos de prueba
 """
 import sys
@@ -67,17 +67,13 @@ def get_token(correo, password):
 def auth_header(token):
     return {"Authorization": f"Bearer {token}"}
 
+from lote_operativo import asegurar_lote, limpiar_fixtures
+
 def obtener_lote_valido():
     try:
-        conn = psycopg2.connect(**DB_CONF)
-        cur = conn.cursor()
-        cur.execute("SELECT id FROM biofloc.lotes ORDER BY id LIMIT 1;")
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return row[0] if row else None
+        return asegurar_lote()[0]
     except Exception as e:
-        print(f"  [WARN] No se pudo conectar a PostgreSQL: {e}")
+        print(f"  [WARN] No se pudo resolver un lote operativo: {e}")
         return None
 
 def test_health():
@@ -241,7 +237,7 @@ def test_estructura_postgresql():
         base_tables = rows.get("BASE TABLE", 0)
         views = rows.get("VIEW", 0)
         total = base_tables + views
-        ok = (base_tables == 42 and views == 4 and total == 46)
+        ok = (base_tables == 43 and views == 3 and total == 46)
         log(15, f"Estructura PostgreSQL ({base_tables} tablas + {views} vistas = {total} total)", ok, f"BASE TABLE: {base_tables}, VIEW: {views}, TOTAL: {total}")
     except Exception as e:
         log(15, "Estructura PostgreSQL", False, str(e))
@@ -280,7 +276,7 @@ def main():
     lote_id = obtener_lote_valido()
     if not lote_id:
         print("[CRITICAL] No hay lotes registrados en la BD para probar. Abortando.")
-        return
+        sys.exit(1)
         
     cid = test_crear_cosecha_valida(token, lote_id)
     test_obtener_cosecha_por_id(token, cid)
@@ -296,6 +292,8 @@ def main():
     test_integridad_fk(cid)
     test_estructura_postgresql()
     limpiar_datos_prueba()
+    leftover = limpiar_fixtures()
+    print(f"  [CLEAN] LEFTOVER TEST_FIXTURE={leftover}")
     
     print("-" * 70)
     tot = len(results)
@@ -303,6 +301,8 @@ def main():
     failed = tot - passed
     print(f"RESUMEN FINAL: {passed}/{tot} PRUEBAS APROBADAS ({failed} FALLIDAS)")
     print("=" * 70)
+    if leftover != 0:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

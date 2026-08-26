@@ -12,10 +12,13 @@ import {
 } from "recharts";
 import { fetchDashboardProduccion, fetchDashboardResumen } from "../api/dashboard";
 import { getComparativoEstanques } from "../api/analisis";
+import { ComparativoEstanquesPanel } from "./produccion/ComparativoEstanquesPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { EmptyState } from "../components/EmptyState";
 import { KpiCard } from "../components/KpiCard";
 import { LoadingState } from "../components/LoadingState";
 import { PageHeader } from "../components/PageHeader";
+import { FCA_GRANJA_ND } from "../utils/fcaPresentacion";
 import { apiErrorMessage } from "../utils/apiError";
 import { formatChartValue, formatCop, formatDate, formatNumber } from "../utils/format";
 import type { DashboardResumen } from "../types/dashboard";
@@ -60,7 +63,7 @@ function SkeletonKpis() {
       {Array.from({ length: 5 }).map((_, index) => (
         <div
           key={index}
-          className="h-[104px] animate-pulse rounded-xl border border-[var(--bf-border)] bg-white"
+          className="h-[104px] animate-pulse rounded-2xl border border-[var(--bf-border)] bg-white"
         />
       ))}
     </div>
@@ -147,7 +150,7 @@ export function DashboardPage() {
     <div>
       <PageHeader
         title="Dashboard"
-        description="Resumen operativo de la piscicultura"
+        description="Resumen de operación piscícola"
         actions={
           <form
             className="flex flex-wrap items-end gap-2"
@@ -210,48 +213,69 @@ export function DashboardPage() {
         <>
           <p className="mb-4 text-sm text-[var(--bf-muted)]">{periodoLabel(data, appliedDesde, appliedHasta)}</p>
 
-          <Section title="Granja · productividad y eficiencia">
+          <Section title="Producción">
             {analisisQuery.isLoading ? <LoadingState label="Cargando resumen piscícola…" /> : null}
             {analisisQuery.isError ? <ErrorAlert message={apiErrorMessage(analisisQuery.error)} /> : null}
-            {analisisQuery.data ? (
+            {analisisQuery.data && analisisQuery.data.resumen.estanques === 0 ? (
+              <EmptyState
+                title="Sin datos productivos"
+                description="No hay estanques registrados. Los indicadores de población, biomasa y supervivencia aparecen cuando exista un ciclo activo. El FCA de granja permanece N/D mientras no exista regla de agregación."
+              />
+            ) : null}
+            {analisisQuery.data && analisisQuery.data.resumen.estanques > 0 ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <KpiCard
-                    label="Estanques activos con lote"
+                    label="Estanques activos"
                     value={`${formatNumber(analisisQuery.data.resumen.estanques_con_lote_activo)} / ${formatNumber(analisisQuery.data.resumen.estanques)}`}
-                    to="/produccion/estanques?comparativo=1"
+                    to="/produccion/estanques"
                   />
-                  <KpiCard label="Población estimada" value={formatNumber(analisisQuery.data.resumen.poblacion_estimada)} />
                   <KpiCard
-                    label="Biomasa total (kg)"
+                    label="Lotes activos"
+                    value={formatNumber(data.lotes_activos)}
+                    to="/produccion/lotes"
+                  />
+                  <KpiCard
+                    label="Población"
+                    value={analisisQuery.data.resumen.estanques_con_lote_activo === 0 ? "N/D" : formatNumber(analisisQuery.data.resumen.poblacion_estimada)}
+                  />
+                  <KpiCard
+                    label="Biomasa"
                     value={analisisQuery.data.resumen.biomasa_actual_kg == null ? "N/D" : formatNumber(analisisQuery.data.resumen.biomasa_actual_kg, { maximumFractionDigits: 3 })}
-                    hint={analisisQuery.data.resumen.lotes_sin_biomasa > 0 ? `${analisisQuery.data.resumen.lotes_sin_biomasa} lote(s) sin biomasa calculable.` : undefined}
+                    hint="kg"
                   />
-                  <KpiCard label="Supervivencia (%)" value={analisisQuery.data.resumen.supervivencia_porcentaje == null ? "N/D" : formatNumber(analisisQuery.data.resumen.supervivencia_porcentaje, { maximumFractionDigits: 2 })} />
-                  <KpiCard label="Mortalidad (%)" value={analisisQuery.data.resumen.mortalidad_porcentaje == null ? "N/D" : formatNumber(analisisQuery.data.resumen.mortalidad_porcentaje, { maximumFractionDigits: 2 })} />
-                  <KpiCard label="Producción cosechada (kg)" value={formatNumber(analisisQuery.data.resumen.peso_cosechado_kg, { maximumFractionDigits: 3 })} />
+                  <KpiCard label="Supervivencia" value={analisisQuery.data.resumen.supervivencia_porcentaje == null ? "N/D" : `${formatNumber(analisisQuery.data.resumen.supervivencia_porcentaje, { maximumFractionDigits: 2 })} %`} />
                   <KpiCard
-                    label="FCA agregado"
-                    value={analisisQuery.data.resumen.fca == null ? "N/D" : formatNumber(analisisQuery.data.resumen.fca, { maximumFractionDigits: 4 })}
-                    hint={[
-                      analisisQuery.data.resumen.fca_motivo,
-                      `${analisisQuery.data.resumen.lotes_con_fca} lote(s) tienen FCA individual.`,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
+                    label="Alimento"
+                    value={analisisQuery.data.resumen.alimento_real_acumulado_kg == null ? "N/D" : formatNumber(analisisQuery.data.resumen.alimento_real_acumulado_kg, { maximumFractionDigits: 3 })}
+                    hint="kg acumulados del ciclo activo"
                   />
-                  <KpiCard label="Ingresos de lotes activos" value={formatCop(analisisQuery.data.resumen.ingresos_lotes_activos)} />
-                  <KpiCard label="Gastos directos" value={formatCop(analisisQuery.data.resumen.gastos_directos_lotes_activos)} hint="No equivale al costo total de producción." />
-                  <KpiCard label="Estado global" value="N/D" hint="No existen reglas formales para agregar estados analíticos a nivel granja." />
+                  <KpiCard
+                    label="FCA de granja"
+                    value="N/D"
+                    hint={FCA_GRANJA_ND}
+                    title={analisisQuery.data.resumen.fca_motivo}
+                  />
                 </div>
-                <div className="mt-3">
-                  <Link to="/produccion/estanques?comparativo=1" className="bf-btn-primary inline-flex">Comparar estanques</Link>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link to="/produccion/estanques" className="bf-btn-primary inline-flex">
+                    Ir a estanques
+                  </Link>
                 </div>
               </>
             ) : null}
           </Section>
 
-          <Section title="Producción del período">
+          <Section title="Comparación de estanques">
+            <p className="mb-3 text-sm text-[var(--bf-muted)]">
+              Un renglón por estanque con el lote activo. Los indicadores los entrega el API; esta
+              tabla no recalcula. El FCA acumulado es del lote activo, no del estanque. El FCA de
+              granja no se agrega. Entre al estanque para el nivel 3: ficha, lote y gráficas.
+            </p>
+            <ComparativoEstanquesPanel soloActivos mostrarResumen={false} />
+          </Section>
+
+          <Section title="Estado de operación">
             {produccionQuery.isLoading ? <LoadingState label="Cargando producción del período…" /> : null}
             {produccionQuery.isError ? <ErrorAlert message={apiErrorMessage(produccionQuery.error)} /> : null}
             {produccionQuery.data ? (

@@ -6,7 +6,7 @@ export function FinanzasPage() {
     <div>
       <PageHeader
         title="Finanzas"
-        description="Movimientos económicos básicos de la granja. Totales del API. Sin utilidad, margen ni FCR."
+        description="Movimientos económicos básicos de la granja. Totales del API. Sin utilidad, margen ni FCA."
       />
       <div className="grid gap-4 sm:grid-cols-2">
         <Link

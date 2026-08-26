@@ -30,6 +30,15 @@ export function formatNumber(
   return new Intl.NumberFormat(LOCALE, options).format(amount);
 }
 
+/** Parsea número decimal aceptando coma o punto (es-CO). Devuelve null si está vacío o es inválido. */
+export function parseDecimalInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const normalized = trimmed.replace(",", ".");
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 /** Valor de tooltip de gráfica: null/NaN se muestran como N/D, nunca como 0. */
 export function formatChartValue(
   value: unknown,
@@ -92,16 +101,58 @@ export function toDatetimeLocalValue(value?: string | Date | null): string {
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
+export const MSG_FECHA_HORA_INVALIDA = "Fecha y hora inválidas.";
+
+export class FechaHoraInvalidaError extends Error {
+  constructor() {
+    super(MSG_FECHA_HORA_INVALIDA);
+    this.name = "FechaHoraInvalidaError";
+  }
 }
 
 export function datetimeLocalToIso(value: string): string {
-  const date = new Date(value);
+  if (!value || !value.trim()) {
+    throw new FechaHoraInvalidaError();
+  }
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!match) {
+    throw new FechaHoraInvalidaError();
+  }
+  const isoBogota = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:00-05:00`;
+  const date = new Date(isoBogota);
   if (Number.isNaN(date.getTime())) {
-    throw new Error("Fecha/hora inválida");
+    throw new FechaHoraInvalidaError();
   }
   return date.toISOString();
+}
+
+/** Convierte datetime-local a ISO. Si es inválida, avisa y no dispara la petición. */
+export function withFechaHoraIso(
+  value: string,
+  onInvalid: (message: string) => void,
+): string | null {
+  try {
+    return datetimeLocalToIso(value);
+  } catch (err) {
+    if (err instanceof FechaHoraInvalidaError) {
+      onInvalid(err.message);
+      return null;
+    }
+    throw err;
+  }
 }
 
 export function uniqueById<T extends { id: number }>(items: T[]): T[] {
@@ -120,4 +171,9 @@ export function formatEstado(value: string | null | undefined): string {
     .replaceAll("_", " ")
     .toLowerCase()
     .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
+/** Etiqueta legible para selectores: nombre primero, código como referencia secundaria. */
+export function etiquetaProducto(nombre: string, codigo: string): string {
+  return `${nombre} (Código: ${codigo})`;
 }

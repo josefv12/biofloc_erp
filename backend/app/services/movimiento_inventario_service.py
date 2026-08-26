@@ -15,8 +15,19 @@ from fastapi import HTTPException
 from app.models.movimiento_inventario import MovimientoInventario
 from app.models.producto import Producto
 from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
+from app.models.unidad import Unidad
 from app.models.auditoria import Auditoria
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
+
+
+def _formato_cantidad_unidad(valor: Decimal, simbolo: str) -> str:
+    texto = format(valor, "f")
+    if "." in texto:
+        texto = texto.rstrip("0").rstrip(".")
+    texto = texto.replace(".", ",")
+    if simbolo:
+        return f"{texto} {simbolo}"
+    return texto
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -36,13 +47,37 @@ def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id:
     db.add(entrada)
 
 
-def _validar_referencia_biofloc(db: Session, referencia_tipo: str | None, referencia_id: int | None):
-    if referencia_tipo != "APLICACION_BIOFLOC" or referencia_id is None:
+def _validar_referencia(db: Session, referencia_tipo: str | None, referencia_id: int | None):
+    if referencia_id is None or referencia_tipo is None:
         return
-    from app.models.aplicacion_biofloc import AplicacionBiofloc
-    apl = db.query(AplicacionBiofloc).filter(AplicacionBiofloc.id == referencia_id).first()
-    if not apl:
-        raise HTTPException(status_code=404, detail=f"Aplicación Biofloc id={referencia_id} no existe para la trazabilidad")
+    if referencia_tipo == "APLICACION_BIOFLOC":
+        from app.models.aplicacion_biofloc import AplicacionBiofloc
+        apl = db.query(AplicacionBiofloc).filter(AplicacionBiofloc.id == referencia_id).first()
+        if not apl:
+            raise HTTPException(status_code=404, detail=f"Aplicación Biofloc id={referencia_id} no existe para la trazabilidad")
+    elif referencia_tipo == "ALIMENTACION":
+        from app.models.alimentacion import Alimentacion
+        alim = db.query(Alimentacion).filter(Alimentacion.id == referencia_id).first()
+        if not alim:
+            raise HTTPException(status_code=404, detail=f"Alimentación id={referencia_id} no existe para la trazabilidad")
+
+
+def _obtener_tipo_salida_id(db: Session) -> int:
+    """Obtiene el ID del tipo de movimiento SALIDA."""
+    tipo = db.query(TipoMovimientoInventario).filter(TipoMovimientoInventario.nombre == "SALIDA").first()
+    if not tipo:
+        raise HTTPException(status_code=500, detail="Tipo de movimiento SALIDA no encontrado en catálogo")
+    return tipo.id
+
+
+def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
+    """Retorna el stock actual de un producto desde la vista."""
+    row = db.execute(text("""
+        SELECT COALESCE(stock_actual, 0)
+        FROM biofloc.vista_stock_productos
+        WHERE producto_id = :pid
+    """), {"pid": producto_id}).scalar()
+    return Decimal(str(row or 0))
 
 
 def listar_movimientos_inventario(
@@ -100,13 +135,19 @@ def crear_movimiento_inventario(
         """), {"pid": producto.id}).scalar()
         stock_actual = Decimal(str(row or 0))
         if (stock_actual - data.cantidad) < Decimal("0"):
+            unidad = db.query(Unidad).filter(Unidad.id == producto.unidad_id).first()
+            simbolo = unidad.simbolo if unidad else ""
             raise HTTPException(
                 status_code=422,
-                detail=f"Stock insuficiente: actual={stock_actual}, salida={data.cantidad}"
+                detail=(
+                    "No hay stock suficiente. Disponible: "
+                    f"{_formato_cantidad_unidad(stock_actual, simbolo)}; solicitado: "
+                    f"{_formato_cantidad_unidad(Decimal(str(data.cantidad)), simbolo)}."
+                ),
             )
 
-    # 3. Trazabilidad APLICACION_BIOFLOC
-    _validar_referencia_biofloc(db, data.referencia_tipo, data.referencia_id)
+    # 3. Trazabilidad
+    _validar_referencia(db, data.referencia_tipo, data.referencia_id)
 
     # 4. Construir registro
     datos = data.model_dump()
