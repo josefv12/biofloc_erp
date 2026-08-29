@@ -4,6 +4,7 @@ Docs y OpenAPI se controlan con APP_ENV / ENABLE_DOCS (F15.7).
 """
 
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -70,6 +71,15 @@ app = FastAPI(
     docs_url=_docs,
     redoc_url=_redoc,
     openapi_url=_openapi,
+)
+
+# Frontend de producción desplegado en Vercel.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://biofloc-erp.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router, prefix="/api/v1/auth")
