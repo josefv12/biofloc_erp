@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://biofloc-erp.onrender.com/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://biofloc-erp.onrender.com/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
