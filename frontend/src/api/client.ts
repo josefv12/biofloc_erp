@@ -2,6 +2,10 @@ const TOKEN_KEY = "biofloc_access_token";
 
 export const UNAUTHORIZED_EVENT = "biofloc:unauthorized";
 
+// In production the frontend talks directly to the Render API.
+// In local development Vite can override this with VITE_API_BASE_URL.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "https://biofloc-erp.onrender.com").replace(/\/$/, "");
+
 export class ApiError extends Error {
   readonly status: number;
   readonly detail: string;
@@ -109,7 +113,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers,
       body,
