@@ -15,12 +15,7 @@ import { cantidadDesdePresentacion, precioDesdePresentacion, unidadPresentacion 
 import { can } from "../../utils/rbac";
 import type { Compra, CompraCreate, DetalleCompraIn } from "../../types/purchases";
 
-type Linea = {
-  key: string;
-  producto_id: string;
-  cantidad: string;
-  precio_unitario: string;
-};
+type Linea = { key: string; producto_id: string; cantidad: string; precio_unitario: string };
 
 function todayDateInput(): string {
   const now = new Date();
@@ -28,9 +23,7 @@ function todayDateInput(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-function newLinea(): Linea {
-  return { key: crypto.randomUUID(), producto_id: "", cantidad: "", precio_unitario: "" };
-}
+function newLinea(): Linea { return { key: crypto.randomUUID(), producto_id: "", cantidad: "", precio_unitario: "" }; }
 
 export function ComprasPage() {
   const { user } = useAuth();
@@ -46,13 +39,9 @@ export function ComprasPage() {
   const [fechaHasta, setFechaHasta] = useState("");
   const puedeRegistrar = can(user?.rol, "registrarCompra");
 
-  const comprasQuery = useQuery({
-    queryKey: ["compras", fechaDesde, fechaHasta],
-    queryFn: () => listCompras({ fechaDesde: fechaDesde || undefined, fechaHasta: fechaHasta || undefined }),
-  });
+  const comprasQuery = useQuery({ queryKey: ["compras", fechaDesde, fechaHasta], queryFn: () => listCompras({ fechaDesde: fechaDesde || undefined, fechaHasta: fechaHasta || undefined }) });
   const productosQuery = useQuery({ queryKey: ["productos", { soloActivos: true }], queryFn: () => listProductos({ soloActivos: true }) });
   const stockQuery = useQuery({ queryKey: ["productos-stock"], queryFn: listProductosStock });
-
   const unidades = useMemo(() => new Map((stockQuery.data ?? []).map((row) => [row.producto_id, row.unidad])), [stockQuery.data]);
   const productos = useMemo(() => new Map((productosQuery.data ?? []).map((row) => [row.id, row])), [productosQuery.data]);
 
@@ -73,18 +62,14 @@ export function ComprasPage() {
   });
 
   function openCreate() {
-    setFormError(null);
-    setFecha(todayDateInput());
-    setProveedor("");
-    setObservaciones("");
+    setFormError(null); setFecha(todayDateInput()); setProveedor(""); setObservaciones("");
     const first = productosQuery.data?.[0];
     setLineas([{ key: crypto.randomUUID(), producto_id: first ? String(first.id) : "", cantidad: "", precio_unitario: "" }]);
     setOpen(true);
   }
 
   const ayudaVisual = lineas.reduce((acc, linea) => {
-    const cantidad = Number(linea.cantidad);
-    const precio = Number(linea.precio_unitario);
+    const cantidad = Number(linea.cantidad); const precio = Number(linea.precio_unitario);
     if (!Number.isFinite(cantidad) || !Number.isFinite(precio)) return acc;
     return acc + cantidad * precio;
   }, 0);
@@ -113,11 +98,8 @@ export function ComprasPage() {
           const detalles: DetalleCompraIn[] = [];
           for (const linea of lineas) {
             const producto_id = Number(linea.producto_id);
-            const cantidadPresentada = Number(linea.cantidad);
-            const precioPresentado = Number(linea.precio_unitario);
-            const producto = productos.get(producto_id);
-            const simboloInterno = producto ? unidades.get(producto_id) : undefined;
-            const factor = producto?.factor_conversion;
+            const cantidadPresentada = Number(linea.cantidad); const precioPresentado = Number(linea.precio_unitario);
+            const producto = productos.get(producto_id); const simboloInterno = producto ? unidades.get(producto_id) : undefined; const factor = producto?.factor_conversion;
             if (!producto_id || !Number.isFinite(cantidadPresentada) || !Number.isFinite(precioPresentado)) { setFormError("Cada línea requiere producto, cantidad y precio unitario."); return; }
             const cantidad = cantidadDesdePresentacion(cantidadPresentada, simboloInterno, factor);
             const precio_unitario = precioDesdePresentacion(precioPresentado, simboloInterno, factor);
@@ -134,13 +116,9 @@ export function ComprasPage() {
           <div className="space-y-3">
             <p className="text-sm font-medium text-[var(--bf-ink)]">Productos</p>
             {lineas.map((linea, index) => {
-              const productoId = Number(linea.producto_id) || undefined;
-              const producto = productoId ? productos.get(productoId) : undefined;
-              const unidadInterna = productoId ? unidades.get(productoId) : undefined;
-              const unidad = producto ? unidadPresentacion(unidadInterna, getUnidadComercial(producto, stockQuery.data)) : unidadPresentacion(unidadInterna);
-              const cantidad = Number(linea.cantidad);
-              const precio = Number(linea.precio_unitario);
-              const subtotal = Number.isFinite(cantidad) && Number.isFinite(precio) ? cantidad * precio : null;
+              const productoId = Number(linea.producto_id) || undefined; const producto = productoId ? productos.get(productoId) : undefined; const unidadInterna = productoId ? unidades.get(productoId) : undefined;
+              const unidad = producto ? unidadPresentacion(unidadInterna, getUnidadComercial(producto.id, stockQuery.data)) : unidadPresentacion(unidadInterna);
+              const cantidad = Number(linea.cantidad); const precio = Number(linea.precio_unitario); const subtotal = Number.isFinite(cantidad) && Number.isFinite(precio) ? cantidad * precio : null;
               return <div key={linea.key} className="rounded-lg border border-[var(--bf-border)] p-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Producto"><select className="bf-input" value={linea.producto_id} onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, producto_id: e.target.value } : row))}><option value="">Seleccione</option>{(productosQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{etiquetaProducto(row.nombre, row.codigo)}</option>)}</select></Field>
@@ -162,8 +140,8 @@ export function ComprasPage() {
   );
 }
 
-function getUnidadComercial(producto: { unidad_comercial_id: number; factor_conversion: string | number }, stock: { producto_id: number; unidad_comercial: string }[] | undefined) {
-  return stock?.find((row) => row.producto_id === producto.unidad_comercial_id)?.unidad_comercial ?? "";
+function getUnidadComercial(productoId: number, stock: { producto_id: number; unidad_comercial: string }[] | undefined) {
+  return stock?.find((row) => row.producto_id === productoId)?.unidad_comercial ?? "";
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
