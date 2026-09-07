@@ -12,6 +12,8 @@ export type ProductoCreate = {
   nombre: string;
   categoria_id: number;
   unidad_id: number;
+  unidad_comercial_id: number;
+  factor_conversion: number;
   stock_minimo: number;
   activo?: boolean;
 };
@@ -21,6 +23,8 @@ export type ProductoUpdate = {
   nombre?: string;
   categoria_id?: number;
   unidad_id?: number;
+  unidad_comercial_id?: number;
+  factor_conversion?: number;
   stock_minimo?: number;
   activo?: boolean;
 };
@@ -30,6 +34,8 @@ export type StockProducto = {
   codigo: string;
   nombre: string;
   unidad: string;
+  unidad_comercial: string;
+  factor_conversion: string | number;
   stock_actual: string | number;
   stock_minimo: string | number;
 };
