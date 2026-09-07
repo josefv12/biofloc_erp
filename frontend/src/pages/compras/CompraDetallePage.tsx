@@ -7,40 +7,25 @@ import { listProductos, listProductosStock, listTiposMovimientoInventario } from
 import { getCompra } from "../../api/purchases";
 import { apiErrorMessage } from "../../utils/apiError";
 import { etiquetaProducto, formatCop, formatDate, formatDateTime, formatNumber } from "../../utils/format";
+import { cantidadParaPresentacion, precioConUnidad, unidadPresentacion } from "../../utils/unidades";
 
 export function CompraDetallePage() {
   const { id } = useParams();
   const compraId = Number(id);
   const invalid = !Number.isInteger(compraId) || compraId <= 0;
 
-  const compraQuery = useQuery({
-    queryKey: ["compra", compraId],
-    queryFn: () => getCompra(compraId),
-    enabled: !invalid,
-  });
-  const productosQuery = useQuery({
-    queryKey: ["productos", { soloActivos: false }],
-    queryFn: () => listProductos({ soloActivos: false }),
-  });
-  const tiposQuery = useQuery({
-    queryKey: ["tipos-movimiento-inventario"],
-    queryFn: listTiposMovimientoInventario,
-  });
+  const compraQuery = useQuery({ queryKey: ["compra", compraId], queryFn: () => getCompra(compraId), enabled: !invalid });
+  const productosQuery = useQuery({ queryKey: ["productos", { soloActivos: false }], queryFn: () => listProductos({ soloActivos: false }) });
+  const tiposQuery = useQuery({ queryKey: ["tipos-movimiento-inventario"], queryFn: listTiposMovimientoInventario });
   const stockQuery = useQuery({ queryKey: ["productos-stock"], queryFn: listProductosStock });
 
-  if (invalid) {
-    return <ErrorAlert message="Identificador de compra inválido." />;
-  }
-  if (compraQuery.isLoading) {
-    return <LoadingState label="Cargando compra…" />;
-  }
+  if (invalid) return <ErrorAlert message="Identificador de compra inválido." />;
+  if (compraQuery.isLoading) return <LoadingState label="Cargando compra…" />;
   if (compraQuery.isError) {
     return (
       <div className="space-y-3">
         <ErrorAlert message={apiErrorMessage(compraQuery.error)} />
-        <Link to="/compras" className="bf-btn-secondary inline-flex">
-          Volver a compras
-        </Link>
+        <Link to="/compras" className="bf-btn-secondary inline-flex">Volver a compras</Link>
       </div>
     );
   }
@@ -54,11 +39,7 @@ export function CompraDetallePage() {
 
   return (
     <div>
-      <div className="mb-4">
-        <Link to="/compras" className="text-sm text-[var(--bf-accent)]">
-          ← Compras
-        </Link>
-      </div>
+      <div className="mb-4"><Link to="/compras" className="text-sm text-[var(--bf-accent)]">← Compras</Link></div>
       <div className="rounded-2xl border border-[var(--bf-border)] bg-white p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-accent)]">Compra</p>
         <h1 className="font-display text-3xl font-semibold text-[var(--bf-ink)]">#{compra.id}</h1>
@@ -78,23 +59,15 @@ export function CompraDetallePage() {
           rowKey={(row) => row.id}
           empty="Esta compra no tiene líneas."
           columns={[
-            {
-              key: "producto",
-              header: "Producto",
-              render: (row) => {
-                const producto = productos.get(row.producto_id);
-                return producto ? etiquetaProducto(producto.nombre, producto.codigo) : `#${row.producto_id}`;
-              },
-            },
-            {
-              key: "cant",
-              header: "Cantidad",
-              render: (row) => {
-                const unidad = unidades.get(row.producto_id);
-                return `${formatNumber(row.cantidad, { maximumFractionDigits: 3 })}${unidad ? ` ${unidad}` : ""}`;
-              },
-            },
-            { key: "pu", header: "Precio unitario", render: (row) => formatCop(row.precio_unitario) },
+            { key: "producto", header: "Producto", render: (row) => {
+              const producto = productos.get(row.producto_id);
+              return producto ? etiquetaProducto(producto.nombre, producto.codigo) : `#${row.producto_id}`;
+            }},
+            { key: "cant", header: "Cantidad", render: (row) => {
+              const unidad = unidades.get(row.producto_id);
+              return `${formatNumber(cantidadParaPresentacion(row.cantidad, unidad), { maximumFractionDigits: 3 })}${unidad ? ` ${unidadPresentacion(unidad)}` : ""}`;
+            }},
+            { key: "pu", header: "Precio unitario", render: (row) => precioConUnidad(row.precio_unitario, unidades.get(row.producto_id)) },
             { key: "sub", header: "Subtotal", render: (row) => formatCop(row.subtotal) },
           ]}
         />
@@ -102,46 +75,21 @@ export function CompraDetallePage() {
 
       <section className="mt-6">
         <h2 className="mb-1 font-display text-lg font-semibold">Movimientos generados</h2>
-        <p className="mb-3 text-sm text-[var(--bf-muted)]">
-          Lo que devuelve GET /compras/{compra.id} en el campo movimientos. Referencia DETALLE_COMPRA.
-        </p>
+        <p className="mb-3 text-sm text-[var(--bf-muted)]">Lo que devuelve GET /compras/{compra.id} en el campo movimientos. Referencia DETALLE_COMPRA.</p>
         <DataTable
           rows={compra.movimientos ?? []}
           rowKey={(row) => row.id}
           empty="El API no devolvió movimientos asociados a esta compra."
           columns={[
             { key: "id", header: "Movimiento", render: (row) => `#${row.id}` },
-            {
-              key: "tipo",
-              header: "Tipo",
-              render: (row) => tipos.get(row.tipo_movimiento_id)?.nombre ?? `#${row.tipo_movimiento_id}`,
-            },
-            {
-              key: "producto",
-              header: "Producto",
-              render: (row) => {
-                const producto = productos.get(row.producto_id);
-                return producto ? producto.codigo : `#${row.producto_id}`;
-              },
-            },
-            {
-              key: "cant",
-              header: "Cantidad",
-              render: (row) => formatNumber(row.cantidad, { maximumFractionDigits: 3 }),
-            },
-            {
-              key: "ref",
-              header: "Referencia",
-              render: (row) =>
-                row.referencia_tipo
-                  ? `${row.referencia_tipo}${row.referencia_id != null ? ` #${row.referencia_id}` : ""}`
-                  : "—",
-            },
-            {
-              key: "fecha",
-              header: "Fecha/hora",
-              render: (row) => formatDateTime(row.fecha_hora),
-            },
+            { key: "tipo", header: "Tipo", render: (row) => tipos.get(row.tipo_movimiento_id)?.nombre ?? `#${row.tipo_movimiento_id}` },
+            { key: "producto", header: "Producto", render: (row) => productos.get(row.producto_id)?.codigo ?? `#${row.producto_id}` },
+            { key: "cant", header: "Cantidad", render: (row) => {
+              const unidad = unidades.get(row.producto_id);
+              return `${formatNumber(cantidadParaPresentacion(row.cantidad, unidad), { maximumFractionDigits: 3 })}${unidad ? ` ${unidadPresentacion(unidad)}` : ""}`;
+            }},
+            { key: "ref", header: "Referencia", render: (row) => row.referencia_tipo ? `${row.referencia_tipo}${row.referencia_id != null ? ` #${row.referencia_id}` : ""}` : "—" },
+            { key: "fecha", header: "Fecha/hora", render: (row) => formatDateTime(row.fecha_hora) },
           ]}
         />
       </section>
@@ -150,10 +98,5 @@ export function CompraDetallePage() {
 }
 
 function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">{label}</dt>
-      <dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">{value}</dd>
-    </div>
-  );
+  return <div><dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">{label}</dt><dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">{value}</dd></div>;
 }
