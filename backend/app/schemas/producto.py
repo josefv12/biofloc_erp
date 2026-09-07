@@ -9,6 +9,8 @@ class ProductoBase(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=120)
     categoria_id: int
     unidad_id: int
+    unidad_comercial_id: int
+    factor_conversion: Decimal = Field(Decimal("1"), gt=0, max_digits=18, decimal_places=6)
     stock_minimo: Decimal = Field(Decimal("0"), ge=0, max_digits=12, decimal_places=3)
     activo: bool = True
 
@@ -18,6 +20,8 @@ class ProductoCreate(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=120)
     categoria_id: int
     unidad_id: int
+    unidad_comercial_id: int
+    factor_conversion: Decimal = Field(Decimal("1"), gt=0, max_digits=18, decimal_places=6)
     stock_minimo: Decimal = Field(Decimal("0"), ge=0, max_digits=12, decimal_places=3)
     activo: Optional[bool] = True
 
@@ -27,6 +31,8 @@ class ProductoUpdate(BaseModel):
     nombre: Optional[str] = Field(None, min_length=1, max_length=120)
     categoria_id: Optional[int] = None
     unidad_id: Optional[int] = None
+    unidad_comercial_id: Optional[int] = None
+    factor_conversion: Optional[Decimal] = Field(None, gt=0, max_digits=18, decimal_places=6)
     stock_minimo: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=3)
     activo: Optional[bool] = None
 
@@ -44,6 +50,8 @@ class StockProductoOut(BaseModel):
     codigo: str
     nombre: str
     unidad: str
+    unidad_comercial: str
+    factor_conversion: Decimal
     stock_actual: Decimal
     stock_minimo: Decimal
 
