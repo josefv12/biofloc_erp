@@ -150,6 +150,8 @@ export type Producto = {
   nombre: string;
   categoria_id: number;
   unidad_id: number;
+  unidad_comercial_id: number;
+  factor_conversion: string | number;
   stock_minimo: string | number;
   activo: boolean;
   created_at: string;
