@@ -35,7 +35,7 @@ export function CompraDetallePage() {
 
   const productos = new Map((productosQuery.data ?? []).map((row) => [row.id, row]));
   const tipos = new Map((tiposQuery.data ?? []).map((row) => [row.id, row]));
-  const unidades = new Map((stockQuery.data ?? []).map((row) => [row.producto_id, row.unidad]));
+  const stock = new Map((stockQuery.data ?? []).map((row) => [row.producto_id, row]));
 
   return (
     <div>
@@ -64,10 +64,15 @@ export function CompraDetallePage() {
               return producto ? etiquetaProducto(producto.nombre, producto.codigo) : `#${row.producto_id}`;
             }},
             { key: "cant", header: "Cantidad", render: (row) => {
-              const unidad = unidades.get(row.producto_id);
-              return `${formatNumber(cantidadParaPresentacion(row.cantidad, unidad), { maximumFractionDigits: 3 })}${unidad ? ` ${unidadPresentacion(unidad)}` : ""}`;
+              const productoStock = stock.get(row.producto_id);
+              const unidad = productoStock?.unidad;
+              const comercial = productoStock?.unidad_comercial;
+              return `${formatNumber(cantidadParaPresentacion(row.cantidad, unidad, productoStock?.factor_conversion), { maximumFractionDigits: 3 })}${unidad ? ` ${unidadPresentacion(unidad, comercial)}` : ""}`;
             }},
-            { key: "pu", header: "Precio unitario", render: (row) => precioConUnidad(row.precio_unitario, unidades.get(row.producto_id)) },
+            { key: "pu", header: "Precio unitario", render: (row) => {
+              const productoStock = stock.get(row.producto_id);
+              return precioConUnidad(row.precio_unitario, productoStock?.unidad, productoStock?.factor_conversion, productoStock?.unidad_comercial);
+            }},
             { key: "sub", header: "Subtotal", render: (row) => formatCop(row.subtotal) },
           ]}
         />
@@ -85,8 +90,10 @@ export function CompraDetallePage() {
             { key: "tipo", header: "Tipo", render: (row) => tipos.get(row.tipo_movimiento_id)?.nombre ?? `#${row.tipo_movimiento_id}` },
             { key: "producto", header: "Producto", render: (row) => productos.get(row.producto_id)?.codigo ?? `#${row.producto_id}` },
             { key: "cant", header: "Cantidad", render: (row) => {
-              const unidad = unidades.get(row.producto_id);
-              return `${formatNumber(cantidadParaPresentacion(row.cantidad, unidad), { maximumFractionDigits: 3 })}${unidad ? ` ${unidadPresentacion(unidad)}` : ""}`;
+              const productoStock = stock.get(row.producto_id);
+              const unidad = productoStock?.unidad;
+              const comercial = productoStock?.unidad_comercial;
+              return `${formatNumber(cantidadParaPresentacion(row.cantidad, unidad, productoStock?.factor_conversion), { maximumFractionDigits: 3 })}${unidad ? ` ${unidadPresentacion(unidad, comercial)}` : ""}`;
             }},
             { key: "ref", header: "Referencia", render: (row) => row.referencia_tipo ? `${row.referencia_tipo}${row.referencia_id != null ? ` #${row.referencia_id}` : ""}` : "—" },
             { key: "fecha", header: "Fecha/hora", render: (row) => formatDateTime(row.fecha_hora) },
