@@ -11,6 +11,11 @@ import { listProductos, listProductosStock } from "../../api/inventory";
 import { createCompra, listCompras } from "../../api/purchases";
 import { apiErrorMessage } from "../../utils/apiError";
 import { etiquetaProducto, formatCop, formatDate, formatNumber } from "../../utils/format";
+import {
+  cantidadDesdePresentacion,
+  precioDesdePresentacion,
+  unidadPresentacion,
+} from "../../utils/unidades";
 import { can } from "../../utils/rbac";
 import type { Compra, CompraCreate, DetalleCompraIn } from "../../types/purchases";
 
@@ -140,11 +145,7 @@ export function ComprasPage() {
           columns={[
             { key: "fecha", header: "Fecha", render: (row) => formatDate(row.fecha) },
             { key: "proveedor", header: "Proveedor", render: (row) => row.proveedor || "—" },
-            {
-              key: "lineas",
-              header: "Líneas",
-              render: (row) => formatNumber(row.detalles?.length ?? 0),
-            },
+            { key: "lineas", header: "Líneas", render: (row) => formatNumber(row.detalles?.length ?? 0) },
             { key: "total", header: "Total", render: (row) => formatCop(row.total) },
             { key: "usuario", header: "Registró", render: (row) => `#${row.registrado_por}` },
             { key: "obs", header: "Observaciones", render: (row) => row.observaciones || "—" },
@@ -169,10 +170,17 @@ export function ComprasPage() {
             const detalles: DetalleCompraIn[] = [];
             for (const linea of lineas) {
               const producto_id = Number(linea.producto_id);
-              const cantidad = Number(linea.cantidad);
-              const precio_unitario = Number(linea.precio_unitario);
-              if (!producto_id || !Number.isFinite(cantidad) || !Number.isFinite(precio_unitario)) {
+              const cantidadPresentada = Number(linea.cantidad);
+              const precioPresentado = Number(linea.precio_unitario);
+              const simbolo = unidades.get(producto_id);
+              if (!producto_id || !Number.isFinite(cantidadPresentada) || !Number.isFinite(precioPresentado)) {
                 setFormError("Cada línea requiere producto, cantidad y precio unitario.");
+                return;
+              }
+              const cantidad = cantidadDesdePresentacion(cantidadPresentada, simbolo);
+              const precio_unitario = precioDesdePresentacion(precioPresentado, simbolo);
+              if (!Number.isFinite(cantidad) || !Number.isFinite(precio_unitario) || cantidad <= 0 || precio_unitario < 0) {
+                setFormError("La cantidad debe ser mayor que 0 y el precio unitario no puede ser negativo.");
                 return;
               }
               detalles.push({ producto_id, cantidad, precio_unitario });
@@ -198,11 +206,11 @@ export function ComprasPage() {
             <p className="text-sm font-medium text-[var(--bf-ink)]">Productos</p>
             {lineas.map((linea, index) => {
               const productoId = Number(linea.producto_id) || undefined;
-              const unidad = productoId ? unidades.get(productoId) : undefined;
+              const unidadInterna = productoId ? unidades.get(productoId) : undefined;
+              const unidad = unidadPresentacion(unidadInterna);
               const cantidad = Number(linea.cantidad);
               const precio = Number(linea.precio_unitario);
-              const subtotal =
-                Number.isFinite(cantidad) && Number.isFinite(precio) ? cantidad * precio : null;
+              const subtotal = Number.isFinite(cantidad) && Number.isFinite(precio) ? cantidad * precio : null;
               return (
                 <div key={linea.key} className="rounded-lg border border-[var(--bf-border)] p-3">
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -211,11 +219,7 @@ export function ComprasPage() {
                         className="bf-input"
                         value={linea.producto_id}
                         onChange={(e) =>
-                          setLineas((rows) =>
-                            rows.map((row) =>
-                              row.key === linea.key ? { ...row, producto_id: e.target.value } : row,
-                            ),
-                          )
+                          setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, producto_id: e.target.value } : row))
                         }
                       >
                         <option value="">Seleccione</option>
@@ -233,44 +237,26 @@ export function ComprasPage() {
                         min="0.001"
                         className="bf-input"
                         value={linea.cantidad}
-                        onChange={(e) =>
-                          setLineas((rows) =>
-                            rows.map((row) =>
-                              row.key === linea.key ? { ...row, cantidad: e.target.value } : row,
-                            ),
-                          )
-                        }
+                        onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, cantidad: e.target.value } : row))}
                       />
                     </Field>
-                    <Field label="Precio unitario">
+                    <Field label={unidad ? `Precio unitario ($ / ${unidad})` : "Precio unitario"}>
                       <input
                         type="number"
                         step="any"
                         min="0"
                         className="bf-input"
                         value={linea.precio_unitario}
-                        onChange={(e) =>
-                          setLineas((rows) =>
-                            rows.map((row) =>
-                              row.key === linea.key ? { ...row, precio_unitario: e.target.value } : row,
-                            ),
-                          )
-                        }
+                        onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, precio_unitario: e.target.value } : row))}
                       />
                     </Field>
                     <div className="text-sm">
                       <p className="mb-1 font-medium text-[var(--bf-ink)]">Subtotal (ayuda visual)</p>
-                      <p className="rounded-md bg-[var(--bf-chip)] px-3 py-2">
-                        {subtotal == null ? "—" : formatCop(subtotal)}
-                      </p>
+                      <p className="rounded-md bg-[var(--bf-chip)] px-3 py-2">{subtotal == null ? "—" : formatCop(subtotal)}</p>
                     </div>
                   </div>
                   {lineas.length > 1 ? (
-                    <button
-                      type="button"
-                      className="bf-btn-secondary mt-3 !py-1 text-xs"
-                      onClick={() => setLineas((rows) => rows.filter((row) => row.key !== linea.key))}
-                    >
+                    <button type="button" className="bf-btn-secondary mt-3 !py-1 text-xs" onClick={() => setLineas((rows) => rows.filter((row) => row.key !== linea.key))}>
                       Quitar línea {index + 1}
                     </button>
                   ) : null}
@@ -280,17 +266,7 @@ export function ComprasPage() {
             <button
               type="button"
               className="bf-btn-secondary"
-              onClick={() =>
-                setLineas((rows) => [
-                  ...rows,
-                  {
-                    key: crypto.randomUUID(),
-                    producto_id: productosQuery.data?.[0] ? String(productosQuery.data[0].id) : "",
-                    cantidad: "",
-                    precio_unitario: "",
-                  },
-                ])
-              }
+              onClick={() => setLineas((rows) => [...rows, { key: crypto.randomUUID(), producto_id: productosQuery.data?.[0] ? String(productosQuery.data[0].id) : "", cantidad: "", precio_unitario: "" }])}
             >
               Agregar producto
             </button>
@@ -302,11 +278,7 @@ export function ComprasPage() {
             <p className="text-[var(--bf-muted)]">Suma visual de líneas (no sustituye el total del servidor)</p>
             <p className="mt-1 font-display text-xl font-semibold">{formatCop(ayudaVisual)}</p>
           </div>
-          <button
-            type="submit"
-            className="bf-btn-primary"
-            disabled={mutation.isPending || (productosQuery.data ?? []).length === 0}
-          >
+          <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || (productosQuery.data ?? []).length === 0}>
             {mutation.isPending ? "Guardando…" : "Registrar compra"}
           </button>
         </form>
