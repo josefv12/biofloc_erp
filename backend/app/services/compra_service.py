@@ -64,24 +64,11 @@ def _quant3(d: Decimal) -> Decimal:
     return Decimal(d).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
 
 
-def _factor_a_kg(unidad_simbolo: str | None) -> Decimal:
-    """Factor para normalizar compras de masa a kg sin alterar el modelo de datos.
-
-    La base de datos conserva la cantidad en la unidad configurada del producto.
-    Esta función se usa únicamente cuando una compra se captura en kg.
-    """
-    simbolo = (unidad_simbolo or "").strip().lower()
-    if simbolo in {"kg", "kilogramo", "kilogramos"}:
-        return Decimal("1")
-    if simbolo in {"g", "gr", "gramo", "gramos"}:
-        return Decimal("0.001")
-    return Decimal("1")
-
-
 def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
     if not payload.detalles or len(payload.detalles) == 0:
         raise HTTPException(status_code=422, detail="Compra requiere al menos 1 detalle")
 
+    # 1. Validar productos y calcular subtotales server-side
     detalles_procesados = []
     total_calculado = Decimal("0")
 
@@ -98,9 +85,6 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             raise HTTPException(status_code=422, detail=f"Cantidad debe ser > 0 (detalle #{idx})")
         if pu < Decimal("0"):
             raise HTTPException(status_code=422, detail=f"Precio unitario debe ser >= 0 (detalle #{idx})")
-
-        # La cantidad y el precio unitario pertenecen a la unidad comercial del producto.
-        # El cálculo correcto es siempre cantidad * precio por esa misma unidad.
         subtotal = _quant2(cantidad * pu)
         total_calculado += subtotal
         detalles_procesados.append({
@@ -110,6 +94,7 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             "subtotal": subtotal,
         })
 
+    # 2. Transacción atómica
     tipo_entrada = _tipo_movimiento_entrada(db)
     try:
         compra = Compra(
@@ -120,9 +105,9 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             registrado_por=usuario_id,
         )
         db.add(compra)
-        db.flush()
+        db.flush()  # obtiene compra.id sin commitear
 
-        detalle_objetos: list[tuple[DetalleCompra, int]] = []
+        detalle_objetos: list[tuple[DetalleCompra, int]] = []  # (detalle, movimiento_id)
 
         for dp in detalles_procesados:
             detalle = DetalleCompra(
@@ -133,7 +118,7 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
                 subtotal=dp["subtotal"],
             )
             db.add(detalle)
-            db.flush()
+            db.flush()  # obtiene detalle.id sin commitear
 
             mov_create = MovimientoInventarioCreate(
                 producto_id=dp["producto_id"],
@@ -149,9 +134,11 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             mov = crear_movimiento_inventario(db, mov_create, usuario_id=usuario_id, flush_only=True)
             detalle_objetos.append((detalle, mov.id))
 
+        # 3. Actualizar total compra
         compra.total = _quant2(total_calculado)
         db.flush()
 
+        # 4. Auditorías manuales (ya mov_inv está auditado dentro de flush_only)
         _registrar_auditoria(
             db, usuario_id, tabla="compras", accion="INSERT", registro_id=compra.id,
             detalle={
@@ -188,6 +175,7 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
         raise HTTPException(status_code=400, detail=f"Error inesperado al registrar compra: {str(e)}")
 
     db.refresh(compra)
+    # eager load detalles para devolver
     _ = compra.detalles
     return compra
 
