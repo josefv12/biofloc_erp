@@ -22,6 +22,7 @@ import { listUnidades } from "../../api/operations";
 import { apiErrorMessage } from "../../utils/apiError";
 import { formatNumber, etiquetaProducto } from "../../utils/format";
 import { can } from "../../utils/rbac";
+import { cantidadParaPresentacion } from "../../utils/unidades";
 import type { Producto, ProductoCreate, ProductoUpdate } from "../../types/inventory";
 
 type ProductoForm = {
@@ -29,6 +30,8 @@ type ProductoForm = {
   nombre: string;
   categoria_id: number;
   unidad_id: number;
+  unidad_comercial_id: number;
+  factor_conversion: number;
   stock_minimo: number;
   activo: boolean;
 };
@@ -126,6 +129,8 @@ export function InventarioPage() {
       nombre: "",
       categoria_id: categoriasQuery.data?.[0]?.id ?? 0,
       unidad_id: unidadesQuery.data?.[0]?.id ?? 0,
+      unidad_comercial_id: unidadesQuery.data?.[0]?.id ?? 0,
+      factor_conversion: 1,
       stock_minimo: 0,
       activo: true,
     });
@@ -139,6 +144,8 @@ export function InventarioPage() {
       nombre: producto.nombre,
       categoria_id: producto.categoria_id,
       unidad_id: producto.unidad_id,
+      unidad_comercial_id: producto.unidad_comercial_id,
+      factor_conversion: Number(producto.factor_conversion),
       stock_minimo: Number(producto.stock_minimo),
       activo: producto.activo,
     });
@@ -196,14 +203,24 @@ export function InventarioPage() {
               {
                 key: "stock",
                 header: "Stock",
-                render: (row) => `${formatNumber(row.stock_actual, { maximumFractionDigits: 3 })} ${row.unidad}`,
+                render: (row) => {
+                  const stock = stockMap.get(row.producto_id);
+                  const factor = stock?.factor_conversion ?? 1;
+                  const unidadComercial = stock?.unidad_comercial ?? row.unidad;
+                  return `${formatNumber(cantidadParaPresentacion(row.stock_actual, row.unidad, factor), { maximumFractionDigits: 3 })} ${unidadComercial}`;
+                },
               },
               {
                 key: "min",
                 header: "Stock mínimo",
-                render: (row) => `${formatNumber(row.stock_minimo, { maximumFractionDigits: 3 })} ${row.unidad}`,
+                render: (row) => {
+                  const stock = stockMap.get(row.producto_id);
+                  const factor = stock?.factor_conversion ?? 1;
+                  const unidadComercial = stock?.unidad_comercial ?? row.unidad;
+                  return `${formatNumber(cantidadParaPresentacion(row.stock_minimo, row.unidad, factor), { maximumFractionDigits: 3 })} ${unidadComercial}`;
+                },
               },
-              { key: "unidad", header: "Unidad", render: (row) => row.unidad },
+              { key: "unidad", header: "Unidad comercial", render: (row) => stockMap.get(row.producto_id)?.unidad_comercial ?? row.unidad },
               {
                 key: "clasif",
                 header: "Clasificación",
@@ -248,11 +265,12 @@ export function InventarioPage() {
             },
             {
               key: "unidad",
-              header: "Unidad",
+              header: "Unidades",
               render: (row) => {
-                const unidad = unidades.get(row.unidad_id);
-                const stockUnidad = stockMap.get(row.id)?.unidad;
-                return stockUnidad ?? (unidad ? unidad.simbolo : `#${row.unidad_id}`);
+                const stock = stockMap.get(row.id);
+                const interna = unidades.get(row.unidad_id)?.simbolo ?? `#${row.unidad_id}`;
+                const comercial = stock?.unidad_comercial ?? unidades.get(row.unidad_comercial_id)?.simbolo ?? `#${row.unidad_comercial_id}`;
+                return `${interna} → ${comercial}`;
               },
             },
             {
@@ -261,13 +279,19 @@ export function InventarioPage() {
               render: (row) => {
                 const stock = stockMap.get(row.id);
                 if (!stock) return "—";
-                return formatNumber(stock.stock_actual, { maximumFractionDigits: 3 });
+                return `${formatNumber(cantidadParaPresentacion(stock.stock_actual, stock.unidad, stock.factor_conversion), { maximumFractionDigits: 3 })} ${stock.unidad_comercial}`;
               },
             },
             {
               key: "min",
               header: "Stock mínimo",
-              render: (row) => formatNumber(row.stock_minimo, { maximumFractionDigits: 3 }),
+              render: (row) => {
+                const stock = stockMap.get(row.id);
+                const factor = stock?.factor_conversion ?? row.factor_conversion;
+                const unidad = stock?.unidad ?? unidades.get(row.unidad_id)?.simbolo ?? "";
+                const comercial = stock?.unidad_comercial ?? unidades.get(row.unidad_comercial_id)?.simbolo ?? "";
+                return `${formatNumber(cantidadParaPresentacion(row.stock_minimo, unidad, factor), { maximumFractionDigits: 3 })} ${comercial}`;
+              },
             },
             {
               key: "clasif",
@@ -320,6 +344,8 @@ export function InventarioPage() {
             nombre: values.nombre.trim(),
             categoria_id: Number(values.categoria_id),
             unidad_id: Number(values.unidad_id),
+            unidad_comercial_id: Number(values.unidad_comercial_id),
+            factor_conversion: Number(values.factor_conversion),
             stock_minimo: Number(values.stock_minimo),
             activo: values.activo,
           };
@@ -399,7 +425,7 @@ function ProductoModal({
             ))}
           </select>
         </Field>
-        <Field label="Unidad">
+        <Field label="Unidad interna de almacenamiento">
           <select className="bf-input" {...form.register("unidad_id", { valueAsNumber: true })}>
             {unidades.map((row) => (
               <option key={row.id} value={row.id}>
@@ -407,6 +433,27 @@ function ProductoModal({
               </option>
             ))}
           </select>
+          <span className="mt-1 block text-xs text-[var(--bf-muted)]">Unidad en la que el sistema guarda inventario y movimientos.</span>
+        </Field>
+        <Field label="Unidad comercial">
+          <select className="bf-input" {...form.register("unidad_comercial_id", { valueAsNumber: true })}>
+            {unidades.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.nombre} ({row.simbolo})
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-[var(--bf-muted)]">Unidad que verá el usuario al comprar, alimentar y consultar stock.</span>
+        </Field>
+        <Field label="Factor de conversión">
+          <input
+            type="number"
+            step="any"
+            min="0.000001"
+            className="bf-input"
+            {...form.register("factor_conversion", { valueAsNumber: true, min: 0.000001 })}
+          />
+          <span className="mt-1 block text-xs text-[var(--bf-muted)]">Cantidad de unidades internas que equivale a 1 unidad comercial. Ejemplo: g → kg = 1000.</span>
         </Field>
         <Field label="Stock mínimo">
           <input
