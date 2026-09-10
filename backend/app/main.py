@@ -5,6 +5,7 @@ Docs y OpenAPI se controlan con APP_ENV / ENABLE_DOCS (F15.7).
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -139,12 +140,11 @@ app.include_router(
 # ---------------------------------------------------------------------------
 @app.get("/", tags=["Root"])
 def root():
-    """Información básica de la aplicación."""
-    return {
-        "status": "ok",
-        "application": settings.app_name,
-        "version": settings.app_version,
-    }
+    """Redirige la raíz del backend al frontend de producción."""
+    return RedirectResponse(
+        url="https://biofloc-erp.vercel.app/",
+        status_code=307,
+    )
 
 
 # ---------------------------------------------------------------------------
