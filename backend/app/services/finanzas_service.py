@@ -60,7 +60,6 @@ def calcular_finanzas(
                 JOIN biofloc.alimentaciones a
                   ON a.id = mi.referencia_id
                 WHERE mi.referencia_tipo = 'ALIMENTACION'
-                  AND mi.lote_id IS NULL
                   AND a.lote_id = l.id
                   AND CAST(a.fecha_hora AS date) <= v.fecha
                   AND mi.costo_total IS NOT NULL
