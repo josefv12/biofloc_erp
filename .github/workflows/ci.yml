@@ -18,9 +18,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Instalar dependencias
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
       - name: Verificar sintaxis Python
         run: python -m compileall -q app tests
+      - name: Ejecutar pruebas unitarias
+        run: pytest -q tests/test_poblacion_lote.py
 
   frontend:
     runs-on: ubuntu-latest
