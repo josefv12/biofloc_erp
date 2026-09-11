@@ -9,7 +9,7 @@ import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
 import { createGasto, listCategoriasGasto, listGastos } from "../../api/finance";
-import { listLotes } from "../../api/production";
+import { listEstanques, listLotes } from "../../api/production";
 import { apiErrorMessage } from "../../utils/apiError";
 import { formatCop, formatDate } from "../../utils/format";
 import { can } from "../../utils/rbac";
@@ -18,7 +18,9 @@ import type { Gasto, GastoCreate } from "../../types/finance";
 type GastoForm = {
   fecha: string;
   categoria_id: number;
+  destino: "lote" | "estanque" | "general";
   lote_id: string;
+  estanque_id: string;
   descripcion: string;
   valor: number | "";
   proveedor: string;
@@ -36,6 +38,7 @@ export function GastosPage() {
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const loteId = Number(params.get("lote_id") ?? "") || undefined;
+  const estanqueId = Number(params.get("estanque_id") ?? "") || undefined;
   const categoriaId = Number(params.get("categoria_id") ?? "") || undefined;
   const fechaDesde = params.get("fecha_desde") ?? "";
   const fechaHasta = params.get("fecha_hasta") ?? "";
@@ -44,10 +47,11 @@ export function GastosPage() {
   const puedeRegistrar = can(user?.rol, "registrarGasto");
 
   const gastosQuery = useQuery({
-    queryKey: ["gastos", loteId, categoriaId, fechaDesde, fechaHasta],
+    queryKey: ["gastos", loteId, estanqueId, categoriaId, fechaDesde, fechaHasta],
     queryFn: () =>
       listGastos({
         loteId,
+        estanqueId,
         categoriaId,
         fechaDesde: fechaDesde || undefined,
         fechaHasta: fechaHasta || undefined,
@@ -58,18 +62,25 @@ export function GastosPage() {
     queryFn: () => listCategoriasGasto(false),
   });
   const lotesQuery = useQuery({ queryKey: ["lotes"], queryFn: () => listLotes() });
+  const estanquesQuery = useQuery({ queryKey: ["estanques"], queryFn: () => listEstanques() });
   const categorias = useMemo(
     () => new Map((categoriasQuery.data ?? []).map((row) => [row.id, row])),
     [categoriasQuery.data],
   );
   const lotes = useMemo(() => new Map((lotesQuery.data ?? []).map((row) => [row.id, row])), [lotesQuery.data]);
+  const estanques = useMemo(
+    () => new Map((estanquesQuery.data ?? []).map((row) => [row.id, row])),
+    [estanquesQuery.data],
+  );
   const form = useForm<GastoForm>();
+  const destino = form.watch("destino") ?? "general";
   const mutation = useMutation({
     mutationFn: (data: GastoCreate) => createGasto(data),
     onSuccess: async () => {
       setOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["gastos"] });
       await queryClient.invalidateQueries({ queryKey: ["analisis-lote"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard-finanzas"] });
     },
     onError: (error) => setFormError(apiErrorMessage(error)),
   });
@@ -86,7 +97,9 @@ export function GastosPage() {
     form.reset({
       fecha: todayDateInput(),
       categoria_id: categoriasQuery.data?.[0]?.id ?? 0,
+      destino: loteId ? "lote" : estanqueId ? "estanque" : "general",
       lote_id: loteId ? String(loteId) : "",
+      estanque_id: estanqueId ? String(estanqueId) : "",
       descripcion: "",
       valor: "",
       proveedor: "",
@@ -98,12 +111,12 @@ export function GastosPage() {
   return (
     <div>
       <PageHeader
-        title="Gastos"
-        description="Registro inmutable. El valor mostrado es el que entrega el API."
+        title="Costos"
+        description="Registra costos directos del lote, costos del estanque o gastos generales."
         actions={
           puedeRegistrar ? (
             <button type="button" className="bf-btn-primary" onClick={openCreate}>
-              Registrar gasto
+              Registrar costo
             </button>
           ) : null
         }
@@ -123,9 +136,7 @@ export function GastosPage() {
           <select className="bf-input" value={categoriaId ?? ""} onChange={(e) => setParam("categoria_id", e.target.value)}>
             <option value="">Todas</option>
             {(categoriasQuery.data ?? []).map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.nombre}
-              </option>
+              <option key={row.id} value={row.id}>{row.nombre}</option>
             ))}
           </select>
         </label>
@@ -134,9 +145,16 @@ export function GastosPage() {
           <select className="bf-input" value={loteId ?? ""} onChange={(e) => setParam("lote_id", e.target.value)}>
             <option value="">Todos</option>
             {(lotesQuery.data ?? []).map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.codigo}
-              </option>
+              <option key={row.id} value={row.id}>{row.codigo}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-[var(--bf-muted)]">Estanque</span>
+          <select className="bf-input" value={estanqueId ?? ""} onChange={(e) => setParam("estanque_id", e.target.value)}>
+            <option value="">Todos</option>
+            {(estanquesQuery.data ?? []).map((row) => (
+              <option key={row.id} value={row.id}>{row.codigo}</option>
             ))}
           </select>
         </label>
@@ -148,43 +166,38 @@ export function GastosPage() {
         <DataTable
           rows={gastosQuery.data}
           rowKey={(row: Gasto) => row.id}
-          empty="No hay gastos."
+          empty="No hay costos registrados."
           columns={[
             { key: "fecha", header: "Fecha", render: (row) => formatDate(row.fecha) },
-            {
-              key: "cat",
-              header: "Categoría",
-              render: (row) => categorias.get(row.categoria_id)?.nombre ?? `#${row.categoria_id}`,
-            },
+            { key: "cat", header: "Categoría", render: (row) => categorias.get(row.categoria_id)?.nombre ?? `#${row.categoria_id}` },
             { key: "desc", header: "Descripción", render: (row) => row.descripcion },
             { key: "valor", header: "Valor", render: (row) => formatCop(row.valor) },
             { key: "proveedor", header: "Proveedor", render: (row) => row.proveedor || "—" },
             {
-              key: "lote",
-              header: "Lote",
-              render: (row) =>
-                row.lote_id == null ? (
-                  "—"
-                ) : (
-                  <Link to={`/produccion/lotes/${row.lote_id}`} className="text-[var(--bf-accent)]">
-                    {lotes.get(row.lote_id)?.codigo ?? `#${row.lote_id}`}
-                  </Link>
-                ),
+              key: "destino",
+              header: "Destino",
+              render: (row) => row.lote_id != null
+                ? <Link to={`/produccion/lotes/${row.lote_id}`} className="text-[var(--bf-accent)]">Lote {lotes.get(row.lote_id)?.codigo ?? `#${row.lote_id}`}</Link>
+                : row.estanque_id != null
+                  ? `Estanque ${estanques.get(row.estanque_id)?.codigo ?? `#${row.estanque_id}`}`
+                  : "General",
             },
             { key: "obs", header: "Observaciones", render: (row) => row.observaciones || "—" },
           ]}
         />
       ) : null}
 
-      <Modal open={open} title="Registrar gasto" onClose={() => setOpen(false)}>
+      <Modal open={open} title="Registrar costo" onClose={() => setOpen(false)}>
         <form
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
             const lote = values.lote_id.trim();
+            const estanque = values.estanque_id.trim();
             mutation.mutate({
               fecha: values.fecha,
               categoria_id: Number(values.categoria_id),
-              lote_id: lote === "" ? null : Number(lote),
+              lote_id: values.destino === "lote" && lote ? Number(lote) : null,
+              estanque_id: values.destino === "estanque" && estanque ? Number(estanque) : null,
               descripcion: values.descripcion.trim(),
               valor: Number(values.valor),
               proveedor: values.proveedor.trim() || null,
@@ -199,14 +212,35 @@ export function GastosPage() {
           <Field label="Categoría">
             <select className="bf-input" {...form.register("categoria_id", { valueAsNumber: true })}>
               {(categoriasQuery.data ?? []).filter((row) => row.activo).map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.nombre}
-                </option>
+                <option key={row.id} value={row.id}>{row.nombre}</option>
               ))}
             </select>
           </Field>
+          <Field label="Destino del costo">
+            <select className="bf-input" {...form.register("destino")}>
+              <option value="lote">Lote</option>
+              <option value="estanque">Estanque</option>
+              <option value="general">General</option>
+            </select>
+          </Field>
+          {destino === "lote" ? (
+            <Field label="Lote">
+              <select className="bf-input" {...form.register("lote_id", { required: true })}>
+                <option value="">Selecciona un lote</option>
+                {(lotesQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{row.codigo}</option>)}
+              </select>
+            </Field>
+          ) : null}
+          {destino === "estanque" ? (
+            <Field label="Estanque">
+              <select className="bf-input" {...form.register("estanque_id", { required: true })}>
+                <option value="">Selecciona un estanque</option>
+                {(estanquesQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{row.codigo}</option>)}
+              </select>
+            </Field>
+          ) : null}
           <Field label="Descripción">
-            <input className="bf-input" {...form.register("descripcion", { required: true })} />
+            <input className="bf-input" {...form.register("descripcion", { required: true })} placeholder="Ej. compra de alevinos" />
           </Field>
           <Field label="Valor">
             <input type="number" step="any" min="0.01" className="bf-input" {...form.register("valor", { valueAsNumber: true })} />
@@ -214,19 +248,12 @@ export function GastosPage() {
           <Field label="Proveedor (opcional)">
             <input className="bf-input" {...form.register("proveedor")} />
           </Field>
-          <Field label="Lote (opcional)">
-            <select className="bf-input" {...form.register("lote_id")}>
-              <option value="">Ninguno</option>
-              {(lotesQuery.data ?? []).map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.codigo}
-                </option>
-              ))}
-            </select>
-          </Field>
           <Field label="Observaciones">
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
           </Field>
+          <p className="text-xs text-[var(--bf-muted)]">
+            El alimento suministrado a un lote se costea automáticamente desde el consumo de inventario; no lo registres otra vez como gasto.
+          </p>
           <button
             type="submit"
             className="bf-btn-primary"
