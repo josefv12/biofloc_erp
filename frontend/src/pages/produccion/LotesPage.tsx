@@ -85,6 +85,7 @@ export function LotesPage() {
   const createForm = useForm<LoteCreateForm>();
   const editForm = useForm<LoteEditForm>();
   const especieSeleccionadaId = createForm.watch("especie_id");
+  const fechaSiembra = createForm.watch("fecha_siembra");
   const especieSeleccionada = especies.find((row) => row.id === Number(especieSeleccionadaId));
 
   const createMut = useMutation({
@@ -249,6 +250,16 @@ export function LotesPage() {
               render: (row) => formatDate(row.fecha_siembra),
             },
             {
+              key: "cosecha_estimada",
+              header: "Cosecha estimada",
+              render: (row) => (
+                <div>
+                  <div className="font-medium text-[var(--bf-ink)]">{formatDate(row.fecha_estimada_cosecha)}</div>
+                  <div className="text-xs text-[var(--bf-muted)]">{row.dias_ciclo_estimado} días objetivo</div>
+                </div>
+              ),
+            },
+            {
               key: "cantidad",
               header: "Sembrados",
               render: (row) => formatNumber(row.cantidad_sembrada),
@@ -352,6 +363,17 @@ export function LotesPage() {
             <Field label="Fecha de siembra">
               <input type="date" className="bf-input" {...createForm.register("fecha_siembra", { required: true })} />
             </Field>
+            {fechaSiembra ? (
+              <div className="rounded-lg border border-[var(--bf-border)] bg-[var(--bf-surface-muted)] p-3">
+                <div className="text-sm font-medium text-[var(--bf-ink)]">Fecha estimada de cosecha</div>
+                <div className="mt-1 text-lg font-semibold text-[var(--bf-accent)]">
+                  {formatDate(addDays(fechaSiembra, 168))}
+                </div>
+                <div className="mt-1 text-xs text-[var(--bf-muted)]">
+                  Ciclo objetivo de 168 días. Es una fecha estimada; la cosecha real se registra cuando ocurra.
+                </div>
+              </div>
+            ) : null}
             <Field label="Fecha de cierre (opcional)">
               <input type="date" className="bf-input" {...createForm.register("fecha_cierre")} />
             </Field>
@@ -421,6 +443,13 @@ export function LotesPage() {
       </Modal>
     </div>
   );
+}
+
+function addDays(value: string, days: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  const result = new Date(Date.UTC(year, month - 1, day));
+  result.setUTCDate(result.getUTCDate() + days);
+  return result.toISOString().slice(0, 10);
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
