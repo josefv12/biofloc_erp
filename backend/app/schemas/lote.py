@@ -1,5 +1,5 @@
-from pydantic import BaseModel, field_validator, model_validator
-from datetime import datetime, date
+from pydantic import BaseModel, field_validator, model_validator, computed_field
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 
@@ -92,6 +92,22 @@ class LoteOut(BaseModel):
     especie: EspecieOut
     etapa_productiva: EtapaProductivaOut
     estado: EstadoLoteOut
+
+    @computed_field
+    @property
+    def fecha_estimada_cosecha(self) -> date:
+        """Fecha objetivo de cosecha para un ciclo estándar de 168 días.
+
+        Es una estimación operativa, no sustituye la fecha real de cosecha.
+        La fecha real se registra en el módulo de cosechas.
+        """
+        return self.fecha_siembra + timedelta(days=168)
+
+    @computed_field
+    @property
+    def dias_ciclo_estimado(self) -> int:
+        """Duración objetivo usada para la estimación de cosecha."""
+        return 168
 
     class Config:
         from_attributes = True
