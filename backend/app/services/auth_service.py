@@ -11,7 +11,11 @@ from app.models.usuario import Usuario
 settings = get_settings()
 security = HTTPBearer()
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> Usuario:
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> Usuario:
     token = credentials.credentials
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -20,16 +24,20 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     )
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        user_id: str = payload.get("sub")
+        user_id = payload.get("sub")
         if user_id is None:
+            raise credentials_exception
+        try:
+            user_id_int = int(user_id)
+        except (TypeError, ValueError):
             raise credentials_exception
     except InvalidTokenError:
         raise credentials_exception
-    
-    user = db.query(Usuario).filter(Usuario.id == int(user_id)).first()
+
+    user = db.query(Usuario).filter(Usuario.id == user_id_int).first()
     if user is None:
         raise credentials_exception
     if not user.activo:
         raise HTTPException(status_code=403, detail="Usuario inactivo")
-    
+
     return user
