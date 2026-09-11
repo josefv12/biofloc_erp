@@ -5,8 +5,7 @@
 BEGIN;
 
 -- El esquema base ya crea idx_detalles_venta_lote sobre lote_id.
--- No se crea un segundo índice idéntico.
-DROP INDEX IF EXISTS biofloc.idx_detalles_venta_lote_id;
+-- La limpieza del índice duplicado existente se gestiona por separado.
 
 CREATE OR REPLACE FUNCTION biofloc.validar_disponibilidad_venta()
 RETURNS TRIGGER
