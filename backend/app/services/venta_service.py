@@ -3,17 +3,21 @@
 - Venta INMUTABLE: POST + GET list + GET detalle.
 - Atómica: 1 transacción (venta + detalles + auditoría INSERT) con rollback 0 huellas.
 - Subtotal / total siempre server-side.
+- La cantidad vendida se expresa en kg de biomasa cosechada.
+- Una venta nunca puede superar la biomasa cosechada y aún disponible del lote.
 """
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from fastapi import HTTPException
 
 from app.models.venta import Venta, DetalleVenta
 from app.models.auditoria import Auditoria
 from app.models.lote import Lote
+from app.models.cosecha import Cosecha
 from app.schemas.venta import VentaCreate
 
 
@@ -66,25 +70,61 @@ def obtener_venta(db: Session, venta_id: int) -> Venta:
     return v
 
 
+def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
+    """Bloquea cada lote y valida la biomasa disponible para venta.
+
+    La cantidad comercial de ventas es kg de biomasa cosechada. El bloqueo de la
+    fila del lote hace que dos ventas concurrentes no puedan consumir la misma
+    disponibilidad. El trigger 004 replica esta regla en PostgreSQL para
+    operaciones que no pasen por este servicio.
+    """
+    solicitada_por_lote: dict[int, Decimal] = {}
+    for d in detalles:
+        solicitada_por_lote[d.lote_id] = solicitada_por_lote.get(d.lote_id, Decimal("0")) + Decimal(d.cantidad)
+
+    for lote_id, solicitada in solicitada_por_lote.items():
+        lote = (
+            db.query(Lote)
+            .filter(Lote.id == lote_id)
+            .with_for_update()
+            .first()
+        )
+        if not lote:
+            raise HTTPException(status_code=404, detail=f"Lote {lote_id} no existe")
+
+        cosechado = db.query(func.coalesce(func.sum(Cosecha.peso_total_kg), 0)).filter(
+            Cosecha.lote_id == lote_id
+        ).scalar()
+        vendido = db.query(func.coalesce(func.sum(DetalleVenta.cantidad), 0)).filter(
+            DetalleVenta.lote_id == lote_id
+        ).scalar()
+        disponible = max(Decimal(str(cosechado or 0)) - Decimal(str(vendido or 0)), Decimal("0"))
+
+        if solicitada > disponible:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Biomasa insuficiente para vender del lote {lote.codigo}. "
+                    f"Disponible: {_norm(disponible, 3)} kg; solicitado: {_norm(solicitada, 3)} kg."
+                ),
+            )
+
+
 def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
     if not data.detalles:
-        raise HTTPException(status_code=422, detail="venta debe tener al menos 1 detalle")
+        raise HTTPException(status_code=422, detail="La venta debe tener al menos 1 detalle")
 
-    # Validar lotes existan y colectar (fail-fast, sin escrituras)
-    lotes_cache = {}
+    # Validaciones sin escrituras. La disponibilidad se valida dentro de la
+    # transacción y con bloqueo de los lotes para proteger concurrencia.
     for idx, d in enumerate(data.detalles, start=1):
         if Decimal(d.cantidad) <= 0:
-            raise HTTPException(status_code=422, detail=f"cantidad debe ser mayor que 0 (detalle #{idx})")
+            raise HTTPException(status_code=422, detail=f"La cantidad debe ser mayor que 0 (detalle #{idx})")
         if Decimal(d.precio_unitario) < 0:
-            raise HTTPException(status_code=422, detail=f"precio_unitario debe ser >= 0 (detalle #{idx})")
-        if d.lote_id in lotes_cache:
-            continue
-        lo = db.query(Lote).filter(Lote.id == d.lote_id).first()
-        if not lo:
-            raise HTTPException(status_code=404, detail=f"Lote {d.lote_id} no existe (detalle #{idx})")
-        lotes_cache[d.lote_id] = lo
+            raise HTTPException(status_code=422, detail=f"El precio unitario debe ser >= 0 (detalle #{idx})")
 
     try:
+        _validar_disponibilidad_lotes(db, data.detalles)
+
         total = Decimal(0)
         detalles_obj = []
         for d in data.detalles:
@@ -109,9 +149,8 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
             detalles=detalles_obj,
         )
         db.add(venta)
-        db.flush()  # asigna ids a venta y detalles
+        db.flush()
 
-        # Auditoría Venta
         _audit(db, usuario_id, "INSERT", "ventas", venta.id, {
             "fecha": venta.fecha,
             "cliente": venta.cliente,
@@ -119,7 +158,6 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
             "observaciones": venta.observaciones,
             "detalles_count": len(venta.detalles),
         })
-        # Auditoría Detalles
         for dv in venta.detalles:
             _audit(db, usuario_id, "INSERT", "detalles_venta", dv.id, {
                 "venta_id": venta.id,
@@ -136,11 +174,11 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
     except HTTPException:
         db.rollback()
         raise
-    except IntegrityError as e:
+    except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error de integridad creando venta: {e}")
-    except Exception as e:
+        raise HTTPException(status_code=400, detail="No fue posible registrar la venta por una regla de integridad.")
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error creando venta: {e}")
+        raise HTTPException(status_code=500, detail="No fue posible registrar la venta por un error interno.")
 
     return obtener_venta(db, venta.id)
