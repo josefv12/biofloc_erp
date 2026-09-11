@@ -31,6 +31,7 @@ def listar(
     fecha_hasta: Optional[date] = None,
     categoria_id: Optional[int] = None,
     lote_id: Optional[int] = None,
+    estanque_id: Optional[int] = None,
     proveedor: Optional[str] = None,
     registrado_por: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -43,6 +44,7 @@ def listar(
         fecha_hasta=fecha_hasta,
         categoria_id=categoria_id,
         lote_id=lote_id,
+        estanque_id=estanque_id,
         proveedor=proveedor,
         registrado_por=registrado_por,
     )
