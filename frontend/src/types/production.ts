@@ -135,7 +135,7 @@ export type Lote = {
   fecha_siembra: string;
   fecha_cierre: string | null;
   fecha_estimada_cosecha: string;
-  dias_ciclo_estimado: number;
+  meses_ciclo_estimado: number;
   cantidad_sembrada: number;
   peso_inicial_promedio_g: number | null;
   observaciones: string | null;
