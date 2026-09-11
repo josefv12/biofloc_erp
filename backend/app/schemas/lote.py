@@ -1,6 +1,19 @@
 from pydantic import BaseModel, field_validator, model_validator, computed_field
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from typing import Optional
+import calendar
+
+
+CICLO_CULTIVO_MESES = 6
+
+
+def sumar_meses(fecha: date, meses: int) -> date:
+    """Suma meses calendario preservando el día cuando es posible."""
+    indice = fecha.month - 1 + meses
+    anio = fecha.year + indice // 12
+    mes = indice % 12 + 1
+    dia = min(fecha.day, calendar.monthrange(anio, mes)[1])
+    return date(anio, mes, dia)
 
 
 # ── Catálogos incrustados en respuestas ──────────────────────────────────────
@@ -96,18 +109,13 @@ class LoteOut(BaseModel):
     @computed_field
     @property
     def fecha_estimada_cosecha(self) -> date:
-        """Fecha objetivo de cosecha para un ciclo estándar de 168 días.
-
-        Es una estimación operativa, no sustituye la fecha real de cosecha.
-        La fecha real se registra en el módulo de cosechas.
-        """
-        return self.fecha_siembra + timedelta(days=168)
+        """Fecha estimada de cosecha: seis meses calendario desde la siembra."""
+        return sumar_meses(self.fecha_siembra, CICLO_CULTIVO_MESES)
 
     @computed_field
     @property
-    def dias_ciclo_estimado(self) -> int:
-        """Duración objetivo usada para la estimación de cosecha."""
-        return 168
+    def meses_ciclo_estimado(self) -> int:
+        return CICLO_CULTIVO_MESES
 
     class Config:
         from_attributes = True
