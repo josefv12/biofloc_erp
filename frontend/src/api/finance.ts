@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { CategoriaGasto, Gasto, GastoCreate, Venta, VentaCreate } from "../types/finance";
+import type { CategoriaGasto, DisponibilidadVenta, Gasto, GastoCreate, Venta, VentaCreate } from "../types/finance";
 
 export function listCategoriasGasto(soloActivos = true): Promise<CategoriaGasto[]> {
   return apiFetch<CategoriaGasto[]>(
@@ -53,4 +53,8 @@ export function getVenta(id: number): Promise<Venta> {
 
 export function createVenta(data: VentaCreate): Promise<Venta> {
   return apiFetch<Venta>("/api/v1/ventas/", { method: "POST", body: data });
+}
+
+export function getDisponibilidadVenta(loteId: number): Promise<DisponibilidadVenta> {
+  return apiFetch<DisponibilidadVenta>(`/api/v1/ventas/disponibilidad/${loteId}`);
 }

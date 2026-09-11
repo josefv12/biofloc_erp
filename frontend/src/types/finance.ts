@@ -60,3 +60,12 @@ export type VentaCreate = {
   observaciones?: string | null;
   detalles: DetalleVentaCreate[];
 };
+
+export type DisponibilidadVenta = {
+  lote_id: number;
+  lote_codigo: string;
+  cosechado_kg: string | number;
+  vendido_kg: string | number;
+  disponible_kg: string | number;
+  unidad: string;
+};

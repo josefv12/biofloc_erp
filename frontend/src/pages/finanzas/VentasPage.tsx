@@ -7,7 +7,7 @@ import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
-import { createVenta, listVentas } from "../../api/finance";
+import { createVenta, getDisponibilidadVenta, listVentas } from "../../api/finance";
 import { listLotes } from "../../api/production";
 import { apiErrorMessage } from "../../utils/apiError";
 import { formatCop, formatDate, formatNumber } from "../../utils/format";
@@ -56,6 +56,12 @@ export function VentasPage() {
   });
   const lotesQuery = useQuery({ queryKey: ["lotes"], queryFn: () => listLotes() });
   const lotes = useMemo(() => new Map((lotesQuery.data ?? []).map((row) => [row.id, row])), [lotesQuery.data]);
+  const loteFormularioId = Number(lineas[0]?.lote_id) || undefined;
+  const disponibilidadQuery = useQuery({
+    queryKey: ["disponibilidad-venta", loteFormularioId],
+    queryFn: () => getDisponibilidadVenta(loteFormularioId!),
+    enabled: open && Boolean(loteFormularioId),
+  });
 
   const mutation = useMutation({
     mutationFn: (data: VentaCreate) => createVenta(data),
@@ -63,6 +69,7 @@ export function VentasPage() {
       setOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["ventas"] });
       await queryClient.invalidateQueries({ queryKey: ["analisis-lote"] });
+      await queryClient.invalidateQueries({ queryKey: ["disponibilidad-venta"] });
       navigate(`/finanzas/ventas/${venta.id}`);
     },
     onError: (error) => setFormError(apiErrorMessage(error)),
@@ -102,7 +109,7 @@ export function VentasPage() {
     <div>
       <PageHeader
         title="Ventas"
-        description="La venta se asocia a lotes, no a productos. No descuenta inventario. El total lo confirma el servidor."
+        description="Las ventas se asocian a lotes y representan biomasa cosechada. No descuentan inventario de productos. El servidor impide vender más kg de los disponibles del lote."
         actions={
           puedeRegistrar ? (
             <button type="button" className="bf-btn-primary" onClick={openCreate}>
@@ -182,16 +189,21 @@ export function VentasPage() {
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
+            setFormError(null);
             const detalles: DetalleVentaCreate[] = [];
             for (const linea of lineas) {
               const lote_id = Number(linea.lote_id);
               const cantidad = Number(linea.cantidad);
               const precio_unitario = Number(linea.precio_unitario);
-              if (!lote_id || !Number.isFinite(cantidad) || !Number.isFinite(precio_unitario)) {
-                setFormError("Cada línea requiere lote, cantidad y precio unitario.");
+              if (!lote_id || !Number.isFinite(cantidad) || !Number.isFinite(precio_unitario) || cantidad <= 0 || precio_unitario < 0) {
+                setFormError("Cada línea requiere lote, una cantidad mayor que 0 y un precio unitario no negativo.");
                 return;
               }
               detalles.push({ lote_id, cantidad, precio_unitario });
+            }
+            if (detalles.length === 0) {
+              setFormError("Agregue al menos una línea de venta.");
+              return;
             }
             mutation.mutate({
               fecha,
@@ -212,6 +224,14 @@ export function VentasPage() {
           </div>
           <div className="space-y-3">
             <p className="text-sm font-medium text-[var(--bf-ink)]">Líneas por lote</p>
+            {disponibilidadQuery.isLoading ? <p className="text-sm text-[var(--bf-muted)]">Consultando biomasa disponible…</p> : null}
+            {disponibilidadQuery.data ? (
+              <div className="rounded-lg border border-[var(--bf-border)] bg-[var(--bf-chip)] px-3 py-2 text-sm">
+                <span className="text-[var(--bf-muted)]">Disponible en {disponibilidadQuery.data.lote_codigo}: </span>
+                <strong>{formatNumber(Number(disponibilidadQuery.data.disponible_kg), { maximumFractionDigits: 3 })} kg</strong>
+              </div>
+            ) : null}
+            {disponibilidadQuery.isError ? <ErrorAlert message={apiErrorMessage(disponibilidadQuery.error)} /> : null}
             {lineas.map((linea, index) => {
               const cantidad = Number(linea.cantidad);
               const precio = Number(linea.precio_unitario);
@@ -237,7 +257,7 @@ export function VentasPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="Cantidad">
+                    <Field label="Cantidad (kg)">
                       <input
                         type="number"
                         step="any"
@@ -251,7 +271,7 @@ export function VentasPage() {
                         }
                       />
                     </Field>
-                    <Field label="Precio unitario">
+                    <Field label="Precio unitario ($ / kg)">
                       <input
                         type="number"
                         step="any"
@@ -310,7 +330,7 @@ export function VentasPage() {
             <p className="mt-1 font-display text-xl font-semibold">{formatCop(ayudaVisual)}</p>
           </div>
           <p className="text-xs text-[var(--bf-muted)]">
-            Esta venta no llama a movimientos de inventario ni descuenta stock.
+            Las ventas representan biomasa cosechada en kg y no descuentan inventario de productos. El servidor valida la disponibilidad del lote en cada registro.
           </p>
           <button
             type="submit"
