@@ -56,12 +56,20 @@ export function VentasPage() {
   });
   const lotesQuery = useQuery({ queryKey: ["lotes"], queryFn: () => listLotes() });
   const lotes = useMemo(() => new Map((lotesQuery.data ?? []).map((row) => [row.id, row])), [lotesQuery.data]);
-  const loteFormularioId = Number(lineas[0]?.lote_id) || undefined;
+
+  const loteFormularioIds = useMemo(
+    () => [...new Set(lineas.map((linea) => Number(linea.lote_id)).filter((id) => Number.isInteger(id) && id > 0))],
+    [lineas],
+  );
   const disponibilidadQuery = useQuery({
-    queryKey: ["disponibilidad-venta", loteFormularioId],
-    queryFn: () => getDisponibilidadVenta(loteFormularioId!),
-    enabled: open && Boolean(loteFormularioId),
+    queryKey: ["disponibilidad-venta", loteFormularioIds],
+    queryFn: () => Promise.all(loteFormularioIds.map((id) => getDisponibilidadVenta(id))),
+    enabled: open && loteFormularioIds.length > 0,
   });
+  const disponibilidades = useMemo(
+    () => new Map((disponibilidadQuery.data ?? []).map((row) => [row.lote_id, row])),
+    [disponibilidadQuery.data],
+  );
 
   const mutation = useMutation({
     mutationFn: (data: VentaCreate) => createVenta(data),
@@ -225,17 +233,13 @@ export function VentasPage() {
           <div className="space-y-3">
             <p className="text-sm font-medium text-[var(--bf-ink)]">Líneas por lote</p>
             {disponibilidadQuery.isLoading ? <p className="text-sm text-[var(--bf-muted)]">Consultando biomasa disponible…</p> : null}
-            {disponibilidadQuery.data ? (
-              <div className="rounded-lg border border-[var(--bf-border)] bg-[var(--bf-chip)] px-3 py-2 text-sm">
-                <span className="text-[var(--bf-muted)]">Disponible en {disponibilidadQuery.data.lote_codigo}: </span>
-                <strong>{formatNumber(Number(disponibilidadQuery.data.disponible_kg), { maximumFractionDigits: 3 })} kg</strong>
-              </div>
-            ) : null}
             {disponibilidadQuery.isError ? <ErrorAlert message={apiErrorMessage(disponibilidadQuery.error)} /> : null}
             {lineas.map((linea, index) => {
               const cantidad = Number(linea.cantidad);
               const precio = Number(linea.precio_unitario);
               const subtotal = Number.isFinite(cantidad) && Number.isFinite(precio) ? cantidad * precio : null;
+              const loteLineaId = Number(linea.lote_id);
+              const disponibilidad = disponibilidades.get(loteLineaId);
               return (
                 <div key={linea.key} className="rounded-lg border border-[var(--bf-border)] p-3">
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -292,6 +296,12 @@ export function VentasPage() {
                       <p className="rounded-md bg-[var(--bf-chip)] px-3 py-2">{subtotal == null ? "—" : formatCop(subtotal)}</p>
                     </div>
                   </div>
+                  {disponibilidad ? (
+                    <div className="mt-3 rounded-md border border-[var(--bf-border)] bg-[var(--bf-chip)] px-3 py-2 text-sm">
+                      <span className="text-[var(--bf-muted)]">Disponible para venta en {disponibilidad.lote_codigo}: </span>
+                      <strong>{formatNumber(Number(disponibilidad.disponible_kg), { maximumFractionDigits: 3 })} kg</strong>
+                    </div>
+                  ) : null}
                   {lineas.length > 1 ? (
                     <button
                       type="button"
