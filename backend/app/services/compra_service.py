@@ -25,15 +25,9 @@ def _tipo_movimiento_entrada(db: Session) -> TipoMovimientoInventario:
         .first()
     )
     if not tipo:
-        raise HTTPException(
-            status_code=500,
-            detail="Catálogo tipos_movimiento_inventario no contiene ENTRADA",
-        )
+        raise HTTPException(status_code=500, detail="Catálogo interno incompleto: falta el movimiento ENTRADA.")
     if int(tipo.afecta_stock) != 1:
-        raise HTTPException(
-            status_code=500,
-            detail="El tipo ENTRADA debe tener afecta_stock=1",
-        )
+        raise HTTPException(status_code=500, detail="Configuración interna inválida para el movimiento ENTRADA.")
     return tipo
 
 
@@ -66,25 +60,24 @@ def _quant3(d: Decimal) -> Decimal:
 
 def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
     if not payload.detalles or len(payload.detalles) == 0:
-        raise HTTPException(status_code=422, detail="Compra requiere al menos 1 detalle")
+        raise HTTPException(status_code=422, detail="La compra requiere al menos 1 detalle")
 
-    # 1. Validar productos y calcular subtotales server-side
     detalles_procesados = []
     total_calculado = Decimal("0")
 
     for idx, din in enumerate(payload.detalles, start=1):
         prod = db.query(Producto).filter(Producto.id == din.producto_id).first()
         if not prod:
-            raise HTTPException(status_code=404, detail=f"Producto id={din.producto_id} no existe (detalle #{idx})")
+            raise HTTPException(status_code=404, detail=f"El producto no existe (detalle #{idx})")
         if not prod.activo:
-            raise HTTPException(status_code=422, detail=f"Producto id={din.producto_id} está inactivo (detalle #{idx})")
+            raise HTTPException(status_code=422, detail=f"El producto está inactivo (detalle #{idx})")
 
         cantidad = _quant3(din.cantidad)
         pu = _quant2(din.precio_unitario)
         if cantidad <= Decimal("0"):
-            raise HTTPException(status_code=422, detail=f"Cantidad debe ser > 0 (detalle #{idx})")
+            raise HTTPException(status_code=422, detail=f"La cantidad debe ser > 0 (detalle #{idx})")
         if pu < Decimal("0"):
-            raise HTTPException(status_code=422, detail=f"Precio unitario debe ser >= 0 (detalle #{idx})")
+            raise HTTPException(status_code=422, detail=f"El precio unitario debe ser >= 0 (detalle #{idx})")
         subtotal = _quant2(cantidad * pu)
         total_calculado += subtotal
         detalles_procesados.append({
@@ -94,7 +87,6 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             "subtotal": subtotal,
         })
 
-    # 2. Transacción atómica
     tipo_entrada = _tipo_movimiento_entrada(db)
     try:
         compra = Compra(
@@ -105,9 +97,9 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             registrado_por=usuario_id,
         )
         db.add(compra)
-        db.flush()  # obtiene compra.id sin commitear
+        db.flush()
 
-        detalle_objetos: list[tuple[DetalleCompra, int]] = []  # (detalle, movimiento_id)
+        detalle_objetos: list[tuple[DetalleCompra, int]] = []
 
         for dp in detalles_procesados:
             detalle = DetalleCompra(
@@ -118,7 +110,7 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
                 subtotal=dp["subtotal"],
             )
             db.add(detalle)
-            db.flush()  # obtiene detalle.id sin commitear
+            db.flush()
 
             mov_create = MovimientoInventarioCreate(
                 producto_id=dp["producto_id"],
@@ -134,11 +126,9 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             mov = crear_movimiento_inventario(db, mov_create, usuario_id=usuario_id, flush_only=True)
             detalle_objetos.append((detalle, mov.id))
 
-        # 3. Actualizar total compra
         compra.total = _quant2(total_calculado)
         db.flush()
 
-        # 4. Auditorías manuales (ya mov_inv está auditado dentro de flush_only)
         _registrar_auditoria(
             db, usuario_id, tabla="compras", accion="INSERT", registro_id=compra.id,
             detalle={
@@ -167,15 +157,14 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
     except HTTPException:
         db.rollback()
         raise
-    except IntegrityError as e:
+    except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error de integridad al registrar compra: {str(e)}")
-    except Exception as e:
+        raise HTTPException(status_code=400, detail="No fue posible registrar la compra por una regla de integridad.")
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error inesperado al registrar compra: {str(e)}")
+        raise HTTPException(status_code=500, detail="No fue posible registrar la compra por un error interno.")
 
     db.refresh(compra)
-    # eager load detalles para devolver
     _ = compra.detalles
     return compra
 
@@ -205,8 +194,7 @@ def listar_compras(
     if registrado_por:
         q = q.filter(Compra.registrado_por == registrado_por)
 
-    compras = q.order_by(Compra.fecha.desc(), Compra.id.desc()).all()
-    return compras
+    return q.order_by(Compra.fecha.desc(), Compra.id.desc()).all()
 
 
 def obtener_compra(db: Session, compra_id: int) -> Compra:
@@ -217,7 +205,7 @@ def obtener_compra(db: Session, compra_id: int) -> Compra:
         .first()
     )
     if not c:
-        raise HTTPException(status_code=404, detail=f"Compra id={compra_id} no existe")
+        raise HTTPException(status_code=404, detail="Compra no encontrada")
     return c
 
 
