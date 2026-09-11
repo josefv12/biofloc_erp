@@ -255,7 +255,7 @@ export function LotesPage() {
               render: (row) => (
                 <div>
                   <div className="font-medium text-[var(--bf-ink)]">{formatDate(row.fecha_estimada_cosecha)}</div>
-                  <div className="text-xs text-[var(--bf-muted)]">{row.dias_ciclo_estimado} días objetivo</div>
+                  <div className="text-xs text-[var(--bf-muted)]">{row.meses_ciclo_estimado} meses objetivo</div>
                 </div>
               ),
             },
@@ -367,10 +367,10 @@ export function LotesPage() {
               <div className="rounded-lg border border-[var(--bf-border)] bg-[var(--bf-surface-muted)] p-3">
                 <div className="text-sm font-medium text-[var(--bf-ink)]">Fecha estimada de cosecha</div>
                 <div className="mt-1 text-lg font-semibold text-[var(--bf-accent)]">
-                  {formatDate(addDays(fechaSiembra, 168))}
+                  {formatDate(addMonths(fechaSiembra, 6))}
                 </div>
                 <div className="mt-1 text-xs text-[var(--bf-muted)]">
-                  Ciclo objetivo de 168 días. Es una fecha estimada; la cosecha real se registra cuando ocurra.
+                  Ciclo objetivo de 6 meses. Es una fecha estimada; la cosecha real se registra cuando ocurra.
                 </div>
               </div>
             ) : null}
@@ -445,11 +445,14 @@ export function LotesPage() {
   );
 }
 
-function addDays(value: string, days: number): string {
+function addMonths(value: string, months: number): string {
   const [year, month, day] = value.split("-").map(Number);
-  const result = new Date(Date.UTC(year, month - 1, day));
-  result.setUTCDate(result.getUTCDate() + days);
-  return result.toISOString().slice(0, 10);
+  const index = month - 1 + months;
+  const targetYear = year + Math.floor(index / 12);
+  const targetMonth = (index % 12) + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDay);
+  return `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
