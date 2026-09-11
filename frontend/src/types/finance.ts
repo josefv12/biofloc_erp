@@ -10,6 +10,7 @@ export type Gasto = {
   fecha: string;
   categoria_id: number;
   lote_id: number | null;
+  estanque_id: number | null;
   descripcion: string;
   valor: string | number;
   proveedor: string | null;
@@ -22,6 +23,7 @@ export type GastoCreate = {
   fecha: string;
   categoria_id: number;
   lote_id?: number | null;
+  estanque_id?: number | null;
   descripcion: string;
   valor: number;
   proveedor?: string | null;
