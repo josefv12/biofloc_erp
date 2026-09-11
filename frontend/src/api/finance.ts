@@ -12,6 +12,7 @@ export function listGastos(params: {
   fechaHasta?: string;
   categoriaId?: number;
   loteId?: number;
+  estanqueId?: number;
   proveedor?: string;
 } = {}): Promise<Gasto[]> {
   const query = new URLSearchParams();
@@ -19,6 +20,7 @@ export function listGastos(params: {
   if (params.fechaHasta) query.set("fecha_hasta", params.fechaHasta);
   if (params.categoriaId) query.set("categoria_id", String(params.categoriaId));
   if (params.loteId) query.set("lote_id", String(params.loteId));
+  if (params.estanqueId) query.set("estanque_id", String(params.estanqueId));
   if (params.proveedor) query.set("proveedor", params.proveedor);
   const suffix = query.toString();
   return apiFetch<Gasto[]>(`/api/v1/gastos/${suffix ? `?${suffix}` : ""}`);
