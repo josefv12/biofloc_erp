@@ -2,10 +2,13 @@
 Servicio para movimientos_inventario.
 - Histórico INMUTABLE: solo listar / obtener / crear. Sin update/delete.
 - Regla STOCK NEGATIVO: antes de INSERT con tipo.afecta_stock == -1,
-  consultar vista_stock_productos y si stock_actual - cantidad < 0 → HTTP 422.
-- Trazabilidad Biofloc: si referencia_tipo == 'APLICACION_BIOFLOC' y referencia_id no nulo → validar existencia aplicación.
+  validar stock disponible.
+- Las salidas sin costo explícito se valoran al costo promedio ponderado de las
+  entradas históricas con costo hasta la fecha del movimiento. Esto permite que
+  cada alimentación lleve al lote el costo del alimento realmente suministrado.
+- Trazabilidad Biofloc y alimentación.
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -70,6 +73,27 @@ def _obtener_tipo_salida_id(db: Session) -> int:
     return tipo.id
 
 
+def _costo_promedio_entrada(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
+    """Costo promedio ponderado de entradas con costo hasta el momento del consumo."""
+    row = db.execute(text("""
+        SELECT
+            COALESCE(SUM(cantidad), 0) AS cantidad,
+            COALESCE(SUM(costo_total), 0) AS costo
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = :pid
+          AND tm.afecta_stock = 1
+          AND mi.fecha_hora <= :fecha_hora
+          AND mi.costo_unitario IS NOT NULL
+          AND mi.costo_total IS NOT NULL
+    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().one()
+    cantidad = Decimal(str(row["cantidad"] or 0))
+    costo = Decimal(str(row["costo"] or 0))
+    if cantidad <= 0 or costo < 0:
+        return Decimal("0")
+    return (costo / cantidad).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
     """Retorna el stock actual de un producto desde la vista."""
     row = db.execute(text("""
@@ -118,7 +142,6 @@ def crear_movimiento_inventario(
     usuario_id: int,
     flush_only: bool = False,
 ) -> MovimientoInventario:
-    # 1. Verificar FKs obligatorias
     producto = db.query(Producto).filter(Producto.id == data.producto_id).first()
     if not producto:
         raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe")
@@ -126,7 +149,8 @@ def crear_movimiento_inventario(
     if not tipo:
         raise HTTPException(status_code=404, detail=f"Tipo movimiento id={data.tipo_movimiento_id} no existe")
 
-    # 2. Validar regla STOCK NEGATIVO (solo para salidas, afecta_stock == -1)
+    fecha_hora = data.fecha_hora or datetime.now(timezone.utc)
+
     if tipo.afecta_stock == -1:
         row = db.execute(text("""
             SELECT COALESCE(stock_actual, 0)
@@ -146,14 +170,18 @@ def crear_movimiento_inventario(
                 ),
             )
 
-    # 3. Trazabilidad
     _validar_referencia(db, data.referencia_tipo, data.referencia_id)
 
-    # 4. Construir registro
     datos = data.model_dump()
-    if datos.get("fecha_hora") is None:
-        datos["fecha_hora"] = datetime.now(timezone.utc)
+    datos["fecha_hora"] = fecha_hora
     datos["registrado_por"] = usuario_id
+
+    # Si una salida no trae costo, calcularlo desde las entradas históricas.
+    if tipo.afecta_stock == -1 and (datos.get("costo_unitario") is None or datos.get("costo_total") is None):
+        costo_unitario = _costo_promedio_entrada(db, producto.id, fecha_hora)
+        cantidad = Decimal(str(data.cantidad))
+        datos["costo_unitario"] = costo_unitario
+        datos["costo_total"] = (costo_unitario * cantidad).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     nuevo = MovimientoInventario(**datos)
     db.add(nuevo)
