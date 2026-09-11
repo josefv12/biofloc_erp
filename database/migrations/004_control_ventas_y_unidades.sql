@@ -4,8 +4,9 @@
 
 BEGIN;
 
-CREATE INDEX IF NOT EXISTS idx_detalles_venta_lote_id
-    ON biofloc.detalles_venta(lote_id);
+-- El esquema base ya crea idx_detalles_venta_lote sobre lote_id.
+-- No se crea un segundo índice idéntico.
+DROP INDEX IF EXISTS biofloc.idx_detalles_venta_lote_id;
 
 CREATE OR REPLACE FUNCTION biofloc.validar_disponibilidad_venta()
 RETURNS TRIGGER
