@@ -1,0 +1,3 @@
+Frontend deployment trigger.
+
+The obsolete unused factorConversion declaration from the old feeding deployment has already been removed from AlimentacionPage.tsx.
