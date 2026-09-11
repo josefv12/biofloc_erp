@@ -1,11 +1,13 @@
-"""Pruebas unitarias de población disponible (sin HTTP ni BD)."""
+"""Pruebas unitarias de población disponible y reglas de ciclo del lote."""
 from decimal import Decimal
 from types import SimpleNamespace
+from datetime import date
 
 from fastapi import HTTPException
 
 from app.services.analisis_service import FACTOR_A_KG, _alimento_kg
 from app.schemas.analisis import AlimentoUnidadOut
+from app.schemas.lote import sumar_meses, LoteOut
 from app.services.cosecha_service import _peso_promedio_g
 from app.services.poblacion_lote import (
     calcular_poblacion_disponible,
@@ -53,8 +55,8 @@ def test_alimento_kg_gramos_queda_en_3_decimales():
             AlimentoUnidadOut(unidad="g", cantidad=Decimal("500")),
         ]
     )
-    assert razon is None
     assert total is not None
+    assert razon is None
     assert total == Decimal("0.5") + Decimal("0.5")
 
 
@@ -85,3 +87,8 @@ def test_lote_finalizado_rechaza_registros():
         assert "FINALIZADO" in str(exc.detail)
         return
     raise AssertionError("Debió rechazar el lote FINALIZADO")
+
+
+def test_ciclo_estimado_es_seis_meses_calendario():
+    assert sumar_meses(date(2026, 9, 11), 6) == date(2027, 3, 11)
+    assert sumar_meses(date(2026, 8, 31), 6) == date(2027, 2, 28)
