@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DetalleVentaBase(BaseModel):
     lote_id: int
+    # Las ventas representan biomasa cosechada y se registran en kg.
     cantidad: Decimal = Field(..., gt=0, max_digits=12, decimal_places=3)
     precio_unitario: Decimal = Field(..., ge=0, max_digits=14, decimal_places=2)
 
@@ -38,3 +39,12 @@ class VentaOut(VentaBase):
     created_at: datetime
     detalles: List[DetalleVentaOut]
     model_config = ConfigDict(from_attributes=True)
+
+
+class DisponibilidadVentaOut(BaseModel):
+    lote_id: int
+    lote_codigo: str
+    cosechado_kg: Decimal = Field(..., max_digits=18, decimal_places=3)
+    vendido_kg: Decimal = Field(..., max_digits=18, decimal_places=3)
+    disponible_kg: Decimal = Field(..., max_digits=18, decimal_places=3)
+    unidad: str = "kg"
