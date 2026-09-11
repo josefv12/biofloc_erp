@@ -22,6 +22,8 @@ jobs:
       - name: Verificar sintaxis Python
         run: python -m compileall -q app tests
       - name: Ejecutar pruebas unitarias
+        env:
+          PYTHONPATH: .
         run: pytest -q tests/test_poblacion_lote.py
 
   frontend:
