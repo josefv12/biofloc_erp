@@ -12,6 +12,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      JWT_SECRET_KEY: ci-only-test-secret-not-for-production
+      APP_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
