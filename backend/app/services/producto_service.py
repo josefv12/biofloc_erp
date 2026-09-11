@@ -53,6 +53,21 @@ def _validar_factor(factor_conversion: Decimal):
         raise HTTPException(status_code=422, detail="El factor de conversión debe ser mayor que cero")
 
 
+def _producto_tiene_movimientos(db: Session, producto_id: int) -> bool:
+    return bool(
+        db.execute(
+            text("""
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM biofloc.movimientos_inventario
+                    WHERE producto_id = :pid
+                )
+            """),
+            {"pid": producto_id},
+        ).scalar()
+    )
+
+
 def listar_productos(db: Session, solo_activos: bool = False, categoria_id: int | None = None) -> list[Producto]:
     q = db.query(Producto)
     if solo_activos:
@@ -104,7 +119,12 @@ def crear_producto(db: Session, data: ProductoCreate, usuario_id: int) -> Produc
 
 
 def actualizar_producto(db: Session, producto_id: int, data: ProductoUpdate, usuario_id: int) -> Producto:
-    p = obtener_producto(db, producto_id)
+    # Bloquea la fila del producto durante la actualización para evitar que
+    # una operación concurrente cambie la unidad mientras se valida/escribe.
+    p = db.query(Producto).filter(Producto.id == producto_id).with_for_update().first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
     cambios = data.model_dump(exclude_unset=True)
     if not cambios:
         return p
@@ -117,6 +137,18 @@ def actualizar_producto(db: Session, producto_id: int, data: ProductoUpdate, usu
     )
     if "factor_conversion" in cambios:
         _validar_factor(cambios["factor_conversion"])
+
+    campos_unidad = {"unidad_id", "unidad_comercial_id", "factor_conversion"}
+    cambios_unidad = campos_unidad.intersection(cambios)
+    if cambios_unidad and _producto_tiene_movimientos(db, producto_id):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No se pueden cambiar la unidad interna, unidad comercial o factor de conversión "
+                "porque el producto ya tiene movimientos de inventario. Cree un producto nuevo "
+                "si necesita una unidad diferente."
+            ),
+        )
 
     if "codigo" in cambios and cambios["codigo"] != p.codigo:
         if db.query(Producto).filter(Producto.codigo == cambios["codigo"], Producto.id != producto_id).first():
@@ -160,7 +192,7 @@ def _stock_query():
 
 
 def obtener_stock_producto(db: Session, producto_id: int) -> StockProductoOut:
-    obtener_producto(db, producto_id)  # 404 si no existe
+    obtener_producto(db, producto_id)
     row = db.execute(text(_stock_query()), {"pid": producto_id}).mappings().first()
     if not row:
         return StockProductoOut(
