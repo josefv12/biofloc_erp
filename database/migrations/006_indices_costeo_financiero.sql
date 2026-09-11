@@ -15,4 +15,4 @@ CREATE INDEX IF NOT EXISTS idx_detalles_venta_lote_venta
     ON biofloc.detalles_venta (lote_id, venta_id);
 
 CREATE INDEX IF NOT EXISTS idx_cosechas_lote_fecha
-    ON biofloc.cosechas (lote_id, fecha);
+    ON biofloc.cosechas (lote_id, fecha_hora);
