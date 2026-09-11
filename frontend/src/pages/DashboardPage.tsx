@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { fetchDashboardProduccion, fetchDashboardResumen } from "../api/dashboard";
+import { fetchDashboardFinanzas, fetchDashboardProduccion, fetchDashboardResumen } from "../api/dashboard";
 import { getComparativoEstanques } from "../api/analisis";
 import { ComparativoEstanquesPanel } from "./produccion/ComparativoEstanquesPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
@@ -83,6 +83,14 @@ export function DashboardPage() {
     queryKey: ["dashboard", "resumen", appliedDesde, appliedHasta],
     queryFn: () =>
       fetchDashboardResumen({
+        fecha_desde: appliedDesde || undefined,
+        fecha_hasta: appliedHasta || undefined,
+      }),
+  });
+  const finanzasQuery = useQuery({
+    queryKey: ["dashboard", "finanzas", appliedDesde, appliedHasta],
+    queryFn: () =>
+      fetchDashboardFinanzas({
         fecha_desde: appliedDesde || undefined,
         fecha_hasta: appliedHasta || undefined,
       }),
@@ -378,6 +386,38 @@ export function DashboardPage() {
                 to="/energia"
               />
             </div>
+          </Section>
+
+          <Section title="Rentabilidad">
+            {finanzasQuery.isLoading ? <LoadingState label="Cargando indicadores financieros…" /> : null}
+            {finanzasQuery.isError ? (
+              <div className="space-y-3">
+                <ErrorAlert message={apiErrorMessage(finanzasQuery.error)} />
+                <button type="button" className="bf-btn-secondary" onClick={() => void finanzasQuery.refetch()}>
+                  Reintentar finanzas
+                </button>
+              </div>
+            ) : null}
+            {finanzasQuery.data ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <KpiCard label="Ventas" value={formatCop(finanzasQuery.data.ventas)} hint={`${formatNumber(finanzasQuery.data.lotes_con_ventas)} lote(s) con ventas`} to="/finanzas" />
+                  <KpiCard label="Costo de ventas" value={formatCop(finanzasQuery.data.costo_ventas_estimado)} hint="Estimado" to="/finanzas" />
+                  <KpiCard label="Utilidad bruta" value={formatCop(finanzasQuery.data.utilidad_bruta)} hint={finanzasQuery.data.margen_bruto_pct == null ? "Margen N/D" : `Margen ${formatNumber(finanzasQuery.data.margen_bruto_pct, { maximumFractionDigits: 2 })} %`} to="/finanzas" />
+                  <KpiCard label="Gastos operativos" value={formatCop(finanzasQuery.data.gastos_operativos)} hint="Sin lote asignado" to="/finanzas" />
+                  <KpiCard label="Utilidad neta" value={formatCop(finanzasQuery.data.utilidad_neta)} hint={finanzasQuery.data.margen_neto_pct == null ? "Margen N/D" : `Margen ${formatNumber(finanzasQuery.data.margen_neto_pct, { maximumFractionDigits: 2 })} %`} to="/finanzas" emphasize={moneyNumber(finanzasQuery.data.utilidad_neta) < 0} />
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <KpiCard label="Kg vendidos" value={formatNumber(finanzasQuery.data.kg_vendidos, { maximumFractionDigits: 3 })} hint="Biomasa comercializada" />
+                  <KpiCard label="Costo promedio / kg" value={formatCop(finanzasQuery.data.costo_promedio_kg_vendido)} hint="Estimado" />
+                  <KpiCard label="Costo producción" value={formatCop(finanzasQuery.data.costo_produccion_lotes)} hint="Lotes vendidos" />
+                  <KpiCard label="Lotes vendidos" value={formatNumber(finanzasQuery.data.lotes_con_ventas)} to="/finanzas" />
+                </div>
+                <p className="mt-3 text-xs leading-5 text-[var(--bf-muted)]">
+                  Los costos y utilidades son estimados: alimento valorado con costo histórico de compra y gastos directamente asociados al lote; los gastos sin lote se presentan como operativos.
+                </p>
+              </>
+            ) : null}
           </Section>
 
           <Section title="Movimiento económico">
