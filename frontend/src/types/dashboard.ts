@@ -8,7 +8,6 @@ export type TotalN = {
   total: string | number;
 };
 
-/** Contrato exacto de GET /api/v1/dashboard/resumen */
 export type DashboardResumen = {
   periodo: PeriodoDashboard;
   ventas: TotalN;
@@ -46,4 +45,37 @@ export type DashboardProduccion = {
   mediciones_agua_fuera_rango: number;
   mediciones_biofloc_periodo: number;
   aplicaciones_biofloc_periodo: number;
+};
+
+export type FinanzasLote = {
+  lote_id: number;
+  codigo: string;
+  ventas: string | number;
+  kg_vendidos: string | number;
+  kg_cosechados: string | number;
+  costo_alimento: string | number;
+  gastos_lote: string | number;
+  costo_produccion: string | number;
+  costo_por_kg: string | number;
+  costo_ventas_estimado: string | number;
+  utilidad_bruta: string | number;
+  margen_bruto_pct: string | number | null;
+};
+
+export type DashboardFinanzas = {
+  periodo_desde: string | null;
+  periodo_hasta: string | null;
+  ventas: string | number;
+  costo_ventas_estimado: string | number;
+  utilidad_bruta: string | number;
+  gastos_operativos: string | number;
+  utilidad_neta: string | number;
+  margen_bruto_pct: string | number | null;
+  margen_neto_pct: string | number | null;
+  kg_vendidos: string | number;
+  costo_promedio_kg_vendido: string | number;
+  costo_produccion_lotes: string | number;
+  lotes_con_ventas: number;
+  lotes: FinanzasLote[];
+  metodologia: string;
 };
