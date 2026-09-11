@@ -8,6 +8,9 @@
 
 BEGIN;
 
+CREATE INDEX IF NOT EXISTS idx_detalles_venta_lote_id
+    ON biofloc.detalles_venta(lote_id);
+
 CREATE OR REPLACE FUNCTION biofloc.validar_disponibilidad_venta()
 RETURNS TRIGGER
 LANGUAGE plpgsql
