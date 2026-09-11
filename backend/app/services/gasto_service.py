@@ -99,12 +99,12 @@ def crear_gasto(db: Session, data: GastoCreate, usuario_id: int) -> Gasto:
     except HTTPException:
         db.rollback()
         raise
-    except IntegrityError as e:
+    except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error de integridad creando gasto: {e}")
-    except Exception as e:
+        raise HTTPException(status_code=400, detail="No fue posible registrar el gasto por una regla de integridad.")
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error creando gasto: {e}")
+        raise HTTPException(status_code=500, detail="No fue posible registrar el gasto por un error interno.")
 
     db.refresh(nuevo)
     return nuevo
