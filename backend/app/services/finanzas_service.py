@@ -55,16 +55,15 @@ def calcular_finanzas(
                   AND CAST(cos.fecha_hora AS date) <= v.fecha
             ), 0) AS kg_cosechados,
             COALESCE((
-                SELECT SUM(a.cantidad * COALESCE((
-                    SELECT SUM(dc.subtotal) / NULLIF(SUM(dc.cantidad), 0)
-                    FROM biofloc.detalles_compra dc
-                    JOIN biofloc.compras c ON c.id = dc.compra_id
-                    WHERE dc.producto_id = a.producto_id
-                      AND c.fecha <= CAST(a.fecha_hora AS date)
-                ), 0))
-                FROM biofloc.alimentaciones a
-                WHERE a.lote_id = l.id
+                SELECT SUM(mi.costo_total)
+                FROM biofloc.movimientos_inventario mi
+                JOIN biofloc.alimentaciones a
+                  ON a.id = mi.referencia_id
+                WHERE mi.referencia_tipo = 'ALIMENTACION'
+                  AND mi.lote_id IS NULL
+                  AND a.lote_id = l.id
                   AND CAST(a.fecha_hora AS date) <= v.fecha
+                  AND mi.costo_total IS NOT NULL
             ), 0) AS costo_alimento,
             COALESCE((
                 SELECT SUM(g.valor)
@@ -122,6 +121,7 @@ def calcular_finanzas(
         SELECT COALESCE(SUM(g.valor), 0)
         FROM biofloc.gastos g
         WHERE g.lote_id IS NULL
+          AND g.estanque_id IS NULL
           AND (:fecha_desde IS NULL OR g.fecha >= :fecha_desde)
           AND (:fecha_hasta IS NULL OR g.fecha <= :fecha_hasta)
     """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
@@ -168,8 +168,9 @@ def calcular_finanzas(
         lotes_con_ventas=len(lotes),
         lotes=salida,
         metodologia=(
-            "Costo estimado por lote: alimento consumido valorado al costo promedio histórico de compra vigente en cada alimentación, "
-            "más gastos directamente asociados al lote. El costo por kg se obtiene sobre kg cosechados acumulados hasta cada venta; "
-            "el costo de ventas es kg vendidos × costo promedio/kg. Los gastos sin lote se presentan como gastos operativos."
+            "Costo por lote: el alimento se toma del costo registrado en cada salida de inventario generada por una alimentación del lote; "
+            "por tanto, solo se imputa al lote el alimento realmente suministrado. Los demás costos directos se toman de gastos asociados al lote. "
+            "Los costos registrados a nivel de estanque se conservan separados para su posterior asignación entre lotes, evitando repartirlos arbitrariamente. "
+            "El costo por kg se obtiene sobre kg cosechados acumulados hasta cada venta; el costo de ventas es kg vendidos × costo promedio/kg."
         ),
     )
