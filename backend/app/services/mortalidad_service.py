@@ -7,6 +7,8 @@ Reglas de negocio aplicadas:
 - No se expone UPDATE ni DELETE porque el schema no contempla edición (no hay updated_at).
 - La nueva mortalidad no puede superar la población disponible
   (sembrados − mortalidad previa − cosecha previa).
+- La fila del lote se bloquea durante la validación para evitar sobrepasar la
+  población cuando llegan operaciones concurrentes.
 """
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -16,22 +18,11 @@ from app.models.mortalidad import Mortalidad
 from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.mortalidad import MortalidadCreate
-from app.services.poblacion_lote import (
-    exigir_dentro_de_disponible,
-    exigir_lote_en_produccion,
-    mensaje_mortalidad_excede,
-    obtener_poblacion_disponible,
-)
+from app.services.poblacion_lote import exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_mortalidad_excede, obtener_poblacion_disponible
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
-    entrada = Auditoria(
-        usuario_id=usuario_id,
-        tabla="mortalidades",
-        registro_id=registro_id,
-        accion=accion,
-        detalle=detalle,
-    )
+    entrada = Auditoria(usuario_id=usuario_id, tabla="mortalidades", registro_id=registro_id, accion=accion, detalle=detalle)
     db.add(entrada)
 
 
@@ -50,35 +41,24 @@ def obtener_mortalidad(db: Session, mortalidad_id: int) -> Mortalidad:
 
 
 def crear_mortalidad(db: Session, data: MortalidadCreate, usuario_id: int) -> Mortalidad:
-    lote = db.query(Lote).filter(Lote.id == data.lote_id).first()
+    # Bloquear el lote hace que la lectura de población y el INSERT sean
+    # seriales para ese lote dentro de la misma transacción.
+    lote = db.query(Lote).filter(Lote.id == data.lote_id).with_for_update().first()
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
 
     if data.fecha_hora.date() < lote.fecha_siembra:
-        raise HTTPException(
-            status_code=422,
-            detail="La fecha de la mortalidad no puede ser anterior a la siembra del lote",
-        )
+        raise HTTPException(status_code=422, detail="La fecha de la mortalidad no puede ser anterior a la siembra del lote")
 
     disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
-    exigir_dentro_de_disponible(
-        data.cantidad,
-        disponible,
-        mensaje_mortalidad_excede(data.cantidad, disponible),
-    )
+    exigir_dentro_de_disponible(data.cantidad, disponible, mensaje_mortalidad_excede(data.cantidad, disponible))
 
     nuevo = Mortalidad(**data.model_dump(), registrado_por=usuario_id)
     db.add(nuevo)
     try:
         db.flush()
-        _registrar_auditoria(
-            db,
-            usuario_id,
-            "INSERT",
-            nuevo.id,
-            {"lote_id": data.lote_id, "cantidad": data.cantidad, "causa": data.causa},
-        )
+        _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad": data.cantidad, "causa": data.causa})
         db.commit()
     except HTTPException:
         db.rollback()
