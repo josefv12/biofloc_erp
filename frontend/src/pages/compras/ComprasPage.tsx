@@ -7,7 +7,7 @@ import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
-import { listProductos, listProductosStock } from "../../api/inventory";
+import { listProductos } from "../../api/inventory";
 import { createCompra, listCompras } from "../../api/purchases";
 import { listUnidades } from "../../api/operations";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -42,7 +42,6 @@ export function ComprasPage() {
 
   const comprasQuery = useQuery({ queryKey: ["compras", fechaDesde, fechaHasta], queryFn: () => listCompras({ fechaDesde: fechaDesde || undefined, fechaHasta: fechaHasta || undefined }) });
   const productosQuery = useQuery({ queryKey: ["productos", { soloActivos: true }], queryFn: () => listProductos({ soloActivos: true }) });
-  const stockQuery = useQuery({ queryKey: ["productos-stock"], queryFn: listProductosStock });
   const unidadesQuery = useQuery({ queryKey: ["unidades"], queryFn: listUnidades });
   const unidades = useMemo(() => new Map((unidadesQuery.data ?? []).map((row) => [row.id, row])), [unidadesQuery.data]);
   const productos = useMemo(() => new Map((productosQuery.data ?? []).map((row) => [row.id, row])), [productosQuery.data]);
