@@ -40,9 +40,6 @@ def calcular_finanzas(
     if fecha_hasta is not None:
         where_sale += " AND v.fecha <= :fecha_hasta"
 
-    # Cada detalle de venta toma el costo promedio acumulado por kg del lote
-    # hasta la fecha de venta. El costo del alimento se calcula con el costo
-    # promedio histórico de compra del producto vigente en cada alimentación.
     rows = db.execute(text(f"""
         SELECT
             l.id AS lote_id,
@@ -54,7 +51,8 @@ def calcular_finanzas(
             COALESCE((
                 SELECT SUM(cos.peso_total_kg)
                 FROM biofloc.cosechas cos
-                WHERE cos.lote_id = l.id AND cos.fecha <= v.fecha
+                WHERE cos.lote_id = l.id
+                  AND CAST(cos.fecha_hora AS date) <= v.fecha
             ), 0) AS kg_cosechados,
             COALESCE((
                 SELECT SUM(a.cantidad * COALESCE((
@@ -120,9 +118,6 @@ def calcular_finanzas(
         total_kg += kg_vendidos
         total_production_cost += cogs
 
-    # Los gastos no asociados a lote son gastos operativos del período y no
-    # se incluyen en el costo de ventas para evitar mezclar costo productivo
-    # con gasto administrativo/comercial.
     gasto_periodo = db.execute(text("""
         SELECT COALESCE(SUM(g.valor), 0)
         FROM biofloc.gastos g
