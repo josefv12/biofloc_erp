@@ -80,7 +80,6 @@ def calcular_finanzas(
     total_ventas = ZERO
     total_cogs = ZERO
     total_kg = ZERO
-    total_production_cost = ZERO
 
     for r in rows:
         lote_id = int(r["lote_id"])
@@ -114,7 +113,15 @@ def calcular_finanzas(
         total_ventas += ventas
         total_cogs += cogs
         total_kg += kg_vendidos
-        total_production_cost += cogs
+
+    # Es el costo acumulado de producción de los lotes que tienen ventas en el
+    # periodo consultado. No debe confundirse con COGS/costo de ventas: el COGS
+    # solo representa la parte del costo de producción correspondiente a los kg
+    # vendidos.
+    total_production_cost = sum(
+        (item["costo_produccion"] for item in lotes.values()),
+        ZERO,
+    )
 
     gasto_periodo = db.execute(text("""
         SELECT COALESCE(SUM(g.valor), 0)
@@ -170,6 +177,7 @@ def calcular_finanzas(
             "Costo por lote: el alimento se toma del costo registrado en cada salida de inventario generada por una alimentación del lote; "
             "por tanto, solo se imputa al lote el alimento realmente suministrado. Los demás costos directos se toman de gastos asociados al lote. "
             "Los costos registrados a nivel de estanque se conservan separados para su posterior asignación entre lotes, evitando repartirlos arbitrariamente. "
-            "El costo por kg se obtiene sobre kg cosechados acumulados hasta cada venta; el costo de ventas es kg vendidos × costo promedio/kg."
+            "El costo por kg se obtiene sobre kg cosechados acumulados hasta cada venta; el costo de ventas es kg vendidos × costo promedio/kg. "
+            "Costo producción de lotes corresponde al costo acumulado de producción de los lotes con ventas en el periodo; no es COGS."
         ),
     )
