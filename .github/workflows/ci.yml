@@ -24,10 +24,10 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Verificar sintaxis Python
         run: python -m compileall -q app tests
-      - name: Ejecutar pruebas unitarias
+      - name: Ejecutar suite backend
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_poblacion_lote.py
+        run: pytest -q
 
   frontend:
     runs-on: ubuntu-latest
