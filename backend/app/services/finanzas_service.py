@@ -25,6 +25,35 @@ def _params(fecha_desde: Optional[date], fecha_hasta: Optional[date]) -> dict:
     return {k: v for k, v in (("fecha_desde", fecha_desde), ("fecha_hasta", fecha_hasta)) if v is not None}
 
 
+def calcular_costos_financieros_lote(
+    costo_alimento: Decimal,
+    gastos_lote: Decimal,
+    kg_cosechados: Decimal,
+    kg_vendidos: Decimal,
+    ventas: Decimal,
+) -> dict[str, Decimal | None]:
+    """Calcula métricas financieras de un lote sin acceder a la BD."""
+    alimento = Decimal(str(costo_alimento or 0))
+    gastos = Decimal(str(gastos_lote or 0))
+    cosechados = Decimal(str(kg_cosechados or 0))
+    vendidos = Decimal(str(kg_vendidos or 0))
+    ingresos = Decimal(str(ventas or 0))
+
+    costo_produccion = alimento + gastos
+    costo_por_kg = costo_produccion / cosechados if cosechados > ZERO else None
+    cogs = vendidos * costo_por_kg if costo_por_kg is not None else ZERO
+    utilidad = ingresos - cogs if costo_por_kg is not None else None
+    margen = (utilidad / ingresos * 100) if utilidad is not None and ingresos else None
+
+    return {
+        "costo_produccion": costo_produccion.quantize(D2, rounding=ROUND_HALF_UP),
+        "costo_por_kg": costo_por_kg.quantize(D2, rounding=ROUND_HALF_UP) if costo_por_kg is not None else None,
+        "costo_ventas_estimado": cogs.quantize(D2, rounding=ROUND_HALF_UP),
+        "utilidad_bruta": utilidad.quantize(D2, rounding=ROUND_HALF_UP) if utilidad is not None else None,
+        "margen_bruto_pct": margen.quantize(D2, rounding=ROUND_HALF_UP) if margen is not None else None,
+    }
+
+
 def calcular_finanzas(
     db: Session,
     fecha_desde: Optional[date] = None,
