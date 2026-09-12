@@ -27,7 +27,12 @@ jobs:
       - name: Ejecutar pruebas unitarias
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_finanzas.py
+        run: >-
+          pytest -q
+          tests/test_finanzas.py
+          tests/test_poblacion_lote.py
+          tests/test_indicadores_productivos_etapa3.py
+          tests/test_referencia_produccion_precedencia.py
 
   frontend:
     runs-on: ubuntu-latest
