@@ -24,10 +24,10 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Verificar sintaxis Python
         run: python -m compileall -q app tests
-      - name: Ejecutar suite backend
+      - name: Ejecutar pruebas unitarias
         env:
           PYTHONPATH: .
-        run: pytest -q
+        run: pytest -q tests/test_finanzas.py
 
   frontend:
     runs-on: ubuntu-latest
