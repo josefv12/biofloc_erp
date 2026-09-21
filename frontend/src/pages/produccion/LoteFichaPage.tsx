@@ -77,6 +77,7 @@ const TABS_OPERATIVOS: { id: TabId; label: string }[] = [
   { id: "produccion", label: "Producción" },
   { id: "agua", label: "Calidad de agua" },
   { id: "biofloc", label: "Biofloc" },
+  { id: "alimentacion", label: "Alimentación" },
 ];
 const TABS_OPERATIVOS_IDS = new Set(TABS_OPERATIVOS.map((item) => item.id));
 
