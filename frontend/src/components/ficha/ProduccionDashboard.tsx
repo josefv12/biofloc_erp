@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { ChartCard } from "../charts/ChartCard";
 import { ComparativeLineChart } from "../charts/ComparativeLineChart";
 import { TimeSeriesChart } from "../charts/TimeSeriesChart";
+import { CategoryBarChart } from "../charts/CategoryBarChart";
 import { ReferenciaVsLoteReal } from "../alimentacion/ReferenciaVsLoteReal";
 import { formatDate, formatDateTime, formatNumber } from "../../utils/format";
 import {
@@ -14,7 +15,7 @@ import {
   racionSobreBiomasaPct,
 } from "../../utils/indicadoresProduccion";
 import { buscarEvaluacion, colorSerieRealEvaluacion } from "../../utils/analisisStatus";
-import { toNumber, type PuntoComparativo } from "../../utils/series";
+import { toNumber, totalizarAlimentoKgPorDia, type PuntoComparativo } from "../../utils/series";
 import type { AnalisisLote } from "../../types/analisis";
 import { FichaBadge, FichaCard, FichaMetric, FichaSectionHeader } from "./FichaMetric";
 import {
@@ -115,6 +116,10 @@ export function ProduccionDashboard({ data }: { data: AnalisisLote }) {
     [serieAlim],
   );
   const evalAlim = buscarEvaluacion(data.evaluaciones, "alimentacion_diaria_kg");
+  const diasAlimentoKg = useMemo(
+    () => totalizarAlimentoKgPorDia(data.alimentacion_real),
+    [data.alimentacion_real],
+  );
 
   return (
     <section className="border-t-4 border-[var(--bf-bg)] bg-[color-mix(in_srgb,var(--bf-accent-soft)_55%,white)] px-6 py-6">
@@ -261,11 +266,24 @@ export function ProduccionDashboard({ data }: { data: AnalisisLote }) {
               />
             </ChartCard>
           </div>
-        ) : (
-          <p className="mt-3 text-sm text-[var(--bf-muted)]">
-            Gráfica de alimentación: se muestra con al menos dos días de registros convertibles a kg.
-          </p>
-        )}
+        ) : null}
+
+        <div className="mt-4">
+          <ChartCard
+            title="Alimento real por día (kg)"
+            unidad="kg"
+            descripcion="Registro histórico de alimentación por fecha, usando las alimentaciones reales del lote convertidas a kg."
+            vacio={diasAlimentoKg.length === 0}
+            vacioMensaje="Sin alimentaciones convertibles a kg en el rango."
+          >
+            <CategoryBarChart
+              data={diasAlimentoKg.map((punto) => ({ etiqueta: punto.etiqueta, cantidad: punto.cantidad }))}
+              barras={[{ key: "cantidad", nombre: "Real (kg)" }]}
+              unidad="kg"
+              digitos={3}
+            />
+          </ChartCard>
+        </div>
 
         {puntosFca.length >= 2 ? (
           <div className="mt-4">
