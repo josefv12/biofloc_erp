@@ -1288,6 +1288,22 @@ function SeccionAlimentacion({ data, modoOperativo = false }: { data: AnalisisLo
               </dl>
             </Panel>
           )}
+
+          <ChartCard
+            title="Alimento real por día (kg)"
+            unidad="kg"
+            descripcion="Registro histórico de alimentación por fecha, usando las alimentaciones reales del lote convertidas a kg."
+            vacio={diasKg.length === 0}
+            vacioMensaje="Sin alimentaciones convertibles a kg en el rango."
+          >
+            <CategoryBarChart
+              data={diasKg.map((punto) => ({ etiqueta: punto.etiqueta, cantidad: punto.cantidad }))}
+              barras={[{ key: "cantidad", nombre: "Real (kg)" }]}
+              unidad="kg"
+              digitos={3}
+            />
+          </ChartCard>
+
         </>
       ) : (
         <>
@@ -1605,7 +1621,7 @@ const TITULOS_HISTORICOS_PROHIBIDOS = [
   "peso promedio vs tiempo",
 ];
 
-export type SeccionOperativa = "resumen" | "produccion" | "agua" | "biofloc";
+export type SeccionOperativa = "resumen" | "produccion" | "agua" | "biofloc" | "alimentacion";
 
 function RecomendacionesOperativas({ data }: { data: AnalisisLote }) {
   if (data.recomendaciones.length === 0) return null;
@@ -1704,6 +1720,11 @@ export function VistaOperativaAnalisis({
         <section className="px-6 py-6">
           <SeccionBiofloc data={data} modoOperativo />
           <RecomendacionesOperativas data={{ ...data, recomendaciones: recsBiofloc }} />
+        </section>
+      ) : null}
+      {seccion === "alimentacion" ? (
+        <section className="px-6 py-6">
+          <SeccionAlimentacion data={data} modoOperativo />
         </section>
       ) : null}
     </div>
