@@ -53,6 +53,32 @@ def _validar_factor(factor_conversion: Decimal):
         raise HTTPException(status_code=422, detail="El factor de conversión debe ser mayor que cero")
 
 
+def _validar_unidad_alimento(
+    db: Session,
+    categoria_id: int | None,
+    unidad_id: int | None,
+    unidad_comercial_id: int | None,
+    factor_conversion: Decimal,
+) -> None:
+    if categoria_id is None:
+        return
+    categoria = db.query(CategoriaInventario).filter(CategoriaInventario.id == categoria_id).first()
+    if not categoria or categoria.nombre.strip().upper() != "ALIMENTO":
+        return
+    if unidad_id is None or unidad_comercial_id is None:
+        raise HTTPException(status_code=422, detail="Los productos de categoría ALIMENTO requieren unidad interna y comercial kg")
+    unidades = db.query(Unidad).filter(Unidad.id.in_([unidad_id, unidad_comercial_id])).all()
+    por_id = {u.id: u for u in unidades}
+    interna = por_id.get(unidad_id)
+    comercial = por_id.get(unidad_comercial_id)
+    if not interna or interna.simbolo.strip().lower() != "kg":
+        raise HTTPException(status_code=422, detail="Los productos ALIMENTO deben usar kg como unidad interna")
+    if not comercial or comercial.simbolo.strip().lower() != "kg":
+        raise HTTPException(status_code=422, detail="Los productos ALIMENTO deben usar kg como unidad comercial")
+    if Decimal(str(factor_conversion)) != Decimal("1"):
+        raise HTTPException(status_code=422, detail="Los productos ALIMENTO deben tener factor de conversión 1")
+
+
 def _producto_tiene_movimientos(db: Session, producto_id: int) -> bool:
     return bool(
         db.execute(
@@ -87,6 +113,7 @@ def obtener_producto(db: Session, producto_id: int) -> Producto:
 def crear_producto(db: Session, data: ProductoCreate, usuario_id: int) -> Producto:
     _verificar_referencias(db, data.categoria_id, data.unidad_id, data.unidad_comercial_id)
     _validar_factor(data.factor_conversion)
+    _validar_unidad_alimento(db, data.categoria_id, data.unidad_id, data.unidad_comercial_id, data.factor_conversion)
 
     ex_codigo = db.query(Producto).filter(Producto.codigo == data.codigo).first()
     if ex_codigo:
@@ -137,6 +164,12 @@ def actualizar_producto(db: Session, producto_id: int, data: ProductoUpdate, usu
     )
     if "factor_conversion" in cambios:
         _validar_factor(cambios["factor_conversion"])
+
+    categoria_id = cambios.get("categoria_id", p.categoria_id)
+    unidad_id = cambios.get("unidad_id", p.unidad_id)
+    unidad_comercial_id = cambios.get("unidad_comercial_id", p.unidad_comercial_id)
+    factor_conversion = cambios.get("factor_conversion", p.factor_conversion)
+    _validar_unidad_alimento(db, categoria_id, unidad_id, unidad_comercial_id, factor_conversion)
 
     campos_unidad = {"unidad_id", "unidad_comercial_id", "factor_conversion"}
     cambios_unidad = campos_unidad.intersection(cambios)
