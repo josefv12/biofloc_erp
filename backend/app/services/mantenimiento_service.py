@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.mantenimiento import TipoMantenimiento, Mantenimiento
+from app.services.validaciones_fecha import validar_fecha_no_futura
 from app.models.equipo import Equipo
 from app.models.auditoria import Auditoria
 from app.schemas.mantenimiento import TipoMantenimientoCreate, TipoMantenimientoUpdate, MantenimientoCreate
@@ -72,6 +73,7 @@ def obtener_mantenimiento(db: Session, mant_id: int) -> Mantenimiento:
 
 
 def crear_mantenimiento(db: Session, data: MantenimientoCreate, usuario_id: int) -> Mantenimiento:
+    validar_fecha_no_futura(data.fecha, "La fecha del mantenimiento")
     if not db.query(Equipo).filter(Equipo.id == data.equipo_id).first(): raise HTTPException(status_code=404, detail=f"Equipo {data.equipo_id} no existe")
     if not db.query(TipoMantenimiento).filter(TipoMantenimiento.id == data.tipo_mantenimiento_id).first(): raise HTTPException(status_code=404, detail=f"Tipo de mantenimiento {data.tipo_mantenimiento_id} no existe")
     if not data.descripcion or not data.descripcion.strip(): raise HTTPException(status_code=422, detail="descripción requerida")
