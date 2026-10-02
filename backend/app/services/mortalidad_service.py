@@ -51,7 +51,7 @@ def crear_mortalidad(db: Session, data: MortalidadCreate, usuario_id: int) -> Mo
     if data.fecha_hora.date() < lote.fecha_siembra:
         raise HTTPException(status_code=422, detail="La fecha de la mortalidad no puede ser anterior a la siembra del lote")
 
-    disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
+    disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)
     exigir_dentro_de_disponible(data.cantidad, disponible, mensaje_mortalidad_excede(data.cantidad, disponible))
 
     nuevo = Mortalidad(**data.model_dump(), registrado_por=usuario_id)
