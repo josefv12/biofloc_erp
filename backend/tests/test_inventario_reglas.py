@@ -32,3 +32,13 @@ def test_fecha_hora_futura_rechazada():
 def test_fecha_colombia_futura_rechazada():
     with pytest.raises(Exception):
         validar_fecha_no_futura(date.today() + timedelta(days=1))
+
+
+def test_movimiento_salida_toma_bloqueo_antes_de_valorar():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "movimiento_inventario_service.py"
+    text = source.read_text(encoding="utf-8")
+    lock = "with_for_update()"
+    outbound = text.index("if efecto == -1:")
+    cost = text.index("_costo_promedio_stock_as_of", outbound)
+    assert text.index(lock, outbound) < cost
