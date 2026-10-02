@@ -94,7 +94,10 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list, fecha_venta: date
     for d in detalles:
         solicitada_por_lote[d.lote_id] = solicitada_por_lote.get(d.lote_id, Decimal("0")) + Decimal(d.cantidad)
 
-    for lote_id, solicitada in solicitada_por_lote.items():
+    # Orden determinista de bloqueo: evita deadlocks entre ventas concurrentes
+    # que involucren los mismos lotes en distinto orden.
+    for lote_id in sorted(solicitada_por_lote):
+        solicitada = solicitada_por_lote[lote_id]
         lote = (
             db.query(Lote)
             .filter(Lote.id == lote_id)
