@@ -99,7 +99,9 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
     db.add(nuevo)
     try:
         db.flush()
-        restante = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
+        # La población para decidir cierre debe corresponder a la fecha del
+        # evento, no al estado actual, porque la cosecha puede ser retroactiva.
+        restante = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)
         if restante == 0:
             _cerrar_lote_si_sin_peces(db, lote, usuario_id, data.fecha_hora)
         _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad_peces": data.cantidad_peces, "peso_total_kg": data.peso_total_kg, "peso_promedio_g": payload["peso_promedio_g"] if payload.get("peso_promedio_g") is not None else None, "poblacion_restante": restante})
