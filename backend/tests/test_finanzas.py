@@ -50,3 +50,12 @@ def test_calculo_financiero_admite_costos_cero():
     assert resultado["costo_ventas_estimado"] == Decimal("0.00")
     assert resultado["utilidad_bruta"] == Decimal("300000.00")
     assert resultado["margen_bruto_pct"] == Decimal("100.00")
+
+
+def test_finanzas_historical_uses_colombia_local_date_expression():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "finanzas_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "AT TIME ZONE 'America/Bogota'" in text
+    assert "CAST(cos.fecha_hora AS date)" not in text
+    assert "CAST(a.fecha_hora AS date)" not in text
