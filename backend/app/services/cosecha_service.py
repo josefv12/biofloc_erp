@@ -76,6 +76,19 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
     disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)
     exigir_dentro_de_disponible(data.cantidad_peces, disponible, mensaje_cosecha_excede(data.cantidad_peces, disponible))
 
+    promedio_calculado = _peso_promedio_g(data.peso_total_kg, data.cantidad_peces)
+    if data.peso_promedio_g is not None:
+        diferencia = abs(data.peso_promedio_g - promedio_calculado)
+        tolerancia = Decimal("0.001")
+        if diferencia > tolerancia:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "El peso promedio indicado no coincide con el peso total y la cantidad de peces. "
+                    f"Esperado: {promedio_calculado} g."
+                ),
+            )
+
     payload = data.model_dump()
     if payload.get("peso_promedio_g") is None:
         payload["peso_promedio_g"] = _peso_promedio_g(data.peso_total_kg, data.cantidad_peces)
