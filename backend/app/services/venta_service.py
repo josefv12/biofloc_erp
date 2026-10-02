@@ -15,7 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from fastapi import HTTPException
 
-from app.models.venta import Venta, DetalleVenta
+from app.models.venta
+from app.services.validaciones_fecha import validar_fecha_no_futura import Venta, DetalleVenta
 from app.models.auditoria import Auditoria
 from app.models.lote import Lote
 from app.models.cosecha import Cosecha
@@ -127,6 +128,7 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list, fecha_venta: date
 
 
 def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
+    validar_fecha_no_futura(data.fecha, "La fecha de la venta")
     if not data.detalles:
         raise HTTPException(status_code=422, detail="La venta debe tener al menos 1 detalle")
 
