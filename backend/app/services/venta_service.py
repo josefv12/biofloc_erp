@@ -7,7 +7,8 @@
 - Una venta nunca puede superar la biomasa cosechada y aún disponible del lote.
 """
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
@@ -70,7 +71,17 @@ def obtener_venta(db: Session, venta_id: int) -> Venta:
     return v
 
 
-def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
+def _fin_dia_colombia_utc(fecha: date) -> datetime:
+    """Límite superior exclusivo para una fecha comercial en America/Bogota."""
+    siguiente = fecha + timedelta(days=1)
+    return datetime.combine(
+        siguiente,
+        time.min,
+        tzinfo=ZoneInfo("America/Bogota"),
+    ).astimezone(timezone.utc)
+
+
+def _validar_disponibilidad_lotes(db: Session, detalles: list, fecha_venta: date) -> None:
     """Bloquea cada lote y valida la biomasa disponible para venta.
 
     La cantidad comercial de ventas es kg de biomasa cosechada. El bloqueo de la
@@ -92,11 +103,16 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
         if not lote:
             raise HTTPException(status_code=404, detail=f"Lote {lote_id} no existe")
 
+        limite_cosecha = _fin_dia_colombia_utc(fecha_venta)
         cosechado = db.query(func.coalesce(func.sum(Cosecha.peso_total_kg), 0)).filter(
-            Cosecha.lote_id == lote_id
+            Cosecha.lote_id == lote_id,
+            Cosecha.fecha_hora < limite_cosecha,
         ).scalar()
-        vendido = db.query(func.coalesce(func.sum(DetalleVenta.cantidad), 0)).filter(
-            DetalleVenta.lote_id == lote_id
+        vendido = db.query(func.coalesce(func.sum(DetalleVenta.cantidad), 0)).join(
+            Venta, Venta.id == DetalleVenta.venta_id
+        ).filter(
+            DetalleVenta.lote_id == lote_id,
+            Venta.fecha <= fecha_venta,
         ).scalar()
         disponible = max(Decimal(str(cosechado or 0)) - Decimal(str(vendido or 0)), Decimal("0"))
 
@@ -123,7 +139,7 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
             raise HTTPException(status_code=422, detail=f"El precio unitario debe ser >= 0 (detalle #{idx})")
 
     try:
-        _validar_disponibilidad_lotes(db, data.detalles)
+        _validar_disponibilidad_lotes(db, data.detalles, data.fecha)
 
         total = Decimal(0)
         detalles_obj = []
