@@ -38,26 +38,24 @@ def test_mensajes_negocio():
     )
 
 
-def test_fca_factor_solo_g_y_kg():
-    assert FACTOR_A_KG == {"kg": Decimal("1"), "g": Decimal("0.001")}
+def test_fca_alimento_solo_kg():
+    assert FACTOR_A_KG == {"kg": Decimal("1")}
 
 
-def test_alimento_kg_gramos_queda_en_3_decimales():
+def test_alimento_kg_rechaza_gramos():
     total, razon = _alimento_kg(
         [AlimentoUnidadOut(unidad="g", cantidad=Decimal("3.500"))]
     )
-    assert razon is None
-    assert total == Decimal("0.004")
+    assert total is None
+    assert razon == "UNIDAD_ALIMENTO_INCOMPATIBLE"
 
+
+def test_alimento_kg_suma_solo_kg():
     total, razon = _alimento_kg(
-        [
-            AlimentoUnidadOut(unidad="kg", cantidad=Decimal("0.5")),
-            AlimentoUnidadOut(unidad="g", cantidad=Decimal("500")),
-        ]
+        [AlimentoUnidadOut(unidad="kg", cantidad=Decimal("0.5"))]
     )
-    assert total is not None
+    assert total == Decimal("0.500")
     assert razon is None
-    assert total == Decimal("0.5") + Decimal("0.5")
 
 
 def test_alimento_unidad_no_masica_no_se_convierte():
