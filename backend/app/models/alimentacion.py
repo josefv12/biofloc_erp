@@ -1,6 +1,7 @@
 from sqlalchemy import BigInteger, String, DateTime, Text, ForeignKey, Index, CheckConstraint, Numeric, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from app.core.database import Base
@@ -18,7 +19,7 @@ class Alimentacion(Base):
     lote_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("lotes.id"), nullable=False)
     producto_id: Mapped[int] = mapped_column(BigInteger, nullable=False) # FK to productos(id), omitted relationship to avoid cascade model creation
     fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    cantidad: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    cantidad: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     observaciones: Mapped[str | None] = mapped_column(Text, nullable=True)
     registrado_por: Mapped[int] = mapped_column(BigInteger, ForeignKey("usuarios.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
