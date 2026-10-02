@@ -15,8 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from fastapi import HTTPException
 
-from app.models.venta
-from app.services.validaciones_fecha import validar_fecha_no_futura import Venta, DetalleVenta
+from app.models.venta import Venta, DetalleVenta
+from app.services.validaciones_fecha import validar_fecha_no_futura
 from app.models.auditoria import Auditoria
 from app.models.lote import Lote
 from app.models.cosecha import Cosecha
