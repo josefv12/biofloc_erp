@@ -104,6 +104,21 @@ def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
     return Decimal(str(row or 0))
 
 
+def obtener_stock_as_of(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
+    """Retorna el stock histórico del producto hasta la fecha/hora indicada."""
+    row = db.execute(text("""
+        SELECT COALESCE(SUM(
+            CASE WHEN tm.afecta_stock = 1 THEN mi.cantidad ELSE -mi.cantidad END
+        ), 0)
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm
+          ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = :pid
+          AND mi.fecha_hora <= :fecha_hora
+    """), {"pid": producto_id, "fecha_hora": fecha_hora}).scalar()
+    return Decimal(str(row or 0))
+
+
 def listar_movimientos_inventario(
     db: Session,
     producto_id: int | None = None,
@@ -152,13 +167,8 @@ def crear_movimiento_inventario(
     fecha_hora = data.fecha_hora or datetime.now(timezone.utc)
 
     if tipo.afecta_stock == -1:
-        row = db.execute(text("""
-            SELECT COALESCE(stock_actual, 0)
-            FROM biofloc.vista_stock_productos
-            WHERE producto_id = :pid
-        """), {"pid": producto.id}).scalar()
-        stock_actual = Decimal(str(row or 0))
-        if (stock_actual - data.cantidad) < Decimal("0"):
+        stock_as_of = obtener_stock_as_of(db, producto.id, fecha_hora)
+        if (stock_as_of - data.cantidad) < Decimal("0"):
             unidad = db.query(Unidad).filter(Unidad.id == producto.unidad_id).first()
             simbolo = unidad.simbolo if unidad else ""
             raise HTTPException(
