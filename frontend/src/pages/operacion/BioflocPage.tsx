@@ -528,7 +528,10 @@ export function AplicacionesBioflocPanel({
             <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
           </Field>
           <Field label="Unidad">
-            <input className="bf-input" {...form.register("unidad")} />
+            <input className="bf-input" {...form.register("unidad")} placeholder="Ej.: kg, L, g" />
+            <p className="mt-1 text-xs text-[var(--bf-muted)]">
+              Si selecciona un producto, el sistema usa automáticamente la unidad interna de ese producto.
+            </p>
           </Field>
           <Field label="Observaciones">
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
