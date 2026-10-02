@@ -42,3 +42,19 @@ def test_movimiento_salida_toma_bloqueo_antes_de_valorar():
     outbound = text.index("if efecto == -1:")
     cost = text.index("_costo_promedio_stock_as_of", outbound)
     assert text.index(lock, outbound) < cost
+
+
+def test_venta_bloquea_lotes_en_orden_determinista():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "venta_service.py"
+    text = source.read_text(encoding="utf-8")
+    marker = "for lote_id in sorted(solicitada_por_lote):"
+    assert marker in text
+
+
+def test_compra_bloquea_productos_en_orden_determinista():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "compra_service.py"
+    text = source.read_text(encoding="utf-8")
+    marker = 'for producto_id in sorted({dp["producto_id"] for dp in detalles_procesados}):'
+    assert marker in text
