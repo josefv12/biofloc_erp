@@ -9,6 +9,8 @@ from app.models.compra import Compra
 from app.services.validaciones_fecha import validar_fecha_no_futura
 from app.models.detalle_compra import DetalleCompra
 from app.models.producto import Producto
+from app.models.unidad import Unidad
+from app.models.categoria_inventario import CategoriaInventario
 from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
 from app.models.auditoria import Auditoria
 from app.schemas.compra import CompraCreate
@@ -74,6 +76,15 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             raise HTTPException(status_code=404, detail=f"El producto no existe (detalle #{idx})")
         if not prod.activo:
             raise HTTPException(status_code=422, detail=f"El producto está inactivo (detalle #{idx})")
+
+        categoria = db.query(CategoriaInventario).filter(CategoriaInventario.id == prod.categoria_id).first()
+        if categoria and categoria.nombre.strip().upper() == "ALIMENTO":
+            unidades = db.query(Unidad).filter(Unidad.id.in_([prod.unidad_id, prod.unidad_comercial_id])).all()
+            por_id = {u.id: u for u in unidades}
+            interna = por_id.get(prod.unidad_id)
+            comercial = por_id.get(prod.unidad_comercial_id)
+            if not interna or interna.simbolo.strip().lower() != "kg" or not comercial or comercial.simbolo.strip().lower() != "kg" or Decimal(str(prod.factor_conversion)) != Decimal("1"):
+                raise HTTPException(status_code=422, detail=f"El producto ALIMENTO debe estar configurado en kg/kg con factor 1 (detalle #{idx})")
 
         cantidad = _quant3(din.cantidad)
         pu = _quant2(din.precio_unitario)
