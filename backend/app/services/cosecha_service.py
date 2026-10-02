@@ -100,7 +100,7 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
         restante = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
         if restante == 0:
             _cerrar_lote_si_sin_peces(db, lote, usuario_id, data.fecha_hora)
-        _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad_peces": data.cantidad_peces, "peso_total_kg": float(data.peso_total_kg), "peso_promedio_g": float(payload["peso_promedio_g"]) if payload.get("peso_promedio_g") is not None else None, "poblacion_restante": restante})
+        _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad_peces": data.cantidad_peces, "peso_total_kg": data.peso_total_kg, "peso_promedio_g": payload["peso_promedio_g"] if payload.get("peso_promedio_g") is not None else None, "poblacion_restante": restante})
         db.commit()
     except HTTPException:
         db.rollback()
