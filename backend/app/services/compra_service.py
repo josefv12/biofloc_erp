@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
-from app.models.compra import Compra
+from app.models.compra
+from app.services.validaciones_fecha import validar_fecha_no_futura import Compra
 from app.models.detalle_compra import DetalleCompra
 from app.models.producto import Producto
 from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
@@ -60,6 +61,7 @@ def _quant3(d: Decimal) -> Decimal:
 
 
 def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
+    validar_fecha_no_futura(payload.fecha, "La fecha de la compra")
     if not payload.detalles or len(payload.detalles) == 0:
         raise HTTPException(status_code=422, detail="La compra requiere al menos 1 detalle")
 
