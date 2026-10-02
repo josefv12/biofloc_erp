@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime, date, timezone
+from datetime import datetime, date, time, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
@@ -116,7 +117,7 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
                 producto_id=dp["producto_id"],
                 tipo_movimiento_id=tipo_entrada.id,
                 cantidad=dp["cantidad"],
-                fecha_hora=datetime.now(timezone.utc),
+                fecha_hora=datetime.combine(payload.fecha, time.min, tzinfo=ZoneInfo("America/Bogota")).astimezone(timezone.utc),
                 referencia_tipo=REFERENCIA_TIPO_DETALLE_COMPRA,
                 referencia_id=detalle.id,
                 observaciones=f"Compra #{compra.id} generada",
