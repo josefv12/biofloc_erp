@@ -26,6 +26,7 @@ from app.schemas.aplicacion_biofloc import AplicacionBioflocCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
 from app.services.movimiento_inventario_service import crear_movimiento_inventario, _obtener_tipo_salida_id
 from app.services.poblacion_lote import exigir_lote_en_produccion
+from app.services.validaciones_fecha import validar_no_futuro
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -62,6 +63,7 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
+    validar_no_futuro(data.fecha_hora, "La fecha de la aplicación")
 
     # 2. Validar tipo_aplicacion_id
     tipo = db.query(TipoAplicacionBiofloc).filter(TipoAplicacionBiofloc.id == data.tipo_aplicacion_id).first()
