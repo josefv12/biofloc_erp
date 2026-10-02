@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
 from decimal import Decimal
 
@@ -14,6 +14,7 @@ class MovimientoInventarioBase(BaseModel):
     observaciones: Optional[str] = None
     costo_unitario: Optional[Decimal] = Field(None, ge=0, max_digits=14, decimal_places=2)
     costo_total: Optional[Decimal] = Field(None, ge=0, max_digits=16, decimal_places=2)
+    efecto_stock: Optional[Literal[-1, 1]] = None
 
 
 class MovimientoInventarioCreate(MovimientoInventarioBase):
