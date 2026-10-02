@@ -1008,4 +1008,90 @@ VALUES
 -- FIN
 -- ============================================================
 
+    
+-- Integridad productiva a nivel de base de datos.
+CREATE OR REPLACE FUNCTION biofloc.validar_fecha_evento_lote()
+RETURNS TRIGGER LANGUAGE plpgsql AS $
+DECLARE v_siembra DATE;
+BEGIN
+    SELECT fecha_siembra INTO v_siembra FROM lotes WHERE id=NEW.lote_id;
+    IF v_siembra IS NULL THEN
+        RAISE EXCEPTION 'Lote % no existe', NEW.lote_id USING ERRCODE='foreign_key_violation';
+    END IF;
+    IF NEW.fecha_hora < (v_siembra::timestamp AT TIME ZONE 'America/Bogota') THEN
+        RAISE EXCEPTION 'La fecha del evento no puede ser anterior a la siembra del lote'
+            USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END; $;
+
+CREATE TRIGGER trg_validar_fecha_biometria
+BEFORE INSERT OR UPDATE ON biometrias
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
+CREATE TRIGGER trg_validar_fecha_mortalidad
+BEFORE INSERT OR UPDATE ON mortalidades
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
+CREATE TRIGGER trg_validar_fecha_cosecha
+BEFORE INSERT OR UPDATE ON cosechas
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
+
+CREATE OR REPLACE FUNCTION biofloc.validar_muestra_biometria()
+RETURNS TRIGGER LANGUAGE plpgsql AS $
+DECLARE v_sembrados INTEGER; v_salidas INTEGER;
+BEGIN
+    SELECT cantidad_sembrada INTO v_sembrados FROM lotes WHERE id=NEW.lote_id;
+    SELECT COALESCE(SUM(m.cantidad),0) INTO v_salidas
+      FROM mortalidades m WHERE m.lote_id=NEW.lote_id AND m.fecha_hora<=NEW.fecha_hora;
+    SELECT v_salidas + COALESCE(SUM(c.cantidad_peces),0) INTO v_salidas
+      FROM cosechas c WHERE c.lote_id=NEW.lote_id AND c.fecha_hora<=NEW.fecha_hora;
+    IF NEW.cantidad_muestra > GREATEST(v_sembrados-v_salidas,0) THEN
+        RAISE EXCEPTION 'La muestra biométrica excede la población disponible. Disponible: %, solicitado: %',
+            GREATEST(v_sembrados-v_salidas,0), NEW.cantidad_muestra USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END; $;
+
+CREATE TRIGGER trg_validar_muestra_biometria
+BEFORE INSERT OR UPDATE ON biometrias
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_muestra_biometria();
+
+CREATE OR REPLACE FUNCTION biofloc.validar_promedio_cosecha()
+RETURNS TRIGGER LANGUAGE plpgsql AS $
+DECLARE v_esperado NUMERIC;
+BEGIN
+    v_esperado := (NEW.peso_total_kg * 1000) / NULLIF(NEW.cantidad_peces, 0);
+    IF NEW.peso_promedio_g IS NOT NULL AND ABS(NEW.peso_promedio_g-v_esperado)>0.001 THEN
+        RAISE EXCEPTION 'El peso promedio de la cosecha no coincide. Esperado: %, recibido: %',
+            ROUND(v_esperado,3), NEW.peso_promedio_g USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END; $;
+
+CREATE TRIGGER trg_validar_promedio_cosecha
+BEFORE INSERT OR UPDATE ON cosechas
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_promedio_cosecha();
+
+CREATE OR REPLACE FUNCTION biofloc.validar_fecha_evento_no_futura()
+RETURNS TRIGGER LANGUAGE plpgsql AS $
+BEGIN
+    IF NEW.fecha_hora > NOW() THEN
+        RAISE EXCEPTION 'La fecha/hora del evento no puede estar en el futuro'
+            USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END; $;
+
+CREATE TRIGGER trg_validar_fecha_biometria_futura BEFORE INSERT OR UPDATE ON biometrias
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+CREATE TRIGGER trg_validar_fecha_mortalidad_futura BEFORE INSERT OR UPDATE ON mortalidades
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+CREATE TRIGGER trg_validar_fecha_cosecha_futura BEFORE INSERT OR UPDATE ON cosechas
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+CREATE TRIGGER trg_validar_fecha_alimentacion_futura BEFORE INSERT OR UPDATE ON alimentaciones
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+CREATE TRIGGER trg_validar_fecha_medicion_biofloc_futura BEFORE INSERT OR UPDATE ON mediciones_biofloc
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+CREATE TRIGGER trg_validar_fecha_aplicacion_biofloc_futura BEFORE INSERT OR UPDATE ON aplicaciones_biofloc
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+
 COMMIT;
