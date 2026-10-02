@@ -204,7 +204,7 @@ export function MedicionesBioflocPanel({
                   lote_id: loteId ?? enProduccion[0]?.id ?? 0,
                   fecha_hora: toDatetimeLocalValue(),
                   volumen_sedimentable: "",
-                  unidad: unidadCatalogo,
+                  unidad: "mL/L",
                   relacion_cn: "",
                   observaciones: "",
                 });
