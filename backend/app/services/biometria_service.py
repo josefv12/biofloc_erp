@@ -14,6 +14,7 @@ from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.biometria import BiometriaCreate
 from app.services.poblacion_lote import exigir_lote_en_produccion, obtener_poblacion_disponible, mensaje_mortalidad_excede
+from app.services.validaciones_fecha import validar_no_futuro
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -47,6 +48,7 @@ def crear_biometria(db: Session, data: BiometriaCreate, usuario_id: int) -> Biom
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
+    validar_no_futuro(data.fecha_hora, "La fecha de la biometría")
     
     poblacion_disponible = obtener_poblacion_disponible(
         db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora
