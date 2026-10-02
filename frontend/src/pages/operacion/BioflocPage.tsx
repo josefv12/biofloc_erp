@@ -524,17 +524,17 @@ export function AplicacionesBioflocPanel({
           <Field label="Fecha y hora">
             <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
           </Field>
-          <Field label="Cantidad (opcional)">
+          <Field label="Cantidad aplicada (opcional)">
             <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
           </Field>
-          <Field label="Unidad (opcional, texto del API)">
+          <Field label="Unidad">
             <input className="bf-input" {...form.register("unidad")} />
           </Field>
           <Field label="Observaciones">
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
           </Field>
           <p className="text-xs text-[var(--bf-muted)]">
-            Esta aplicación no descuenta inventario. No se llama a movimientos.
+            Si se selecciona un producto y una cantidad mayor que 0, la aplicación genera automáticamente una salida de inventario en la misma fecha y hora.
           </p>
           <button
             type="submit"
