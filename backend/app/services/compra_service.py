@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
-from app.models.compra
-from app.services.validaciones_fecha import validar_fecha_no_futura import Compra
+from app.models.compra import Compra
+from app.services.validaciones_fecha import validar_fecha_no_futura
 from app.models.detalle_compra import DetalleCompra
 from app.models.producto import Producto
 from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
