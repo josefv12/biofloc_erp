@@ -108,7 +108,7 @@ export function ComprasPage() {
             const simboloInterno = unidadInterna?.simbolo;
             const factor = producto?.factor_conversion;
             if (!producto_id || !Number.isFinite(cantidadPresentada) || !Number.isFinite(precioPresentado)) { setFormError("Cada línea requiere producto, cantidad y precio unitario."); return; }
-            const esAlimento = (categorias.get(producto.categoria_id) ?? "").trim().toUpperCase() === "ALIMENTO";
+            const esAlimento = producto ? (categorias.get(producto.categoria_id) ?? "").trim().toUpperCase() === "ALIMENTO" : false;
             const cantidad = esAlimento ? cantidadPresentada : cantidadDesdePresentacion(cantidadPresentada, simboloInterno, factor);
             const precio_unitario = esAlimento ? precioPresentado : precioDesdePresentacion(precioPresentado, simboloInterno, factor);
             if (!Number.isFinite(cantidad) || !Number.isFinite(precio_unitario) || cantidad <= 0 || precio_unitario < 0) { setFormError("La cantidad debe ser mayor que 0 y el precio unitario no puede ser negativo."); return; }
