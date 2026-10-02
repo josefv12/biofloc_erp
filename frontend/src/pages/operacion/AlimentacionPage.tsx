@@ -34,7 +34,7 @@ export function AlimentacionPanel({ loteId, lotes, compact }: { loteId?: number;
   const lotesMap = useMemo(() => new Map(lotes.map((row) => [row.id, row])), [lotes]); const enProduccion = lotesActivos(lotes);
   const loteContexto = loteId ? lotes.find((row) => row.id === loteId) : undefined; const puedeRegistrarLote = !loteId || esLoteActivo(loteContexto);
   const form = useForm({ defaultValues: { lote_id: loteId ?? 0, producto_id: 0, fecha_hora: toDatetimeLocalValue(), cantidad: "", observaciones: "" } });
-  const loteFormId = form.watch("lote_id") || loteId; form.watch("producto_id");
+  const loteFormId = form.watch("lote_id") || loteId;
   const etiquetaCantidad = "Cantidad suministrada (kg)";
   const contextoQuery = useQuery({ queryKey: ["contexto-alimentacion", loteFormId], queryFn: () => getContextoAlimentacionLote(Number(loteFormId)), enabled: open && Boolean(loteFormId) }); const ref = contextoQuery.data?.referencia_activa;
   const [stockMsg, setStockMsg] = useState<string | null>(null);
