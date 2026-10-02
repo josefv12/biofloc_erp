@@ -358,6 +358,7 @@ CREATE TABLE movimientos_inventario (
     observaciones TEXT,
     registrado_por BIGINT NOT NULL REFERENCES usuarios(id),
     costo_unitario       NUMERIC(14,2) CHECK (costo_unitario >= 0),
+    efecto_stock         SMALLINT CHECK (efecto_stock IN (-1, 1)),
     costo_total          NUMERIC(16,2) CHECK (costo_total >= 0),
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -789,7 +790,12 @@ SELECT
     p.nombre,
     u.simbolo AS unidad,
     COALESCE(
-        SUM(mi.cantidad * tmi.afecta_stock),
+        SUM(
+            CASE
+                WHEN tmi.nombre = 'AJUSTE' THEN mi.cantidad * mi.efecto_stock
+                ELSE mi.cantidad * tmi.afecta_stock
+            END
+        ),
         0
     ) AS stock_actual,
     p.stock_minimo
@@ -944,7 +950,8 @@ INSERT INTO tipos_movimiento_inventario
     (nombre, descripcion, afecta_stock)
 VALUES
     ('ENTRADA', 'Entrada de producto al inventario', 1),
-    ('SALIDA', 'Salida de producto del inventario', -1);
+    ('SALIDA', 'Salida de producto del inventario', -1),
+    ('AJUSTE', 'Ajuste manual de inventario con efecto positivo o negativo', 1);
 
 INSERT INTO categorias_gasto (nombre, descripcion)
 VALUES
