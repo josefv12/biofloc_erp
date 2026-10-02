@@ -188,7 +188,7 @@ export function MedicionesBioflocPanel({
     [usuariosQuery.data],
   );
   const rows = compact ? (query.data ?? []).slice(0, 5) : (query.data ?? []);
-  const unidadCatalogo = query.data?.[0]?.unidad ?? "";
+
 
   return (
     <div>
