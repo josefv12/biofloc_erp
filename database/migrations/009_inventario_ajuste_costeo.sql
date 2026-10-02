@@ -176,4 +176,44 @@ GROUP BY
     u.simbolo,
     p.stock_minimo;
 
+-- Reglas adicionales de integridad: solo los tres tipos permitidos y coherencia
+-- entre costo total y costo unitario/cantidad cuando el costo se informa.
+CREATE OR REPLACE FUNCTION biofloc.validar_integridad_movimiento_inventario()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $
+DECLARE
+    v_nombre VARCHAR(30);
+BEGIN
+    SELECT nombre INTO v_nombre
+      FROM biofloc.tipos_movimiento_inventario
+     WHERE id = NEW.tipo_movimiento_id;
+
+    IF v_nombre NOT IN ('ENTRADA', 'SALIDA', 'AJUSTE') THEN
+        RAISE EXCEPTION 'Tipo de movimiento no permitido: %', COALESCE(v_nombre, NEW.tipo_movimiento_id::text)
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF NEW.costo_unitario IS NOT NULL AND NEW.costo_unitario < 0 THEN
+        RAISE EXCEPTION 'El costo unitario no puede ser negativo' USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.costo_total IS NOT NULL AND NEW.costo_total < 0 THEN
+        RAISE EXCEPTION 'El costo total no puede ser negativo' USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF NEW.costo_unitario IS NOT NULL AND NEW.costo_total IS NOT NULL
+       AND ABS(NEW.costo_total - (NEW.cantidad * NEW.costo_unitario)) > 0.01 THEN
+        RAISE EXCEPTION 'Costo total inconsistente con cantidad y costo unitario' USING ERRCODE = 'check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS trg_validar_integridad_movimiento_inventario
+ON biofloc.movimientos_inventario;
+CREATE TRIGGER trg_validar_integridad_movimiento_inventario
+BEFORE INSERT OR UPDATE ON biofloc.movimientos_inventario
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_integridad_movimiento_inventario();
+
 COMMIT;
