@@ -102,6 +102,19 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
         db.add(compra)
         db.flush()
 
+        # Adquirir todos los bloqueos de producto en orden determinista antes
+        # de generar movimientos. Evita deadlocks entre compras concurrentes
+        # con productos en distinto orden.
+        for producto_id in sorted({dp["producto_id"] for dp in detalles_procesados}):
+            producto = (
+                db.query(Producto)
+                .filter(Producto.id == producto_id)
+                .with_for_update()
+                .first()
+            )
+            if not producto:
+                raise HTTPException(status_code=404, detail=f"El producto {producto_id} no existe")
+
         detalle_objetos: list[tuple[DetalleCompra, int]] = []
 
         for dp in detalles_procesados:
