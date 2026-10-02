@@ -73,7 +73,7 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
     if data.fecha_hora.date() < lote.fecha_siembra:
         raise HTTPException(status_code=422, detail="La fecha de la cosecha no puede ser anterior a la fecha de siembra del lote")
 
-    disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
+    disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)
     exigir_dentro_de_disponible(data.cantidad_peces, disponible, mensaje_cosecha_excede(data.cantidad_peces, disponible))
 
     payload = data.model_dump()
