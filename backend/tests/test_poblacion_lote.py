@@ -98,3 +98,10 @@ def test_peso_promedio_cosecha_decimal_y_redondeo():
 
 def test_peso_promedio_no_depende_de_unidades_comerciales():
     assert _peso_promedio_g(Decimal("2.500"), 5) == Decimal("500.000")
+
+
+def test_cosecha_cierre_usa_poblacion_historica():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "cosecha_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)" in text
