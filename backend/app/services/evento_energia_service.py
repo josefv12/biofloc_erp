@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.evento_energia import EventoEnergia
+from app.services.validaciones_fecha import validar_no_futuro
 from app.models.equipo import Equipo
 from app.models.auditoria import Auditoria
 from app.schemas.evento_energia import EventoEnergiaCreate, EventoEnergiaUpdate
@@ -57,6 +58,9 @@ def obtener_evento_energia(db: Session, evento_id: int) -> EventoEnergia:
 
 
 def crear_evento_energia(db: Session, data: EventoEnergiaCreate, usuario_id: int) -> EventoEnergia:
+    validar_no_futuro(data.fecha_hora_inicio, "La fecha/hora de inicio del evento de energía")
+    if data.fecha_hora_fin is not None:
+        validar_no_futuro(data.fecha_hora_fin, "La fecha/hora de fin del evento de energía")
     respaldo = bool(data.respaldo_activado); _validar_respaldo(respaldo, data.equipo_respaldo_id, db)
     if data.fecha_hora_fin is not None and _aware(data.fecha_hora_fin) < _aware(data.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
     duracion = data.duracion_minutos
@@ -80,6 +84,9 @@ def actualizar_evento_energia(db: Session, evento_id: int, data: EventoEnergiaUp
     if not cambios: return e
     respaldo = cambios.get("respaldo_activado", e.respaldo_activado); equipo_id = cambios.get("equipo_respaldo_id", e.equipo_respaldo_id); _validar_respaldo(bool(respaldo), equipo_id, db)
     fin = cambios.get("fecha_hora_fin", e.fecha_hora_fin)
+    validar_no_futuro(e.fecha_hora_inicio, "La fecha/hora de inicio del evento de energía")
+    if fin is not None:
+        validar_no_futuro(fin, "La fecha/hora de fin del evento de energía")
     if fin is not None and _aware(fin) < _aware(e.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
     if "fecha_hora_fin" in cambios: cambios["duracion_minutos"] = _duracion_minutos(e.fecha_hora_inicio, cambios["fecha_hora_fin"])
     elif "duracion_minutos" in cambios and cambios["duracion_minutos"] is not None and cambios["duracion_minutos"] < 0: raise HTTPException(status_code=422, detail="duracion_minutos debe ser >= 0")
