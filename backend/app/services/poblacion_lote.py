@@ -5,6 +5,8 @@ antes de persistir, de modo que no se cree población negativa.
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -25,22 +27,25 @@ def calcular_poblacion_disponible(
     return int(sembrados) - int(mortalidad_acumulada or 0) - int(peces_cosechados or 0)
 
 
-def obtener_salidas_peces(db: Session, lote_id: int) -> tuple[int, int]:
-    mortalidad = (
-        db.query(func.coalesce(func.sum(Mortalidad.cantidad), 0))
-        .filter(Mortalidad.lote_id == lote_id)
-        .scalar()
+def obtener_salidas_peces(db: Session, lote_id: int, hasta: datetime | None = None) -> tuple[int, int]:
+    mortalidad_q = db.query(func.coalesce(func.sum(Mortalidad.cantidad), 0)).filter(
+        Mortalidad.lote_id == lote_id
     )
-    cosechados = (
-        db.query(func.coalesce(func.sum(Cosecha.cantidad_peces), 0))
-        .filter(Cosecha.lote_id == lote_id)
-        .scalar()
+    cosecha_q = db.query(func.coalesce(func.sum(Cosecha.cantidad_peces), 0)).filter(
+        Cosecha.lote_id == lote_id
     )
+    if hasta is not None:
+        mortalidad_q = mortalidad_q.filter(Mortalidad.fecha_hora <= hasta)
+        cosecha_q = cosecha_q.filter(Cosecha.fecha_hora <= hasta)
+    mortalidad = mortalidad_q.scalar()
+    cosechados = cosecha_q.scalar()
     return int(mortalidad or 0), int(cosechados or 0)
 
 
-def obtener_poblacion_disponible(db: Session, lote_id: int, cantidad_sembrada: int) -> int:
-    mortalidad, cosechados = obtener_salidas_peces(db, lote_id)
+def obtener_poblacion_disponible(
+    db: Session, lote_id: int, cantidad_sembrada: int, hasta: datetime | None = None
+) -> int:
+    mortalidad, cosechados = obtener_salidas_peces(db, lote_id, hasta)
     return calcular_poblacion_disponible(cantidad_sembrada, mortalidad, cosechados)
 
 
