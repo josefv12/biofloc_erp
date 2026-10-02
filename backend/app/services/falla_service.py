@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.falla import Falla
+from app.services.validaciones_fecha import validar_no_futuro
 from app.models.equipo import Equipo
 from app.models.auditoria import Auditoria
 from app.schemas.falla import FallaCreate, FallaUpdate
@@ -37,6 +38,7 @@ def obtener_falla(db: Session, falla_id: int) -> Falla:
 
 
 def crear_falla(db: Session, data: FallaCreate, usuario_id: int) -> Falla:
+    validar_no_futuro(data.fecha_hora, "La fecha de la falla")
     if not db.query(Equipo).filter(Equipo.id == data.equipo_id).first():
         raise HTTPException(status_code=404, detail=f"Equipo {data.equipo_id} no existe")
     if not data.descripcion or not data.descripcion.strip(): raise HTTPException(status_code=422, detail="descripción requerida")
