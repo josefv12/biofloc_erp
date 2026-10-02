@@ -93,3 +93,27 @@ def test_movimientos_automaticos_tienen_unicidad_por_evento_origen():
     text = migration.read_text(encoding="utf-8")
     assert "uq_movimientos_inventario_alimentacion" in text
     assert "uq_movimientos_inventario_aplicacion_biofloc" in text
+
+
+def test_ventas_evalua_cosecha_hasta_fecha_de_venta():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "venta_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "_fin_dia_colombia_utc(fecha_venta)" in text
+    assert "Cosecha.fecha_hora < limite_cosecha" in text
+
+
+def test_ventas_descuenta_solo_ventas_hasta_fecha_consultada():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "venta_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "Venta.fecha <= fecha_venta" in text
+
+
+def test_trigger_venta_es_historico_y_no_usa_stock_actual():
+    from pathlib import Path
+    source = Path(__file__).parents[2] / "database" / "migrations" / "008_integridad_historica_asof.sql"
+    text = source.read_text(encoding="utf-8")
+    assert "cosechas" in text
+    assert "v.fecha <= v_fecha_venta" in text
+    assert "v_limite_cosecha" in text
