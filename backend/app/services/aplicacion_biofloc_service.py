@@ -19,6 +19,8 @@ from fastapi import HTTPException
 from app.models.aplicacion_biofloc import AplicacionBiofloc
 from app.models.lote import Lote
 from app.models.tipo_aplicacion_biofloc import TipoAplicacionBiofloc
+from app.models.producto import Producto
+from app.models.unidad import Unidad
 from app.models.auditoria import Auditoria
 from app.schemas.aplicacion_biofloc import AplicacionBioflocCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
@@ -74,6 +76,16 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
     if data.cantidad is not None and data.cantidad < 0:
         raise HTTPException(status_code=422, detail="La cantidad debe ser mayor o igual a 0")
 
+    producto = None
+    unidad_producto = None
+    if data.producto_id is not None:
+        producto = db.query(Producto).filter(Producto.id == data.producto_id).first()
+        if not producto or not producto.activo:
+            raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe o está inactivo")
+        unidad_producto = db.query(Unidad).filter(Unidad.id == producto.unidad_id).first()
+        if not unidad_producto:
+            raise HTTPException(status_code=422, detail="El producto no tiene una unidad interna válida")
+
     # Determinar si debe generar movimiento de inventario
     generar_movimiento = (
         data.producto_id is not None
@@ -83,7 +95,10 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
 
     tipo_salida_id = _obtener_tipo_salida_id(db) if generar_movimiento else None
 
-    nuevo = AplicacionBiofloc(**data.model_dump(), registrado_por=usuario_id)
+    payload = data.model_dump()
+    if producto is not None and unidad_producto is not None:
+        payload["unidad"] = unidad_producto.simbolo
+    nuevo = AplicacionBiofloc(**payload, registrado_por=usuario_id)
     db.add(nuevo)
 
     try:
