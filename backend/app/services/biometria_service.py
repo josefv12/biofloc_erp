@@ -13,7 +13,7 @@ from app.models.biometria import Biometria
 from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.biometria import BiometriaCreate
-from app.services.poblacion_lote import exigir_lote_en_produccion
+from app.services.poblacion_lote import exigir_lote_en_produccion, obtener_poblacion_disponible, mensaje_mortalidad_excede
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -48,6 +48,18 @@ def crear_biometria(db: Session, data: BiometriaCreate, usuario_id: int) -> Biom
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
     
+    poblacion_disponible = obtener_poblacion_disponible(
+        db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora
+    )
+    if data.cantidad_muestra > poblacion_disponible:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"La muestra de {data.cantidad_muestra} peces supera la población "
+                f"disponible en la fecha de la biometría ({poblacion_disponible})."
+            ),
+        )
+
     # Validar fecha_hora contra fecha_siembra
     # Although not explicitly in check constraints, logically biometria cannot happen before siembra.
     if data.fecha_hora.date() < lote.fecha_siembra:
