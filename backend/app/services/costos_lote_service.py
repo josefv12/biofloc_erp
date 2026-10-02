@@ -34,17 +34,12 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
                   AND mi.costo_total IS NOT NULL
             ), 0) AS alimento,
             COALESCE((
-                SELECT SUM(
-                    CASE LOWER(TRIM(u.simbolo))
-                        WHEN 'kg' THEN a.cantidad
-                        WHEN 'g' THEN a.cantidad / 1000
-                        ELSE 0
-                    END
-                )
+                SELECT SUM(a.cantidad)
                 FROM biofloc.alimentaciones a
                 JOIN biofloc.productos p ON p.id = a.producto_id
                 JOIN biofloc.unidades u ON u.id = p.unidad_id
                 WHERE a.lote_id = :lote_id
+                  AND LOWER(TRIM(u.simbolo)) = 'kg'
             ), 0) AS alimento_suministrado,
             COALESCE((
                 SELECT SUM(g.valor)
