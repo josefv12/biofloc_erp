@@ -366,6 +366,17 @@ CREATE TABLE movimientos_inventario (
 );
 
 -- Alimentación depende de productos
+-- Un registro operativo que consume inventario solo puede tener un movimiento automático.
+CREATE UNIQUE INDEX uq_movimientos_inventario_alimentacion
+    ON movimientos_inventario (referencia_tipo, referencia_id)
+    WHERE referencia_tipo = 'ALIMENTACION'
+      AND referencia_id IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_movimientos_inventario_aplicacion_biofloc
+    ON movimientos_inventario (referencia_tipo, referencia_id)
+    WHERE referencia_tipo = 'APLICACION_BIOFLOC'
+      AND referencia_id IS NOT NULL;
+
 CREATE TABLE alimentaciones (
     id BIGSERIAL PRIMARY KEY,
     lote_id BIGINT NOT NULL REFERENCES lotes(id),
