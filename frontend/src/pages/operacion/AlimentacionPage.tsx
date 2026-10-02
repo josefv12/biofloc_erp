@@ -34,13 +34,13 @@ export function AlimentacionPanel({ loteId, lotes, compact }: { loteId?: number;
   const lotesMap = useMemo(() => new Map(lotes.map((row) => [row.id, row])), [lotes]); const enProduccion = lotesActivos(lotes);
   const loteContexto = loteId ? lotes.find((row) => row.id === loteId) : undefined; const puedeRegistrarLote = !loteId || esLoteActivo(loteContexto);
   const form = useForm({ defaultValues: { lote_id: loteId ?? 0, producto_id: 0, fecha_hora: toDatetimeLocalValue(), cantidad: "", observaciones: "" } });
-  const loteFormId = form.watch("lote_id") || loteId; const productoFormId = form.watch("producto_id"); const productoSeleccionado = productos.get(Number(productoFormId));
+  const loteFormId = form.watch("lote_id") || loteId; form.watch("producto_id");
   const etiquetaCantidad = "Cantidad suministrada (kg)";
   const contextoQuery = useQuery({ queryKey: ["contexto-alimentacion", loteFormId], queryFn: () => getContextoAlimentacionLote(Number(loteFormId)), enabled: open && Boolean(loteFormId) }); const ref = contextoQuery.data?.referencia_activa;
   const [stockMsg, setStockMsg] = useState<string | null>(null);
   const mutation = useMutation({ mutationFn: (data: AlimentacionCreate) => createAlimentacion(data), onSuccess: async (resp) => {
     setOpen(false);
-    if (resp.stock_restante != null) { const producto = productos.get(Number(form.getValues("producto_id"))); const restante = Number(resp.stock_restante); setStockMsg(`Inventario actualizado: ${formatNumber(restante, { maximumFractionDigits: 3 })} kg disponibles`); setTimeout(() => setStockMsg(null), 6000); }
+    if (resp.stock_restante != null) { const restante = Number(resp.stock_restante); setStockMsg(`Inventario actualizado: ${formatNumber(restante, { maximumFractionDigits: 3 })} kg disponibles`); setTimeout(() => setStockMsg(null), 6000); }
     await queryClient.invalidateQueries({ queryKey: ["alimentaciones"] }); await queryClient.invalidateQueries({ queryKey: ["analisis-lote"] }); await queryClient.invalidateQueries({ queryKey: ["analisis-estanques"] }); await queryClient.invalidateQueries({ queryKey: ["contexto-alimentacion"] }); await queryClient.invalidateQueries({ queryKey: ["productos-stock"] }); await queryClient.invalidateQueries({ queryKey: ["alertas-stock-bajo"] });
   }, onError: (err) => setFormError(apiErrorMessage(err)) });
   const rows = compact ? (query.data ?? []).slice(0, 5) : (query.data ?? []);
