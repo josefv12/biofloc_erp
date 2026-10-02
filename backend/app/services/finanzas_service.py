@@ -81,7 +81,7 @@ def calcular_finanzas(
                 SELECT SUM(cos.peso_total_kg)
                 FROM biofloc.cosechas cos
                 WHERE cos.lote_id = l.id
-                  AND CAST(cos.fecha_hora AS date) <= v.fecha
+                  AND (cos.fecha_hora AT TIME ZONE 'America/Bogota')::date <= v.fecha
             ), 0) AS kg_cosechados,
             COALESCE((
                 SELECT SUM(mi.costo_total)
@@ -90,7 +90,7 @@ def calcular_finanzas(
                   ON a.id = mi.referencia_id
                 WHERE mi.referencia_tipo = 'ALIMENTACION'
                   AND a.lote_id = l.id
-                  AND CAST(a.fecha_hora AS date) <= v.fecha
+                  AND (a.fecha_hora AT TIME ZONE 'America/Bogota')::date <= v.fecha
                   AND mi.costo_total IS NOT NULL
             ), 0) AS costo_alimento,
             COALESCE((
