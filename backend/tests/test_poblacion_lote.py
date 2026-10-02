@@ -90,3 +90,11 @@ def test_lote_finalizado_rechaza_registros():
 def test_ciclo_estimado_es_seis_meses_calendario():
     assert sumar_meses(date(2026, 9, 11), 6) == date(2027, 3, 11)
     assert sumar_meses(date(2026, 8, 31), 6) == date(2027, 2, 28)
+
+
+def test_peso_promedio_cosecha_decimal_y_redondeo():
+    assert _peso_promedio_g(Decimal("1.001"), 3) == Decimal("333.667")
+
+
+def test_peso_promedio_no_depende_de_unidades_comerciales():
+    assert _peso_promedio_g(Decimal("2.500"), 5) == Decimal("500.000")
