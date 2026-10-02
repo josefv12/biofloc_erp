@@ -30,6 +30,7 @@ jobs:
         run: >-
           pytest -q
           tests/test_finanzas.py
+          tests/test_inventario_reglas.py
           tests/test_poblacion_lote.py
           tests/test_indicadores_productivos_etapa3.py
           tests/test_referencia_produccion_precedencia.py
