@@ -13,11 +13,10 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { createMovimientoInventario, listMovimientosInventario, listProductos, listProductosStock, listTiposMovimientoInventario } from "../../api/inventory";
 import { apiErrorMessage } from "../../utils/apiError";
 import { datetimeLocalToIso, etiquetaProducto, formatCop, formatDateTime, formatNumber, toDatetimeLocalValue } from "../../utils/format";
-import { cantidadDesdePresentacion, cantidadParaPresentacion, precioDesdePresentacion, unidadPresentacion } from "../../utils/unidades";
 import { can } from "../../utils/rbac";
 import type { MovimientoInventario, MovimientoInventarioCreate } from "../../types/inventory";
 
-type MovimientoForm = { producto_id: number; tipo_movimiento_id: number; cantidad: string; fecha_hora: string; referencia_tipo: string; referencia_id: string; observaciones: string; costo_unitario: string; costo_total: string };
+type MovimientoForm = { producto_id: number; tipo_movimiento_id: number; efecto_stock: "1" | "-1"; cantidad: string; fecha_hora: string; referencia_tipo: string; referencia_id: string; observaciones: string; costo_unitario: string; costo_total: string };
 
 export function MovimientosPage() {
   const { user } = useAuth();
@@ -42,13 +41,12 @@ export function MovimientosPage() {
   const form = useForm<MovimientoForm>();
   const productoFormId = form.watch("producto_id");
   const unidadFormulario = productoFormId ? stock.get(Number(productoFormId)) : undefined;
-  const unidadFormularioTexto = unidadFormulario ? unidadPresentacion(unidadFormulario.unidad, unidadFormulario.unidad_comercial) : undefined;
   const mutation = useMutation({
     mutationFn: (data: MovimientoInventarioCreate) => createMovimientoInventario(data),
     onSuccess: async () => { setOpen(false); await Promise.all([queryClient.invalidateQueries({ queryKey: ["movimientos-inventario"] }), queryClient.invalidateQueries({ queryKey: ["productos-stock"] }), queryClient.invalidateQueries({ queryKey: ["alertas-stock-bajo"] }), queryClient.invalidateQueries({ queryKey: ["alertas-stock-bajo-seccion"] })]); },
     onError: (error) => setFormError(apiErrorMessage(error)),
   });
-  function openCreate() { setFormError(null); form.reset({ producto_id: productoId ?? productosQuery.data?.[0]?.id ?? 0, tipo_movimiento_id: tiposQuery.data?.[0]?.id ?? 0, cantidad: "", fecha_hora: toDatetimeLocalValue(), referencia_tipo: "", referencia_id: "", observaciones: "", costo_unitario: "", costo_total: "" }); setOpen(true); }
+  function openCreate() { setFormError(null); const ajuste = (tiposQuery.data ?? []).find((row) => row.nombre === "AJUSTE"); form.reset({ producto_id: productoId ?? productosQuery.data?.[0]?.id ?? 0, tipo_movimiento_id: ajuste?.id ?? 0, efecto_stock: "1", cantidad: "", fecha_hora: toDatetimeLocalValue(), referencia_tipo: "", referencia_id: "", observaciones: "", costo_unitario: "", costo_total: "" }); setOpen(true); }
 
   return (
     <div>
@@ -64,8 +62,8 @@ export function MovimientosPage() {
       {movimientosQuery.data ? <DataTable rows={movimientosQuery.data} rowKey={(row: MovimientoInventario) => row.id} empty="No hay movimientos." maxVisibleRows={10} columns={[
         { key: "fecha", header: "Fecha/hora", render: (row) => formatDateTime(row.fecha_hora) },
         { key: "producto", header: "Producto", render: (row) => { const producto = productos.get(row.producto_id); if (!producto) return `#${row.producto_id}`; return <span>{producto.nombre}<span className="block text-[11px] text-[var(--bf-muted)]">Código: {producto.codigo}</span></span>; } },
-        { key: "tipo", header: "Tipo", render: (row) => { const tipo = tipos.get(row.tipo_movimiento_id); if (!tipo) return `#${row.tipo_movimiento_id}`; return <StatusBadge label={tipo.nombre} tone={tipo.afecta_stock === 1 ? "ok" : "danger"} />; } },
-        { key: "cantidad", header: "Cantidad", render: (row) => { const rowStock = stock.get(row.producto_id); const simbolo = rowStock?.unidad; const comercial = rowStock?.unidad_comercial; return `${formatNumber(cantidadParaPresentacion(row.cantidad, simbolo, rowStock?.factor_conversion), { maximumFractionDigits: 3 })}${simbolo ? ` ${unidadPresentacion(simbolo, comercial)}` : ""}`; } },
+        { key: "tipo", header: "Tipo", render: (row) => { const tipo = tipos.get(row.tipo_movimiento_id); if (!tipo) return `#${row.tipo_movimiento_id}`; const efecto = row.efecto_stock ?? tipo.afecta_stock; return <StatusBadge label={tipo.nombre === "AJUSTE" ? `AJUSTE ${efecto === 1 ? "+" : "-"}` : tipo.nombre} tone={efecto === 1 ? "ok" : "danger"} />; } },
+        { key: "cantidad", header: "Cantidad", render: (row) => { const rowStock = stock.get(row.producto_id); return `${formatNumber(row.cantidad, { maximumFractionDigits: 3 })}${rowStock?.unidad ? ` ${rowStock.unidad}` : ""}`; } },
         { key: "ref", header: "Referencia", render: (row) => row.referencia_tipo ? `${row.referencia_tipo}${row.referencia_id != null ? ` #${row.referencia_id}` : ""}` : "—" },
         { key: "usuario", header: "Usuario", render: (row) => row.registrado_por === user?.id && user?.nombre ? user.nombre : usuarios.get(row.registrado_por)?.nombre ?? `#${row.registrado_por}` },
         { key: "costo", header: "Costo total", render: (row) => row.costo_total == null ? "—" : formatCop(row.costo_total) },
@@ -74,22 +72,25 @@ export function MovimientosPage() {
       <Modal open={open} title="Registrar movimiento" onClose={() => setOpen(false)}>
         <form className="space-y-3" onSubmit={form.handleSubmit((values) => {
           const refId = values.referencia_id.trim(); const cu = values.costo_unitario.trim(); const ct = values.costo_total.trim();
-          const cantidadPresentada = Number(values.cantidad); const producto = productos.get(Number(values.producto_id)); const stockProducto = producto ? stock.get(producto.id) : undefined; const simbolo = stockProducto?.unidad; const factor = stockProducto?.factor_conversion;
-          if (!Number.isFinite(cantidadPresentada) || cantidadPresentada <= 0) { setFormError("Ingrese una cantidad mayor que 0."); return; }
-          const cantidad = cantidadDesdePresentacion(cantidadPresentada, simbolo, factor); const costoUnitario = cu === "" ? null : precioDesdePresentacion(Number(cu), simbolo, factor); const costoTotal = ct === "" ? null : Number(ct);
-          mutation.mutate({ producto_id: Number(values.producto_id), tipo_movimiento_id: Number(values.tipo_movimiento_id), cantidad, fecha_hora: values.fecha_hora ? datetimeLocalToIso(values.fecha_hora) : null, referencia_tipo: values.referencia_tipo.trim() || null, referencia_id: refId === "" ? null : Number(refId), observaciones: values.observaciones.trim() || null, costo_unitario: costoUnitario, costo_total: costoTotal });
+          const cantidad = Number(values.cantidad); const costoUnitario = cu === "" ? null : Number(cu); const costoTotal = ct === "" ? null : Number(ct); const observaciones = values.observaciones.trim();
+          if (!Number.isFinite(cantidad) || cantidad <= 0) { setFormError("Ingrese una cantidad mayor que 0."); return; }
+          if (!observaciones) { setFormError("El AJUSTE requiere una observación con el motivo."); return; }
+          const ajuste = (tiposQuery.data ?? []).find((row) => row.nombre === "AJUSTE");
+          if (!ajuste) { setFormError("No existe el tipo AJUSTE. Ejecute la migración 009."); return; }
+          mutation.mutate({ producto_id: Number(values.producto_id), tipo_movimiento_id: ajuste.id, efecto_stock: Number(values.efecto_stock) as 1 | -1, cantidad, fecha_hora: values.fecha_hora ? datetimeLocalToIso(values.fecha_hora) : null, referencia_tipo: values.referencia_tipo.trim() || null, referencia_id: refId === "" ? null : Number(refId), observaciones, costo_unitario: costoUnitario, costo_total: costoTotal });
         })}>
           {formError ? <ErrorAlert message={formError} /> : null}
           <Field label="Producto"><select className="bf-input" {...form.register("producto_id", { valueAsNumber: true })}>{(productosQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{etiquetaProducto(row.nombre, row.codigo)}</option>)}</select></Field>
-          <Field label="Tipo de movimiento"><select className="bf-input" {...form.register("tipo_movimiento_id", { valueAsNumber: true })}>{(tiposQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{row.nombre} ({row.afecta_stock === 1 ? "suma stock" : "resta stock"})</option>)}</select></Field>
-          <Field label={`Cantidad${unidadFormularioTexto ? ` (${unidadFormularioTexto})` : ""}`}><input type="number" step="any" min="0.0001" className="bf-input" {...form.register("cantidad")} /></Field>
+          <Field label="Tipo de movimiento"><input className="bf-input" value="AJUSTE" readOnly /></Field>
+          <Field label="Efecto del ajuste"><select className="bf-input" {...form.register("efecto_stock")}><option value="1">Aumentar stock (+)</option><option value="-1">Disminuir stock (-)</option></select></Field>
+          <Field label={`Cantidad${unidadFormulario?.unidad ? ` (${unidadFormulario.unidad})` : ""}`}><input type="number" step="0.001" min="0.001" className="bf-input" {...form.register("cantidad")} /></Field>
           <Field label="Fecha y hora"><input type="datetime-local" className="bf-input" {...form.register("fecha_hora")} /></Field>
           <Field label="Referencia tipo (opcional)"><input className="bf-input" {...form.register("referencia_tipo")} /></Field>
           <Field label="Referencia id (opcional)"><input type="number" className="bf-input" {...form.register("referencia_id")} /></Field>
-          <Field label={`Costo unitario (opcional)${unidadFormularioTexto ? ` ($ / ${unidadFormularioTexto})` : ""}`}><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_unitario")} /></Field>
+          <Field label={`Costo unitario (opcional)${unidadFormulario?.unidad ? ` (COP / ${unidadFormulario.unidad})` : ""}`}><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_unitario")} /></Field>
           <Field label="Costo total (opcional)"><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_total")} /></Field>
           <Field label="Observaciones"><textarea className="bf-input min-h-20" {...form.register("observaciones")} /></Field>
-          <p className="text-xs text-[var(--bf-muted)]">La cantidad y el costo unitario se capturan en la unidad comercial mostrada y se convierten a la unidad interna al guardar.</p>
+          <p className="text-xs text-[var(--bf-muted)]">Los ajustes son manuales, quedan en la unidad interna del producto y exigen observación. Los ajustes positivos requieren costo unitario.</p>
           <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || (productosQuery.data ?? []).length === 0}>{mutation.isPending ? "Guardando…" : "Registrar"}</button>
         </form>
       </Modal>
