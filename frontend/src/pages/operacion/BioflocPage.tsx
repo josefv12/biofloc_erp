@@ -61,7 +61,7 @@ export function BioflocPage() {
     <div>
       <PageHeader
         title="Biofloc"
-        description="Mediciones de volumen sedimentable y aplicaciones. No se genera movimiento de inventario."
+        description="Mediciones de volumen sedimentable y aplicaciones. Las aplicaciones con producto descuentan inventario automáticamente."
       />
       <label className="mb-4 block max-w-xs text-sm">
         <span className="mb-1 block text-[var(--bf-muted)]">Lote</span>
