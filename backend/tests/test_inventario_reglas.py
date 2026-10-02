@@ -58,3 +58,12 @@ def test_compra_bloquea_productos_en_orden_determinista():
     text = source.read_text(encoding="utf-8")
     marker = 'for producto_id in sorted({dp["producto_id"] for dp in detalles_procesados}):'
     assert marker in text
+
+
+def test_compra_rechaza_alimento_fuera_de_kg():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "compra_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'categoria.nombre.strip().upper() == "ALIMENTO"' in text
+    assert 'factor_conversion' in text
+    assert 'debe estar configurado en kg/kg con factor 1' in text
