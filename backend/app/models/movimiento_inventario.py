@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, String, Numeric, DateTime, Text, ForeignKey, Index, CheckConstraint, text
+from sqlalchemy import BigInteger, String, Numeric, DateTime, Text, ForeignKey, Index, CheckConstraint, SmallInteger, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from decimal import Decimal
@@ -10,6 +10,10 @@ class MovimientoInventario(Base):
     __tablename__ = "movimientos_inventario"
     __table_args__ = (
         CheckConstraint("cantidad > 0", name="movimientos_inventario_cantidad_check"),
+        CheckConstraint(
+            "efecto_stock IS NULL OR efecto_stock IN (-1, 1)",
+            name="movimientos_inventario_efecto_stock_check",
+        ),
         CheckConstraint(
             "costo_unitario IS NULL OR costo_unitario >= 0",
             name="movimientos_inventario_costo_unitario_check",
@@ -34,6 +38,7 @@ class MovimientoInventario(Base):
     registrado_por: Mapped[int] = mapped_column(BigInteger, ForeignKey("usuarios.id"), nullable=False)
     costo_unitario: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     costo_total: Mapped[Decimal | None] = mapped_column(Numeric(16, 2), nullable=True)
+    efecto_stock: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
     producto = relationship("Producto")
