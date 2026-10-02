@@ -209,6 +209,16 @@ def crear_movimiento_inventario(
     efecto = _tipo_y_efecto(tipo, data.efecto_stock)
     fecha_hora = data.fecha_hora or datetime.now(timezone.utc)
 
+    # Serializa las salidas/ajustes negativos para que stock y costo promedio
+    # se calculen sobre el mismo estado histórico, incluso bajo concurrencia.
+    if efecto == -1:
+        producto = (
+            db.query(Producto)
+            .filter(Producto.id == data.producto_id)
+            .with_for_update()
+            .one()
+        )
+
     if tipo.nombre == "AJUSTE" and not (data.observaciones and data.observaciones.strip()):
         raise HTTPException(status_code=422, detail="AJUSTE requiere una observación que explique el motivo")
 
