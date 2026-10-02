@@ -67,3 +67,29 @@ def test_compra_rechaza_alimento_fuera_de_kg():
     assert 'categoria.nombre.strip().upper() == "ALIMENTO"' in text
     assert 'factor_conversion' in text
     assert 'debe estar configurado en kg/kg con factor 1' in text
+
+
+def test_alimentacion_es_atomica_y_genera_salida_transaccional():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "alimentacion_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "crear_movimiento_inventario(db, mov_data, usuario_id, flush_only=True)" in text
+    assert 'referencia_tipo="ALIMENTACION"' in text
+    assert 'tipo_salida_id = _obtener_tipo_salida_id(db)' in text
+    assert "db.commit()" in text
+
+
+def test_aplicacion_biofloc_es_atomica_y_genera_salida_transaccional():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "aplicacion_biofloc_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "crear_movimiento_inventario(db, mov_data, usuario_id, flush_only=True)" in text
+    assert 'referencia_tipo="APLICACION_BIOFLOC"' in text
+
+
+def test_movimientos_automaticos_tienen_unicidad_por_evento_origen():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "011_trazabilidad_movimientos_automaticos.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "uq_movimientos_inventario_alimentacion" in text
+    assert "uq_movimientos_inventario_aplicacion_biofloc" in text
