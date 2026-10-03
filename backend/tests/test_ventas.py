@@ -441,3 +441,15 @@ def test_ventas_respetan_intervalo_del_lote():
     for content in (migration, schema):
         assert "trg_validar_venta_dentro_ciclo_lote" in content
         assert "trg_validar_detalle_venta_dentro_ciclo_lote" in content
+
+
+def test_ventas_retroactivas_no_rompen_biomasa_historica():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/venta_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "_validar_ventas_historicas_no_superan_cosechas" in service
+    for content in (migration, schema):
+        assert "trg_validar_secuencia_historica_ventas" in content
+        assert "v_vendido > v_cosechado" in content
+        assert "America/Bogota" in content
