@@ -100,6 +100,10 @@ DROP TRIGGER IF EXISTS trg_validar_fecha_medicion_biofloc_futura ON biofloc.medi
 CREATE TRIGGER trg_validar_fecha_medicion_biofloc_futura BEFORE INSERT OR UPDATE ON biofloc.mediciones_biofloc
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 
+DROP TRIGGER IF EXISTS trg_validar_fecha_medicion_agua_futura ON biofloc.mediciones_agua;
+CREATE TRIGGER trg_validar_fecha_medicion_agua_futura BEFORE INSERT OR UPDATE ON biofloc.mediciones_agua
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+
 DROP TRIGGER IF EXISTS trg_validar_fecha_aplicacion_biofloc_futura ON biofloc.aplicaciones_biofloc;
 CREATE TRIGGER trg_validar_fecha_aplicacion_biofloc_futura BEFORE INSERT OR UPDATE ON biofloc.aplicaciones_biofloc
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
