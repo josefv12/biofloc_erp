@@ -39,6 +39,13 @@ def calcular_costos_financieros_lote(
     vendidos = Decimal(str(kg_vendidos or 0))
     ingresos = Decimal(str(ventas or 0))
 
+    if cosechados < ZERO:
+        raise HTTPException(status_code=422, detail="Los kg cosechados no pueden ser negativos")
+    if vendidos < ZERO:
+        raise HTTPException(status_code=422, detail="Los kg vendidos no pueden ser negativos")
+    if vendidos > cosechados:
+        raise HTTPException(status_code=422, detail="Los kg vendidos no pueden superar los kg cosechados")
+
     costo_produccion = alimento + gastos
     costo_por_kg = costo_produccion / cosechados if cosechados > ZERO else None
     cogs = vendidos * costo_por_kg if costo_por_kg is not None else ZERO
