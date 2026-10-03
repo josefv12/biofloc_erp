@@ -78,12 +78,6 @@ class ReferenciaBioflocUpdate(BaseModel):
         return valor or None
 
     @model_validator(mode="after")
-    def validar_unidad(self) -> "ReferenciaBioflocUpdate":
-        # El indicador es inmutable en UPDATE; la unidad sí puede corregirse,
-        # pero solo hacia su unidad canónica.
-        return self
-
-    @model_validator(mode="after")
     def validar_rangos(self) -> "ReferenciaBioflocUpdate":
         if self.valor_minimo is not None and self.valor_maximo is not None:
             if self.valor_minimo > self.valor_maximo:
