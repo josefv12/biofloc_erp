@@ -268,6 +268,14 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
             status_code=422,
             detail=f"El estado {estado_nuevo.nombre} requiere fecha_cierre",
         )
+    if estado_nuevo.nombre == "FINALIZADO":
+        from app.services.poblacion_lote import obtener_poblacion_disponible
+        poblacion = obtener_poblacion_disponible(db, lote.id, lote.cantidad_sembrada)
+        if poblacion != 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Un lote FINALIZADO debe tener población cero; población disponible actual: {poblacion}",
+            )
     if estado_nuevo.nombre == "ACTIVO" and (cambios.get("fecha_cierre", lote.fecha_cierre) is not None):
         raise HTTPException(status_code=422, detail="Un lote ACTIVO no puede tener fecha_cierre")
     _validar_estanque_operativo_para_lote(db, estanque_id_nuevo, estado_nuevo.id)
