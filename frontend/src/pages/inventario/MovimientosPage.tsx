@@ -87,7 +87,7 @@ export function MovimientosPage() {
           <Field label="Fecha y hora"><input type="datetime-local" className="bf-input" {...form.register("fecha_hora")} /></Field>
           <Field label="Referencia tipo (opcional)"><input className="bf-input" {...form.register("referencia_tipo")} /></Field>
           <Field label="Referencia id (opcional)"><input type="number" className="bf-input" {...form.register("referencia_id")} /></Field>
-          <Field label={`Costo unitario${values.efecto_stock === "1" ? " (obligatorio para aumento)" : " (se calcula por promedio histórico)"}${unidadFormulario?.unidad ? ` (COP / ${unidadFormulario.unidad})` : ""}`}><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_unitario")} disabled={values.efecto_stock === "-1"} /></Field>
+          <Field label={`Costo unitario${form.watch("efecto_stock") === "1" ? " (obligatorio para aumento)" : " (se calcula por promedio histórico)"}${unidadFormulario?.unidad ? ` (COP / ${unidadFormulario.unidad})` : ""}`}><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_unitario")} disabled={values.efecto_stock === "-1"} /></Field>
           <Field label="Costo total (opcional; se calcula automáticamente si se omite)"><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_total")} /></Field>
           <Field label="Observaciones"><textarea className="bf-input min-h-20" {...form.register("observaciones")} /></Field>
           <p className="text-xs text-[var(--bf-muted)]">Los ajustes son manuales, quedan en la unidad interna del producto y exigen observación. Los ajustes positivos requieren costo unitario.</p>
