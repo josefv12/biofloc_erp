@@ -83,7 +83,7 @@ CREATE TABLE referencias_produccion (
     semana_hasta        INTEGER NOT NULL CHECK (semana_hasta >= semana_desde),
     peso_esperado_g     NUMERIC(10,2) CHECK (peso_esperado_g >= 0),
     tasa_alimentacion_pct NUMERIC(6,3) CHECK (tasa_alimentacion_pct >= 0),
-    raciones_min        INTEGER CHECK (raciones_min IS NULL OR raciones_min >= 0),
+    raciones_min        INTEGER CHECK (raciones_min IS NULL OR raciones_min > 0),
     raciones_max        INTEGER,
     fase                VARCHAR(40),
     observaciones       TEXT,
@@ -91,7 +91,7 @@ CREATE TABLE referencias_produccion (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (especie_id, etapa_productiva_id, semana_desde, semana_hasta),
-    CHECK (raciones_max IS NULL OR raciones_min IS NULL OR raciones_max >= raciones_min),
+    CHECK (raciones_max IS NULL OR (raciones_max > 0 AND (raciones_min IS NULL OR raciones_max >= raciones_min))),
     CHECK (fase IS NULL OR fase IN ('Inicio', 'Levante', 'Engorde'))
 );
 
