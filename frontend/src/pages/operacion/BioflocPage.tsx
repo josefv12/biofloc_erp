@@ -528,7 +528,7 @@ export function AplicacionesBioflocPanel({
             <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
           </Field>
           <Field label="Unidad">
-            <input className="bf-input" value={values.producto_id ? "Unidad interna del producto" : "Unidad informada"} readOnly />
+            <input className="bf-input" value={form.watch("producto_id") ? "Unidad interna del producto" : "Unidad informada"} readOnly />
             <p className="mt-1 text-xs text-[var(--bf-muted)]">
               Si selecciona un producto, el sistema usa automáticamente su unidad interna; no se permite alterar esa unidad.
             </p>
