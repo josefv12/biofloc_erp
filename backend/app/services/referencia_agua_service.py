@@ -65,6 +65,8 @@ def crear_referencia_agua(db: Session, data: ReferenciaAguaCreate, usuario_id: i
     parametro = db.query(ParametroAgua).filter(ParametroAgua.id == data.parametro_id).first()
     if not parametro:
         raise HTTPException(status_code=404, detail=f"Parámetro de agua id={data.parametro_id} no existe")
+    if not parametro.activo:
+        raise HTTPException(status_code=422, detail="El parámetro de agua está inactivo y no admite nuevas referencias")
 
     # 4. Validar unicidad (especie, etapa, parametro)
     existente = db.query(ReferenciaAgua).filter(
