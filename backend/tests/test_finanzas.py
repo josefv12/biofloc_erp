@@ -160,3 +160,22 @@ def test_schema_final_protege_compras_y_gastos_historicos():
     source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
     assert "trg_inmutabilidad_compras" in source
     assert "trg_inmutabilidad_gastos" in source
+
+
+def test_finanzas_incluye_costos_de_estanque_una_sola_vez_en_rentabilidad_global():
+    from pathlib import Path
+    schema = (Path(__file__).parents[1] / "app/schemas/finanzas.py").read_text(encoding="utf-8")
+    service = (Path(__file__).parents[1] / "app/services/finanzas_service.py").read_text(encoding="utf-8")
+
+    assert "costos_estanque_no_asignados: Decimal = MONEY" in schema
+    assert "g.estanque_id IS NOT NULL" in service
+    assert "utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados" in service
+    assert "costos_estanque_no_asignados=_d2(costos_estanque_no_asignados)" in service
+
+
+def test_costos_lote_no_mezcla_costos_de_estanque_con_costo_directo():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/costos_lote_service.py").read_text(encoding="utf-8")
+    assert "costos_estanque_no_asignados" in source
+    assert "directo = alimento + alevinos + otros" in source
+    assert 'g.estanque_id = :estanque_id' in source
