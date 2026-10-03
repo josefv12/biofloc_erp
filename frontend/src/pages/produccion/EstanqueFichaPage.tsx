@@ -54,6 +54,7 @@ import type { BiometriaCreate, CosechaCreate, MortalidadCreate } from "../../typ
 import type {
   AlimentacionCreate,
   AplicacionBioflocCreate,
+  Producto,
   MedicionAguaCreate,
   MedicionBioflocCreate,
 } from "../../types/operations";
