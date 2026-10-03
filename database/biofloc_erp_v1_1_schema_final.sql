@@ -1936,3 +1936,46 @@ CREATE TRIGGER trg_validar_fecha_gasto_lote
 BEFORE INSERT OR UPDATE OF fecha, lote_id ON biofloc.gastos
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_gasto_lote();
 
+
+    
+-- Integridad histórica del catálogo de tipos de mantenimiento.
+CREATE OR REPLACE FUNCTION biofloc.validar_tipo_mantenimiento_historico()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_tipo_mantenimiento_historico$
+BEGIN
+    IF TG_OP = 'UPDATE'
+       AND NEW.nombre IS DISTINCT FROM OLD.nombre
+       AND EXISTS (
+           SELECT 1 FROM biofloc.mantenimientos
+           WHERE tipo_mantenimiento_id = OLD.id
+       )
+    THEN
+        RAISE EXCEPTION
+            'El tipo de mantenimiento % ya tiene registros históricos y no puede renombrarse',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+
+    IF TG_OP = 'INSERT' OR NEW.tipo_mantenimiento_id IS DISTINCT FROM OLD.tipo_mantenimiento_id THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM biofloc.tipos_mantenimiento
+            WHERE id = NEW.tipo_mantenimiento_id AND activo = TRUE
+        ) THEN
+            RAISE EXCEPTION
+                'El tipo de mantenimiento % debe existir y estar activo',
+                NEW.tipo_mantenimiento_id USING ERRCODE='check_violation';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$fn_validar_tipo_mantenimiento_historico$;
+
+DROP TRIGGER IF EXISTS trg_validar_tipo_mantenimiento_historico ON biofloc.tipos_mantenimiento;
+CREATE TRIGGER trg_validar_tipo_mantenimiento_historico
+BEFORE UPDATE OF nombre ON biofloc.tipos_mantenimiento
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_tipo_mantenimiento_historico();
+
+DROP TRIGGER IF EXISTS trg_validar_tipo_mantenimiento_activo ON biofloc.mantenimientos;
+CREATE TRIGGER trg_validar_tipo_mantenimiento_activo
+BEFORE INSERT OR UPDATE OF tipo_mantenimiento_id ON biofloc.mantenimientos
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_tipo_mantenimiento_historico();
