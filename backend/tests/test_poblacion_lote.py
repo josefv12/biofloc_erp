@@ -163,3 +163,15 @@ def test_cierre_automatico_cosecha_usa_fecha_colombia():
     source = (Path(__file__).parents[1] / "app/services/cosecha_service.py").read_text(encoding="utf-8")
     assert "TZ_COLOMBIA" in source
     assert "astimezone(TZ_COLOMBIA).date()" in source
+
+
+def test_finalizado_exige_poblacion_cero_y_cancelado_puede_conservar_peces():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "Un lote FINALIZADO debe tener población cero" in service
+    for content in (migration, schema):
+        assert "trg_validar_lote_finalizado_sin_peces" in content
+        assert "v_estado = 'FINALIZADO'" in content
+        assert "SUM(cantidad_peces)" in content
