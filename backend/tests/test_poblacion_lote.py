@@ -143,3 +143,16 @@ def test_listar_lotes_honra_filtro_activos():
     source = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
     assert 'if activos:' in source
     assert 'EstadoLote.nombre == "ACTIVO"' in source
+
+
+def test_mortalidad_total_finaliza_lote_y_protege_reutilizacion():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/mortalidad_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "poblacion_restante" in service
+    assert "ESTADO_LOTE_FINALIZADO" in service
+    for content in (migration, schema):
+        assert "trg_finalizar_lote_por_mortalidad_total" in content
+        assert "fecha_hora <= NEW.fecha_hora" in content
+        assert "nombre = 'FINALIZADO'" in content
