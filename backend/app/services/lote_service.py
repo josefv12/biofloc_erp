@@ -86,10 +86,10 @@ def _validar_estanque_operativo_para_lote(db: Session, estanque_id: int, estado_
         raise HTTPException(status_code=404, detail=f"Estanque id={estanque_id} no existe o está inactivo")
 
     estado_estanque = est.estado
-    if estado_estanque and estado_estanque.nombre in {"MANTENIMIENTO", "FUERA_DE_SERVICIO"}:
+    if estado_estanque and estado_estanque.nombre != "OCUPADO":
         raise HTTPException(
             status_code=422,
-            detail=f"No se puede crear o mover un lote ACTIVO a un estanque en estado {estado_estanque.nombre}",
+            detail=f"Un lote ACTIVO solo puede ocupar un estanque en estado OCUPADO; estado actual: {estado_estanque.nombre}",
         )
 
 
