@@ -1531,3 +1531,22 @@ FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_venta_historica();
 CREATE TRIGGER trg_inmutabilidad_detalles_venta
 BEFORE UPDATE OR DELETE ON detalles_venta
 FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_venta_historica();
+
+
+-- Integridad: compras y gastos históricos son inmutables.
+CREATE OR REPLACE FUNCTION biofloc.impedir_modificacion_financiera_historica()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_inmutabilidad_financiera$
+BEGIN
+    RAISE EXCEPTION 'El registro financiero histórico % de la tabla % es inmutable', OLD.id, TG_TABLE_NAME USING ERRCODE='check_violation';
+END;
+$fn_inmutabilidad_financiera$;
+
+CREATE TRIGGER trg_inmutabilidad_compras
+BEFORE UPDATE OR DELETE ON compras
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_financiera_historica();
+
+CREATE TRIGGER trg_inmutabilidad_gastos
+BEFORE UPDATE OR DELETE ON gastos
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_financiera_historica();
