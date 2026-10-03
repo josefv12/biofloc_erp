@@ -320,3 +320,25 @@ def test_eventos_operativos_auxiliares_tienen_guardia_temporal_en_bd():
     assert "trg_validar_fecha_falla_futura" in migration
     assert "trg_validar_fecha_mantenimiento_futura" in migration
     assert "trg_validar_fecha_evento_energia_futura" in migration
+
+
+def test_evento_no_puede_superar_cierre_del_lote():
+    from datetime import date, datetime
+    from fastapi import HTTPException
+    from app.services.validaciones_fecha import validar_no_despues_cierre
+    try:
+        validar_no_despues_cierre(datetime(2026, 10, 2, 0, 1), date(2026, 10, 1), "Evento")
+    except HTTPException as exc:
+        assert exc.status_code == 422
+        assert "cierre" in str(exc.detail).lower()
+        return
+    raise AssertionError("Un evento posterior al cierre debe ser rechazado")
+
+
+def test_final_schema_cierra_correctamente_los_dollar_quotes_de_funciones():
+    from pathlib import Path
+    import re
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert not re.search(r"END;\n(\$[A-Za-z_][A-Za-z0-9_]*\$)\n", source)
+    assert "validar_evento_no_despues_cierre" in source
+    assert "trg_validar_cierre_no_anterior_eventos" in source
