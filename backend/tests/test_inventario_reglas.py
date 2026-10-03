@@ -529,3 +529,17 @@ def test_lote_activo_exige_estanque_operativo_y_bloquea_carrera_de_estado():
         assert "pg_advisory_xact_lock(2147483000, NEW.estanque_id)" in content
     assert "pg_advisory_xact_lock(2147483000, NEW.id)" in migration
     assert "pg_advisory_xact_lock(2147483000, NEW.id)" in schema
+
+
+def test_lote_activo_exige_estanque_ocupado_y_no_se_puede_liberar():
+    from pathlib import Path
+    lote = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    estanque = (Path(__file__).parents[1] / "app/services/estanque_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "estado actual: {estado_estanque.nombre}" in lote
+    assert "debe permanecer en estado OCUPADO" in estanque
+    for content in (migration, schema):
+        assert "Un estanque con lote ACTIVO debe permanecer en estado OCUPADO" in content
+        assert "Un lote ACTIVO solo puede ocupar un estanque en estado OCUPADO" in content
+        assert "trg_validar_lote_estanque_operativo" in content
