@@ -206,8 +206,7 @@ BEGIN
         RAISE EXCEPTION 'El costo total no puede ser negativo' USING ERRCODE = 'check_violation';
     END IF;
 
-    IF v_nombre IN ('ENTRADA', 'AJUSTE') AND v_nombre IS NOT NULL
-       AND NEW.costo_unitario IS NOT NULL AND NEW.costo_total IS NOT NULL
+    IF NEW.costo_unitario IS NOT NULL AND NEW.costo_total IS NOT NULL
        AND ABS(NEW.costo_total - (NEW.cantidad * NEW.costo_unitario)) > 0.01 THEN
         RAISE EXCEPTION 'Costo total inconsistente con cantidad y costo unitario' USING ERRCODE = 'check_violation';
     END IF;
