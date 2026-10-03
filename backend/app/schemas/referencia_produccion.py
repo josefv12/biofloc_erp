@@ -7,8 +7,8 @@ FASES_ALIMENTACION = ("Inicio", "Levante", "Engorde")
 
 
 def _validar_raciones(minimo: Optional[int], maximo: Optional[int]) -> None:
-    if minimo is not None and minimo < 0:
-        raise ValueError("raciones_min debe ser >= 0")
+    if minimo is not None and minimo <= 0:
+        raise ValueError("raciones_min debe ser > 0")
     if maximo is not None and minimo is not None and maximo < minimo:
         raise ValueError("raciones_max no puede ser menor que raciones_min")
 
@@ -20,8 +20,8 @@ class ReferenciaProduccionCreate(BaseModel):
     semana_hasta: int = Field(..., ge=1)
     peso_esperado_g: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
     tasa_alimentacion_pct: Optional[Decimal] = Field(None, ge=0, max_digits=6, decimal_places=3)
-    raciones_min: Optional[int] = Field(None, ge=0)
-    raciones_max: Optional[int] = Field(None, ge=0)
+    raciones_min: Optional[int] = Field(None, gt=0)
+    raciones_max: Optional[int] = Field(None, gt=0)
     fase: Optional[str] = Field(None, max_length=40)
     observaciones: Optional[str] = None
     activo: bool = True
