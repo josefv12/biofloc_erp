@@ -17,6 +17,8 @@ from fastapi import HTTPException
 
 from app.models.alimentacion import Alimentacion
 from app.models.lote import Lote
+from app.models.producto import Producto
+from app.models.categoria_inventario import CategoriaInventario
 from app.models.auditoria import Auditoria
 from app.schemas.alimentacion import AlimentacionCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
@@ -58,6 +60,16 @@ def crear_alimentacion(db: Session, data: AlimentacionCreate, usuario_id: int) -
     exigir_lote_en_produccion(db, lote)
 
     validar_evento_lote(data.fecha_hora, lote.fecha_siembra, "la alimentación")
+
+    # Un registro de alimentación solo puede consumir productos de categoría ALIMENTO.
+    producto = db.query(Producto).filter(Producto.id == data.producto_id).first()
+    if not producto:
+        raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe")
+    categoria = db.query(CategoriaInventario).filter(CategoriaInventario.id == producto.categoria_id).first()
+    if not producto.activo:
+        raise HTTPException(status_code=422, detail="El producto seleccionado está inactivo")
+    if not categoria or categoria.nombre != "ALIMENTO":
+        raise HTTPException(status_code=422, detail="El producto seleccionado no pertenece a la categoría ALIMENTO")
 
     # Obtener tipo SALIDA antes de empezar la transacción
     tipo_salida_id = _obtener_tipo_salida_id(db)
