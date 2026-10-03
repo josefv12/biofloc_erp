@@ -104,6 +104,7 @@ Migraciones numeradas de integridad actualmente auditadas:
 - `027_inmutabilidad_compras_gastos.sql` — impide modificar o eliminar compras y gastos históricos.
 - `028_integridad_fecha_gasto_lote.sql` — impide gastos directos de lote anteriores a la siembra.
 - `029_proteger_unidades_historicas_parametros_agua.sql` — impide cambiar la unidad de un parámetro de agua después de registrar mediciones.
+- `030_unidades_canonicas_referencias_biofloc.sql` — obliga a `mL/L` para sólidos sedimentables y `C:N` para relación C:N.
 
 También existen migraciones con nombre de fecha para cambios de unidades, catálogos y referencias productivas; deben ejecutarse después de las numeradas según su orden cronológico y solo sobre una base compatible.
 
