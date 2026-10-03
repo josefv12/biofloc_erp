@@ -102,8 +102,13 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
 
-    IF v_nombre = 'AJUSTE' AND v_efecto = 1 AND NEW.costo_unitario IS NULL THEN
-        RAISE EXCEPTION 'AJUSTE positivo requiere costo_unitario'
+    IF v_efecto = 1 AND NEW.costo_unitario IS NULL THEN
+        RAISE EXCEPTION '% positivo requiere costo_unitario', v_nombre
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF NEW.fecha_hora > NOW() THEN
+        RAISE EXCEPTION 'La fecha/hora del movimiento de inventario no puede estar en el futuro'
             USING ERRCODE = 'check_violation';
     END IF;
 
@@ -201,7 +206,8 @@ BEGIN
         RAISE EXCEPTION 'El costo total no puede ser negativo' USING ERRCODE = 'check_violation';
     END IF;
 
-    IF NEW.costo_unitario IS NOT NULL AND NEW.costo_total IS NOT NULL
+    IF v_nombre IN ('ENTRADA', 'AJUSTE') AND v_nombre IS NOT NULL
+       AND NEW.costo_unitario IS NOT NULL AND NEW.costo_total IS NOT NULL
        AND ABS(NEW.costo_total - (NEW.cantidad * NEW.costo_unitario)) > 0.01 THEN
         RAISE EXCEPTION 'Costo total inconsistente con cantidad y costo unitario' USING ERRCODE = 'check_violation';
     END IF;
