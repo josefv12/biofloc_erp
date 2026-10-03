@@ -130,6 +130,25 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
             )
 
     cambios = data.model_dump(exclude_none=True)
+
+    estado_id_nuevo = cambios.get("estado_id", lote.estado_id)
+    estado_nuevo = db.query(EstadoLote).filter(EstadoLote.id == estado_id_nuevo).first()
+    if not estado_nuevo:
+        raise HTTPException(status_code=404, detail=f"EstadoLote id={estado_id_nuevo} no existe")
+    if not estado_nuevo.activo:
+        raise HTTPException(status_code=422, detail=f"EstadoLote id={estado_id_nuevo} está inactivo")
+
+    estados_terminales = {"FINALIZADO", "CANCELADO"}
+    if estado_nuevo.nombre in estados_terminales and "fecha_cierre" not in cambios and lote.fecha_cierre is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"El estado {estado_nuevo.nombre} requiere fecha_cierre",
+        )
+    if estado_nuevo.nombre == "ACTIVO" and (cambios.get("fecha_cierre", lote.fecha_cierre) is not None):
+        raise HTTPException(status_code=422, detail="Un lote ACTIVO no puede tener fecha_cierre")
+    if lote.estado and lote.estado.nombre in estados_terminales and estado_nuevo.nombre != lote.estado.nombre:
+        raise HTTPException(status_code=422, detail="Un lote FINALIZADO o CANCELADO no puede reabrirse ni cambiar de estado")
+
     for campo, valor in cambios.items():
         setattr(lote, campo, valor)
 
