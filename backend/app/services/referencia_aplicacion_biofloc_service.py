@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.auditoria import Auditoria
 from app.models.lote import Especie
 from app.models.producto import Producto
+from app.models.categoria_inventario import CategoriaInventario
 from app.models.referencia_aplicacion_biofloc import ReferenciaAplicacionBiofloc
 from app.schemas.referencia_aplicacion_biofloc import (
     ReferenciaAplicacionBioflocCreate,
@@ -53,6 +54,14 @@ def crear(db: Session, data: ReferenciaAplicacionBioflocCreate, usuario_id: int)
         raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe")
     if not producto.activo:
         raise HTTPException(status_code=422, detail="El producto de la referencia está inactivo")
+    categoria = db.query(CategoriaInventario).filter(CategoriaInventario.id == producto.categoria_id).first()
+    if not categoria or categoria.nombre not in {"FUENTE_CARBONO", "PROBIOTICO", "CORRECTIVO"}:
+        raise HTTPException(status_code=422, detail="La referencia semanal solo puede usar insumos de las categorías Biofloc")
+    if data.semana <= 0:
+        raise HTTPException(status_code=422, detail="La semana debe ser mayor que 0")
+    fase_esperada = "Inicio" if data.semana <= 4 else "Levante" if data.semana <= 10 else "Engorde"
+    if data.fase != fase_esperada:
+        raise HTTPException(status_code=422, detail=f"La fase no corresponde a la semana {data.semana}; debe ser {fase_esperada}")
 
     existente = db.query(ReferenciaAplicacionBiofloc).filter(
         ReferenciaAplicacionBiofloc.especie_id == data.especie_id,
