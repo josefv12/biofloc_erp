@@ -35,7 +35,7 @@ CREATE OR REPLACE FUNCTION biofloc.efecto_movimiento_inventario(
 )
 RETURNS SMALLINT
 LANGUAGE plpgsql
-AS $biofloc$$
+AS $
 DECLARE
     v_nombre VARCHAR(30);
     v_efecto SMALLINT;
@@ -77,7 +77,7 @@ $$;
 CREATE OR REPLACE FUNCTION biofloc.validar_stock_movimiento()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $biofloc$$
+AS $
 DECLARE
     v_efecto SMALLINT;
     v_stock NUMERIC(18,3);
