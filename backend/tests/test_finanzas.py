@@ -153,3 +153,10 @@ def test_schema_final_protege_ventas_historicas():
     source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
     assert "trg_inmutabilidad_ventas" in source
     assert "trg_inmutabilidad_detalles_venta" in source
+
+
+def test_schema_final_protege_compras_y_gastos_historicos():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_inmutabilidad_compras" in source
+    assert "trg_inmutabilidad_gastos" in source
