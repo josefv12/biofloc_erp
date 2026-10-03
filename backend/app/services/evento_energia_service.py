@@ -39,8 +39,18 @@ def _duracion_minutos(inicio: datetime, fin: Optional[datetime]) -> Optional[int
 
 
 def _validar_respaldo(respaldo_activado: bool, equipo_respaldo_id: Optional[int], db: Session):
-    if respaldo_activado and equipo_respaldo_id is None: raise HTTPException(status_code=422, detail="equipo_respaldo_id es obligatorio cuando respaldo_activado=true")
-    if equipo_respaldo_id is not None and not db.query(Equipo).filter(Equipo.id == equipo_respaldo_id).first(): raise HTTPException(status_code=404, detail=f"Equipo de respaldo {equipo_respaldo_id} no existe")
+    if respaldo_activado and equipo_respaldo_id is None:
+        raise HTTPException(status_code=422, detail="equipo_respaldo_id es obligatorio cuando respaldo_activado=true")
+    if equipo_respaldo_id is None:
+        return
+    equipo = db.query(Equipo).filter(Equipo.id == equipo_respaldo_id).first()
+    if not equipo:
+        raise HTTPException(status_code=404, detail=f"Equipo de respaldo {equipo_respaldo_id} no existe")
+    if respaldo_activado:
+        if not equipo.activo:
+            raise HTTPException(status_code=422, detail="El equipo de respaldo está inactivo")
+        if not equipo.estado or not equipo.estado.activo or equipo.estado.nombre != "OPERATIVO":
+            raise HTTPException(status_code=422, detail="El equipo de respaldo debe estar en estado OPERATIVO y activo")
 
 
 def listar_eventos_energia(db: Session, tipo: Optional[str] = None, fecha_desde: Optional[datetime] = None, fecha_hasta: Optional[datetime] = None, respaldo_activado: Optional[bool] = None, equipo_respaldo_id: Optional[int] = None, registrado_por: Optional[int] = None):
