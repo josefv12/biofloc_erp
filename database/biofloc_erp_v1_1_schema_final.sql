@@ -1035,7 +1035,7 @@ BEGIN
             USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $biofloc$;
+END; $fn_biofloc_validar_fecha_evento_lote$;
 CREATE TRIGGER trg_validar_fecha_biometria
 BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
@@ -1060,7 +1060,7 @@ BEGIN
             GREATEST(v_sembrados-v_salidas,0), NEW.cantidad_muestra USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $biofloc$;
+END; $fn_biofloc_validar_muestra_biometria$;
 CREATE TRIGGER trg_validar_muestra_biometria
 BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_muestra_biometria();
@@ -1075,7 +1075,7 @@ BEGIN
             ROUND(v_esperado,3), NEW.peso_promedio_g USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $biofloc$;
+END; $fn_biofloc_validar_promedio_cosecha$;
 CREATE TRIGGER trg_validar_promedio_cosecha
 BEFORE INSERT OR UPDATE ON cosechas
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_promedio_cosecha();
@@ -1088,7 +1088,7 @@ BEGIN
             USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $biofloc$;
+END; $fn_biofloc_validar_fecha_evento_no_futura$;
 CREATE TRIGGER trg_validar_fecha_biometria_futura BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 CREATE TRIGGER trg_validar_fecha_mortalidad_futura BEFORE INSERT OR UPDATE ON mortalidades
