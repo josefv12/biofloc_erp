@@ -39,8 +39,11 @@ def obtener_falla(db: Session, falla_id: int) -> Falla:
 
 def crear_falla(db: Session, data: FallaCreate, usuario_id: int) -> Falla:
     validar_no_futuro(data.fecha_hora, "La fecha de la falla")
-    if not db.query(Equipo).filter(Equipo.id == data.equipo_id).first():
+    equipo = db.query(Equipo).filter(Equipo.id == data.equipo_id).first()
+    if not equipo:
         raise HTTPException(status_code=404, detail=f"Equipo {data.equipo_id} no existe")
+    if equipo.fecha_adquisicion and data.fecha_hora.date() < equipo.fecha_adquisicion:
+        raise HTTPException(status_code=422, detail="La fecha de la falla no puede ser anterior a la adquisición del equipo")
     if not data.descripcion or not data.descripcion.strip(): raise HTTPException(status_code=422, detail="descripción requerida")
     costo = Decimal(data.costo if data.costo is not None else 0).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if costo < 0: raise HTTPException(status_code=422, detail="costo debe ser >= 0")
