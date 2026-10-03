@@ -192,3 +192,15 @@ def test_reporte_gastos_expone_y_filtra_estanque():
     assert "e.codigo AS estanque_codigo" in service
     assert "def compras(" in service and "if estanque_id is not None" not in service.split("def gastos(", 1)[0]
     assert "estanque_codigo: Optional[str] = None" in schema
+
+
+def test_finanzas_incluye_costos_monetarios_de_mantenimiento_y_fallas():
+    from pathlib import Path
+    schema = (Path(__file__).parents[1] / "app/schemas/finanzas.py").read_text(encoding="utf-8")
+    service = (Path(__file__).parents[1] / "app/services/finanzas_service.py").read_text(encoding="utf-8")
+
+    assert "costos_mantenimiento_fallas: Decimal = MONEY" in schema
+    assert "FROM biofloc.mantenimientos m" in service
+    assert "FROM biofloc.fallas f" in service
+    assert "f.fecha_hora AT TIME ZONE 'America/Bogota'" in service
+    assert "utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados - costos_mantenimiento_fallas" in service
