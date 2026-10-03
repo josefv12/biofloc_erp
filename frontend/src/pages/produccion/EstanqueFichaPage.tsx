@@ -1,5 +1,5 @@
 ﻿import { Link, useParams, useSearchParams } from "react-router-dom";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ErrorAlert } from "../../components/ErrorAlert";
@@ -539,7 +539,7 @@ function AlimentarModal({
 
         <Field label="Producto / alimento">
           <select className="bf-input" {...form.register("producto_id", { valueAsNumber: true, required: true })}>
-            {productos.map((row) => (
+            {productos.map((row: Producto) => (
               <option key={row.id} value={row.id}>
                 {etiquetaProducto(row.nombre, row.codigo)}
               </option>
