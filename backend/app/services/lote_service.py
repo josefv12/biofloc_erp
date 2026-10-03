@@ -55,6 +55,8 @@ def listar_lotes(db: Session, estanque_id: int | None = None, activos: bool = Tr
     q = db.query(Lote)
     if estanque_id:
         q = q.filter(Lote.estanque_id == estanque_id)
+    if activos:
+        q = q.join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(EstadoLote.nombre == "ACTIVO")
     return q.order_by(Lote.id.desc()).all()
 
 
