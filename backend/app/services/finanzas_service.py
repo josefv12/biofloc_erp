@@ -101,7 +101,14 @@ def calcular_finanzas(
                 FROM biofloc.movimientos_inventario mi
                 JOIN biofloc.alimentaciones a
                   ON a.id = mi.referencia_id
+                 AND a.producto_id = mi.producto_id
+                 AND a.cantidad = mi.cantidad
+                 AND a.fecha_hora = mi.fecha_hora
+                JOIN biofloc.tipos_movimiento_inventario tm
+                  ON tm.id = mi.tipo_movimiento_id
+                 AND tm.nombre = 'SALIDA'
                 WHERE mi.referencia_tipo = 'ALIMENTACION'
+                  AND mi.referencia_id IS NOT NULL
                   AND a.lote_id = l.id
                   AND (a.fecha_hora AT TIME ZONE 'America/Bogota')::date <= v.fecha
                   AND mi.costo_total IS NOT NULL
