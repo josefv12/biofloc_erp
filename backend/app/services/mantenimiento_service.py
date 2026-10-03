@@ -74,7 +74,10 @@ def obtener_mantenimiento(db: Session, mant_id: int) -> Mantenimiento:
 
 def crear_mantenimiento(db: Session, data: MantenimientoCreate, usuario_id: int) -> Mantenimiento:
     validar_fecha_no_futura(data.fecha, "La fecha del mantenimiento")
-    if not db.query(Equipo).filter(Equipo.id == data.equipo_id).first(): raise HTTPException(status_code=404, detail=f"Equipo {data.equipo_id} no existe")
+    equipo = db.query(Equipo).filter(Equipo.id == data.equipo_id).first()
+    if not equipo: raise HTTPException(status_code=404, detail=f"Equipo {data.equipo_id} no existe")
+    if equipo.fecha_adquisicion and data.fecha < equipo.fecha_adquisicion:
+        raise HTTPException(status_code=422, detail="La fecha del mantenimiento no puede ser anterior a la adquisición del equipo")
     if not db.query(TipoMantenimiento).filter(TipoMantenimiento.id == data.tipo_mantenimiento_id).first(): raise HTTPException(status_code=404, detail=f"Tipo de mantenimiento {data.tipo_mantenimiento_id} no existe")
     if not data.descripcion or not data.descripcion.strip(): raise HTTPException(status_code=422, detail="descripción requerida")
     costo = Decimal(data.costo if data.costo is not None else 0).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
