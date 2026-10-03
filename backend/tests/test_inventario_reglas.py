@@ -590,3 +590,15 @@ def test_datos_fundacionales_lote_son_inmutables_con_historial():
         assert "trg_proteger_datos_fundacionales_lote" in content
         for campo in ("estanque_id", "especie_id", "etapa_productiva_id", "cantidad_sembrada", "peso_inicial_promedio_g"):
             assert campo in content
+
+
+def test_estanque_no_admite_ciclos_historicos_solapados():
+    from pathlib import Path
+    servicio = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migracion = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    esquema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "_validar_solapamiento_historico_estanque" in servicio
+    for content in (migracion, esquema):
+        assert "trg_validar_solapamiento_historico_estanque" in content
+        assert "DATE '9999-12-31'" in content
+        assert "pg_advisory_xact_lock(2147483000, NEW.estanque_id)" in content
