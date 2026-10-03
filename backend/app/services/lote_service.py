@@ -96,6 +96,29 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
     if data.fecha_cierre and data.fecha_cierre < lote.fecha_siembra:
         raise HTTPException(status_code=422, detail="fecha_cierre debe ser >= fecha_siembra")
 
+    if data.fecha_cierre is not None:
+        # Un cierre no puede quedar antes de un evento histórico ya registrado.
+        from sqlalchemy import text
+        ultimo = db.execute(
+            text("""
+                SELECT MAX(fecha_evento) FROM (
+                    SELECT fecha_hora AS fecha_evento FROM biofloc.biometrias WHERE lote_id = :lote_id
+                    UNION ALL SELECT fecha_hora FROM biofloc.mortalidades WHERE lote_id = :lote_id
+                    UNION ALL SELECT fecha_hora FROM biofloc.cosechas WHERE lote_id = :lote_id
+                    UNION ALL SELECT fecha_hora FROM biofloc.alimentaciones WHERE lote_id = :lote_id
+                    UNION ALL SELECT fecha_hora FROM biofloc.mediciones_biofloc WHERE lote_id = :lote_id
+                    UNION ALL SELECT fecha_hora FROM biofloc.mediciones_agua WHERE lote_id = :lote_id
+                    UNION ALL SELECT fecha_hora FROM biofloc.aplicaciones_biofloc WHERE lote_id = :lote_id
+                ) eventos
+            """),
+            {"lote_id": lote.id},
+        ).scalar()
+        if ultimo is not None and ultimo.date() > data.fecha_cierre:
+            raise HTTPException(
+                status_code=422,
+                detail="fecha_cierre no puede ser anterior a un evento histórico del lote",
+            )
+
     cambios = data.model_dump(exclude_none=True)
     for campo, valor in cambios.items():
         setattr(lote, campo, valor)
