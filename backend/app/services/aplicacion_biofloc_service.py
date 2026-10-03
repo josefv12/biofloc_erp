@@ -55,6 +55,14 @@ def obtener_aplicacion_biofloc(db: Session, aplicacion_id: int) -> AplicacionBio
     return a
 
 
+def _validar_producto_para_cantidad(cantidad: Decimal | None, producto_id: int | None) -> None:
+    if cantidad is not None and cantidad > 0 and producto_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Debe seleccionar un producto cuando la cantidad de la aplicación Biofloc es mayor que 0",
+        )
+
+
 def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario_id: int) -> AplicacionBiofloc:
     # 1. Validar lote
     lote = db.query(Lote).filter(Lote.id == data.lote_id).first()
