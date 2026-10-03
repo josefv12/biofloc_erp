@@ -281,3 +281,17 @@ def test_fecha_hora_sin_zona_se_interpreta_en_colombia_sin_typeerror():
     futuro_local = datetime.now(ZoneInfo("America/Bogota")).replace(tzinfo=None) + timedelta(minutes=5)
     with pytest.raises(Exception):
         validar_no_futuro(futuro_local)
+
+def test_evento_energia_datetime_sin_zona_usa_hora_colombia():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/evento_energia_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'ZoneInfo("America/Bogota")' in text
+    assert 'dt.replace(tzinfo=ZoneInfo("America/Bogota"))' in text
+
+
+def test_schema_final_no_tiene_cierres_dollar_quote_corruptos():
+    from pathlib import Path
+    schema = Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql"
+    text = schema.read_text(encoding="utf-8")
+    assert not __import__("re").search(r"\$[A-Za-z_][A-Za-z0-9_]*\$\d+", text)
