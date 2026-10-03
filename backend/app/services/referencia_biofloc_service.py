@@ -117,6 +117,15 @@ def actualizar_referencia_biofloc(
     if not cambios:
         return row
 
+    if "unidad" in cambios:
+        unidad = cambios["unidad"]
+        unidad_esperada = "mL/L" if row.indicador == "VOLUMEN_SEDIMENTABLE" else "C:N"
+        if unidad != unidad_esperada:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{row.indicador} debe usar la unidad {unidad_esperada}",
+            )
+
     nuevo_min = cambios.get("valor_minimo", row.valor_minimo)
     nuevo_max = cambios.get("valor_maximo", row.valor_maximo)
     nuevo_obj = cambios.get("valor_objetivo", row.valor_objetivo)
