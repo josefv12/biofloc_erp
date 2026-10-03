@@ -131,3 +131,11 @@ def test_schema_final_tiene_guardia_de_gasto_no_futuro():
     from pathlib import Path
     source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
     assert "trg_validar_fecha_gasto_no_futura" in source
+
+
+def test_reportes_timestamps_use_colombia_local_date():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/reportes_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "AT TIME ZONE 'America/Bogota'" in text
+    assert "CAST({col} AS date)" not in text
