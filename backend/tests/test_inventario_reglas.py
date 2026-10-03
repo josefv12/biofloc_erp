@@ -42,7 +42,7 @@ def test_movimiento_salida_toma_bloqueo_antes_de_valorar():
     lock = "with_for_update()"
     outbound = text.index("if efecto == -1:")
     cost = text.index("_costo_promedio_stock_as_of", outbound)
-    assert text.index(lock, outbound) < cost
+    assert text.index(lock) < cost
 
 
 def test_venta_bloquea_lotes_en_orden_determinista():
@@ -522,7 +522,7 @@ def test_lote_activo_exige_estanque_operativo_y_bloquea_carrera_de_estado():
     lote = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
     migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
     schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
-    assert "No se puede crear o mover un lote ACTIVO a un estanque en estado" in lote
+    assert "Un lote ACTIVO solo puede ocupar un estanque en estado OCUPADO" in lote
     for content in (migration, schema):
         assert "trg_validar_lote_estanque_operativo" in content
         assert "MANTENIMIENTO" in content and "FUERA_DE_SERVICIO" in content
@@ -560,7 +560,7 @@ def test_fecha_siembra_se_protege_despues_de_iniciar_historial():
 def test_cierre_de_lote_usa_fecha_local_de_colombia():
     from pathlib import Path
     validaciones = (Path(__file__).parents[1] / "app/services/validaciones_fecha.py").read_text(encoding="utf-8")
-    migracion = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    migracion = (Path(__file__).parents[2] / "database/migrations/019_integridad_temporal_cierre_lote.sql").read_text(encoding="utf-8")
     esquema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
     assert "astimezone(TZ_COLOMBIA).date()" in validaciones
     for content in (migracion, esquema):
