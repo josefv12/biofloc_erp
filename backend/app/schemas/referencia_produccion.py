@@ -53,8 +53,8 @@ class ReferenciaProduccionUpdate(BaseModel):
     semana_hasta: Optional[int] = Field(None, ge=1)
     peso_esperado_g: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
     tasa_alimentacion_pct: Optional[Decimal] = Field(None, ge=0, max_digits=6, decimal_places=3)
-    raciones_min: Optional[int] = Field(None, ge=0)
-    raciones_max: Optional[int] = Field(None, ge=0)
+    raciones_min: Optional[int] = Field(None, gt=0)
+    raciones_max: Optional[int] = Field(None, gt=0)
     fase: Optional[str] = Field(None, max_length=40)
     observaciones: Optional[str] = None
     activo: Optional[bool] = None
