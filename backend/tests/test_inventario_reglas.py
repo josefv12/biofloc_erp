@@ -418,3 +418,13 @@ def test_duracion_evento_energia_es_derivada_y_protegida():
     assert "duracion_minutos es un campo calculado" in service
     assert "trg_validar_duracion_evento_energia" in migration
     assert "trg_validar_duracion_evento_energia" in schema
+
+
+def test_fallas_historicas_son_inmutables():
+    from pathlib import Path
+    router = (Path(__file__).parents[1] / "app/routers/fallas.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert 'status_code=405' in router
+    assert "trg_inmutabilidad_fallas" in migration
+    assert "trg_inmutabilidad_fallas" in schema
