@@ -1504,7 +1504,9 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $fn_validar_transicion_estado_equipo$
 DECLARE v_actual TEXT; v_nuevo TEXT;
 BEGIN
     IF TG_OP = 'UPDATE' AND NEW.estado_id = OLD.estado_id THEN RETURN NEW; END IF;
-    SELECT nombre INTO v_actual FROM biofloc.estados_equipo WHERE id=OLD.estado_id;
+    IF TG_OP = 'UPDATE' THEN
+        SELECT nombre INTO v_actual FROM biofloc.estados_equipo WHERE id=OLD.estado_id;
+    END IF;
     SELECT nombre INTO v_nuevo FROM biofloc.estados_equipo WHERE id=NEW.estado_id;
     IF TG_OP = 'UPDATE' AND v_actual = 'BAJA' THEN
         RAISE EXCEPTION 'Un equipo en estado BAJA no puede volver a otro estado' USING ERRCODE='check_violation';
