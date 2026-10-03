@@ -19,6 +19,7 @@ from app.models.auditoria import Auditoria
 from app.models.lote import Lote
 from app.models.cosecha import Cosecha
 from app.schemas.venta import VentaCreate
+from app.services.validaciones_temporales import validar_evento_no_futuro
 
 
 def _norm(v, prec=2):
@@ -70,7 +71,7 @@ def obtener_venta(db: Session, venta_id: int) -> Venta:
     return v
 
 
-def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
+def _validar_disponibilidad_lotes(db: Session, detalles: list, fecha_venta: date) -> None:
     """Bloquea cada lote y valida la biomasa disponible para venta.
 
     La cantidad comercial de ventas es kg de biomasa cosechada. El bloqueo de la
@@ -93,7 +94,8 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
             raise HTTPException(status_code=404, detail=f"Lote {lote_id} no existe")
 
         cosechado = db.query(func.coalesce(func.sum(Cosecha.peso_total_kg), 0)).filter(
-            Cosecha.lote_id == lote_id
+            Cosecha.lote_id == lote_id,
+            func.cast(Cosecha.fecha_hora, date) <= fecha_venta,
         ).scalar()
         vendido = db.query(func.coalesce(func.sum(DetalleVenta.cantidad), 0)).filter(
             DetalleVenta.lote_id == lote_id
@@ -123,7 +125,8 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
             raise HTTPException(status_code=422, detail=f"El precio unitario debe ser >= 0 (detalle #{idx})")
 
     try:
-        _validar_disponibilidad_lotes(db, data.detalles)
+        validar_evento_no_futuro(data.fecha, "la venta")
+        _validar_disponibilidad_lotes(db, data.detalles, data.fecha)
 
         total = Decimal(0)
         detalles_obj = []
