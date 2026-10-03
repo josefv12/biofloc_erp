@@ -86,12 +86,25 @@ def calcular_finanzas(
             COALESCE((
                 SELECT SUM(mi.costo_total)
                 FROM biofloc.movimientos_inventario mi
-                JOIN biofloc.alimentaciones a
-                  ON a.id = mi.referencia_id
-                WHERE mi.referencia_tipo = 'ALIMENTACION'
-                  AND a.lote_id = l.id
-                  AND CAST(a.fecha_hora AS date) <= v.fecha
+                WHERE mi.referencia_tipo IN ('ALIMENTACION', 'APLICACION_BIOFLOC')
                   AND mi.costo_total IS NOT NULL
+                  AND (
+                      (mi.referencia_tipo = 'ALIMENTACION' AND EXISTS (
+                          SELECT 1
+                          FROM biofloc.alimentaciones a
+                          WHERE a.id = mi.referencia_id
+                            AND a.lote_id = l.id
+                            AND CAST(a.fecha_hora AS date) <= v.fecha
+                      ))
+                      OR
+                      (mi.referencia_tipo = 'APLICACION_BIOFLOC' AND EXISTS (
+                          SELECT 1
+                          FROM biofloc.aplicaciones_biofloc ab
+                          WHERE ab.id = mi.referencia_id
+                            AND ab.lote_id = l.id
+                            AND CAST(ab.fecha_hora AS date) <= v.fecha
+                      ))
+                  )
             ), 0) AS costo_alimento,
             COALESCE((
                 SELECT SUM(g.valor)
