@@ -3,6 +3,7 @@
 No hay estanque_id en el DDL. No se generan filas en alarmas (fase posterior).
 """
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -24,7 +25,9 @@ def _audit(db, usuario_id, accion, registro_id, detalle: dict):
 
 
 def _aware(dt: datetime) -> datetime:
-    if dt.tzinfo is None: return dt.replace(tzinfo=timezone.utc)
+    """Normaliza datetimes ingenuos como hora local de Colombia."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=ZoneInfo("America/Bogota"))
     return dt
 
 
