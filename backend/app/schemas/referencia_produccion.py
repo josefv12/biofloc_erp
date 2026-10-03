@@ -16,8 +16,8 @@ def _validar_raciones(minimo: Optional[int], maximo: Optional[int]) -> None:
 class ReferenciaProduccionCreate(BaseModel):
     especie_id: int
     etapa_productiva_id: int
-    semana_desde: int = Field(..., ge=0)
-    semana_hasta: int = Field(..., ge=0)
+    semana_desde: int = Field(..., ge=1)
+    semana_hasta: int = Field(..., ge=1)
     peso_esperado_g: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
     tasa_alimentacion_pct: Optional[Decimal] = Field(None, ge=0, max_digits=6, decimal_places=3)
     raciones_min: Optional[int] = Field(None, ge=0)
@@ -49,8 +49,8 @@ class ReferenciaProduccionCreate(BaseModel):
 class ReferenciaProduccionUpdate(BaseModel):
     especie_id: Optional[int] = None
     etapa_productiva_id: Optional[int] = None
-    semana_desde: Optional[int] = Field(None, ge=0)
-    semana_hasta: Optional[int] = Field(None, ge=0)
+    semana_desde: Optional[int] = Field(None, ge=1)
+    semana_hasta: Optional[int] = Field(None, ge=1)
     peso_esperado_g: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
     tasa_alimentacion_pct: Optional[Decimal] = Field(None, ge=0, max_digits=6, decimal_places=3)
     raciones_min: Optional[int] = Field(None, ge=0)
