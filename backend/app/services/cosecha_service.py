@@ -26,7 +26,7 @@ from app.models.cosecha import Cosecha
 from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.cosecha import CosechaCreate
-from app.services.poblacion_lote import ESTADO_LOTE_FINALIZADO, exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_cosecha_excede, obtener_estado_lote_por_nombre, obtener_poblacion_disponible
+from app.services.poblacion_lote import cerrar_lote_si_sin_peces, exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_cosecha_excede, obtener_poblacion_disponible
 from app.services.validaciones_temporales import validar_evento_lote
 
 
@@ -80,16 +80,6 @@ def _validar_coherencia_peso(
         )
 
 
-def _cerrar_lote_si_sin_peces(db: Session, lote: Lote, usuario_id: int, fecha_hora: datetime) -> None:
-    estado_fin = obtener_estado_lote_por_nombre(db, ESTADO_LOTE_FINALIZADO)
-    if lote.estado_id == estado_fin.id:
-        return
-    lote.estado_id = estado_fin.id
-    if lote.fecha_cierre is None:
-        lote.fecha_cierre = fecha_hora.date()
-    db.add(Auditoria(usuario_id=usuario_id, tabla="lotes", registro_id=lote.id, accion="UPDATE", detalle={"estado": ESTADO_LOTE_FINALIZADO, "fecha_cierre": lote.fecha_cierre.isoformat() if lote.fecha_cierre else None, "origen": "cosecha_poblacion_cero"}))
-
-
 def listar_cosechas(db: Session, lote_id: int | None = None) -> list[Cosecha]:
     q = db.query(Cosecha)
     if lote_id:
@@ -130,7 +120,9 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
         db.flush()
         restante = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
         if restante == 0:
-            _cerrar_lote_si_sin_peces(db, lote, usuario_id, data.fecha_hora)
+            cerrar_lote_si_sin_peces(
+                db, lote, usuario_id, data.fecha_hora, "cosecha_poblacion_cero"
+            )
         _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad_peces": data.cantidad_peces, "peso_total_kg": float(data.peso_total_kg), "peso_promedio_g": float(payload["peso_promedio_g"]) if payload.get("peso_promedio_g") is not None else None, "poblacion_restante": restante})
         db.commit()
     except HTTPException:
