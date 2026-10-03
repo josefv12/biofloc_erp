@@ -36,3 +36,29 @@ CREATE TRIGGER trg_validar_transicion_estado_equipo
 BEFORE INSERT OR UPDATE OF estado_id ON biofloc.equipos
 FOR EACH ROW
 EXECUTE FUNCTION biofloc.validar_transicion_estado_equipo();
+
+    
+-- Consistencia de duración de eventos de energía.
+CREATE OR REPLACE FUNCTION biofloc.validar_duracion_evento_energia()
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn_validar_duracion_evento_energia$
+DECLARE v_duracion INTEGER;
+BEGIN
+    IF NEW.fecha_hora_fin IS NULL THEN
+        IF NEW.duracion_minutos IS NOT NULL THEN
+            RAISE EXCEPTION 'Un evento de energía abierto no puede tener duración' USING ERRCODE='check_violation';
+        END IF;
+        RETURN NEW;
+    END IF;
+    v_duracion := FLOOR(EXTRACT(EPOCH FROM (NEW.fecha_hora_fin - NEW.fecha_hora_inicio))/60)::INTEGER;
+    IF v_duracion < 0 OR NEW.duracion_minutos IS DISTINCT FROM v_duracion THEN
+        RAISE EXCEPTION 'La duración del evento de energía no coincide con su intervalo' USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_validar_duracion_evento_energia$;
+
+DROP TRIGGER IF EXISTS trg_validar_duracion_evento_energia ON biofloc.eventos_energia;
+CREATE TRIGGER trg_validar_duracion_evento_energia
+BEFORE INSERT OR UPDATE OF fecha_hora_inicio, fecha_hora_fin, duracion_minutos
+ON biofloc.eventos_energia
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_duracion_evento_energia();
