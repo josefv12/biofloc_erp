@@ -380,6 +380,19 @@ export function AplicacionesBioflocPanel({
       observaciones: "",
     },
   });
+
+  const tipoAplicacionId = form.watch("tipo_aplicacion_id");
+  const tipoAplicacion = tipos.get(Number(tipoAplicacionId));
+  const productosBiofloc = useMemo(() => {
+    const tipo = (tipoAplicacion?.nombre ?? "").toUpperCase();
+    let patrones: RegExp[] = [];
+    if (tipo.includes("PROBIOTICO")) patrones = [/probi[oó]tico/i];
+    else if (tipo.includes("FUENTE_CARBONO")) patrones = [/melaza/i];
+    else if (tipo.includes("CORRECTIVO")) patrones = [/sal\s*marina/i, /bicarbonato/i];
+    return (productosQuery.data ?? []).filter((row: Producto) =>
+      patrones.some((patron) => patron.test(row.nombre) || patron.test(row.codigo)),
+    );
+  }, [productosQuery.data, tipoAplicacion?.nombre]);
   const mutation = useMutation({
     mutationFn: (data: AplicacionBioflocCreate) => createAplicacionBiofloc(data),
     onSuccess: async (resp) => {
@@ -517,7 +530,7 @@ export function AplicacionesBioflocPanel({
               ))}
             </select>
           </Field>
-          <Field label="Producto (opcional)">
+          <Field label="Producto">
             <select className="bf-input" {...form.register("producto_id")}>
               <option value="">Ninguno</option>
               {(productosQuery.data ?? []).map((row) => (
