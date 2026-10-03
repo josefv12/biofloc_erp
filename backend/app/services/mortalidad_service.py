@@ -18,7 +18,7 @@ from app.models.mortalidad import Mortalidad
 from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.mortalidad import MortalidadCreate
-from app.services.poblacion_lote import exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_mortalidad_excede, obtener_poblacion_disponible
+from app.services.poblacion_lote import cerrar_lote_si_sin_peces, exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_mortalidad_excede, obtener_poblacion_disponible
 from app.services.validaciones_temporales import validar_evento_lote
 
 
@@ -58,7 +58,14 @@ def crear_mortalidad(db: Session, data: MortalidadCreate, usuario_id: int) -> Mo
     db.add(nuevo)
     try:
         db.flush()
-        _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad": data.cantidad, "causa": data.causa})
+        restante = obtener_poblacion_disponible(
+            db, data.lote_id, lote.cantidad_sembrada
+        )
+        if restante == 0:
+            cerrar_lote_si_sin_peces(
+                db, lote, usuario_id, data.fecha_hora, "mortalidad_poblacion_cero"
+            )
+        _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad": data.cantidad, "causa": data.causa, "poblacion_restante": restante})
         db.commit()
     except HTTPException:
         db.rollback()
