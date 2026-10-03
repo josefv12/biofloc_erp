@@ -168,9 +168,6 @@ def compras(db: Session, fecha_desde=None, fecha_hasta=None,
             proveedor: Optional[str] = None, producto_id: Optional[int] = None,
             registrado_por: Optional[int] = None) -> ReporteComprasOut:
     extra, extra_sql = {}, ""
-    if estanque_id is not None:
-        extra["estanque_id"] = estanque_id
-        extra_sql += " AND g.estanque_id = :estanque_id"
     if proveedor:
         extra["proveedor"] = f"%{proveedor}%"
         extra_sql += " AND c.proveedor ILIKE :proveedor"
@@ -242,6 +239,9 @@ def gastos(db: Session, fecha_desde=None, fecha_hasta=None,
     if lote_id is not None:
         extra["lote_id"] = lote_id
         extra_sql += " AND g.lote_id = :lote_id"
+    if estanque_id is not None:
+        extra["estanque_id"] = estanque_id
+        extra_sql += " AND g.estanque_id = :estanque_id"
     if proveedor:
         extra["proveedor"] = f"%{proveedor}%"
         extra_sql += " AND g.proveedor ILIKE :proveedor"
