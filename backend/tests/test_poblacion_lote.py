@@ -156,3 +156,10 @@ def test_mortalidad_total_finaliza_lote_y_protege_reutilizacion():
         assert "trg_finalizar_lote_por_mortalidad_total" in content
         assert "fecha_hora <= NEW.fecha_hora" in content
         assert "nombre = 'FINALIZADO'" in content
+
+
+def test_cierre_automatico_cosecha_usa_fecha_colombia():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/cosecha_service.py").read_text(encoding="utf-8")
+    assert "TZ_COLOMBIA" in source
+    assert "astimezone(TZ_COLOMBIA).date()" in source
