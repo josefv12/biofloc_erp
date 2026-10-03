@@ -60,7 +60,7 @@ BEGIN
     FROM biofloc.equipos
     WHERE id = NEW.equipo_id;
 
-    IF v_adquisicion IS NOT NULL AND NEW.fecha_hora::date < v_adquisicion THEN
+    IF v_adquisicion IS NOT NULL AND (NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date < v_adquisicion THEN
         RAISE EXCEPTION 'La falla no puede ser anterior a la adquisición del equipo'
             USING ERRCODE='check_violation';
     END IF;
