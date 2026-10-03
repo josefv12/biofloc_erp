@@ -314,9 +314,9 @@ export function MedicionesBioflocPanel({
             />
           </Field>
           <Field label="Unidad">
-            <input className="bf-input" {...form.register("unidad")} />
+            <input className="bf-input" value="mL/L" readOnly {...form.register("unidad")} />
             <p className="mt-1 text-xs text-[var(--bf-muted)]">
-              Use la unidad del catálogo o de la última medición. No se asume mL/L si el registro usa otra.
+              Los sólidos sedimentables se registran únicamente en mililitros por litro (mL/L).
             </p>
           </Field>
           <Field label="Relación C/N (opcional)">
