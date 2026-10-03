@@ -2341,3 +2341,46 @@ CREATE CONSTRAINT TRIGGER trg_validar_stock_historico_no_negativo
 AFTER INSERT ON biofloc.movimientos_inventario
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_stock_historico_no_negativo();
+
+
+-- Datos fundacionales del lote: inmutables una vez iniciado/cerrado el historial.
+CREATE OR REPLACE FUNCTION biofloc.proteger_datos_fundacionales_lote()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_proteger_datos_fundacionales_lote$
+DECLARE
+    v_tiene_historial BOOLEAN;
+BEGIN
+    SELECT (
+        OLD.fecha_cierre IS NOT NULL
+        OR EXISTS (SELECT 1 FROM biofloc.biometrias WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.mortalidades WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.cosechas WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.alimentaciones WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.mediciones_biofloc WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.mediciones_agua WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.aplicaciones_biofloc WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.gastos WHERE lote_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM biofloc.detalles_venta WHERE lote_id = OLD.id)
+    ) INTO v_tiene_historial;
+
+    IF v_tiene_historial AND (
+        NEW.estanque_id IS DISTINCT FROM OLD.estanque_id
+        OR NEW.especie_id IS DISTINCT FROM OLD.especie_id
+        OR NEW.etapa_productiva_id IS DISTINCT FROM OLD.etapa_productiva_id
+        OR NEW.cantidad_sembrada IS DISTINCT FROM OLD.cantidad_sembrada
+        OR NEW.peso_inicial_promedio_g IS DISTINCT FROM OLD.peso_inicial_promedio_g
+    ) THEN
+        RAISE EXCEPTION
+            'Los datos fundacionales del lote % son inmutables una vez iniciado o cerrado su historial',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_proteger_datos_fundacionales_lote$;
+
+DROP TRIGGER IF EXISTS trg_proteger_datos_fundacionales_lote ON biofloc.lotes;
+CREATE TRIGGER trg_proteger_datos_fundacionales_lote
+BEFORE UPDATE OF estanque_id, especie_id, etapa_productiva_id, cantidad_sembrada, peso_inicial_promedio_g
+ON biofloc.lotes
+FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_datos_fundacionales_lote();
