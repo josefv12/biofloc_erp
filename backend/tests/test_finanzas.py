@@ -118,3 +118,15 @@ def test_dashboard_inventario_ajuste_usa_efecto_real():
     text = source.read_text(encoding="utf-8")
     assert "CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END" in text
     assert 'r["efecto_stock"]' in text
+
+
+def test_gasto_rechaza_fecha_futura_en_servicio():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/gasto_service.py").read_text(encoding="utf-8")
+    assert 'validar_fecha_no_futura(data.fecha, "La fecha del gasto")' in source
+
+
+def test_schema_final_tiene_guardia_de_gasto_no_futuro():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_fecha_gasto_no_futura" in source
