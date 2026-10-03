@@ -222,3 +222,13 @@ def test_costeo_lote_suma_movimientos_de_alimentacion_por_referencia():
     assert "mi.referencia_tipo = 'ALIMENTACION'" in text
     assert "mi.referencia_id IS NOT NULL" in text
     assert "mi.costo_total IS NOT NULL" in text
+
+def test_coste_alimento_exige_salida_y_coincidencia_con_alimentacion():
+    from pathlib import Path
+    for rel in ("app/services/costos_lote_service.py", "app/services/finanzas_service.py"):
+        source = Path(__file__).parents[1] / rel
+        text = source.read_text(encoding="utf-8")
+        assert "a.producto_id = mi.producto_id" in text
+        assert "a.cantidad = mi.cantidad" in text
+        assert "a.fecha_hora = mi.fecha_hora" in text
+        assert "tm.nombre = 'SALIDA'" in text
