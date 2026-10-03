@@ -204,3 +204,14 @@ def test_finanzas_incluye_costos_monetarios_de_mantenimiento_y_fallas():
     assert "FROM biofloc.fallas f" in service
     assert "f.fecha_hora AT TIME ZONE 'America/Bogota'" in service
     assert "utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados - costos_mantenimiento_fallas" in service
+
+
+def test_gasto_directo_de_lote_no_puede_preceder_siembra():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/gasto_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/028_integridad_fecha_gasto_lote.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+
+    assert "data.fecha < lo.fecha_siembra" in service
+    assert "trg_validar_fecha_gasto_lote" in migration
+    assert "trg_validar_fecha_gasto_lote" in schema
