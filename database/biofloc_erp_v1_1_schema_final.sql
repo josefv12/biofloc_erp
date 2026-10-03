@@ -707,7 +707,7 @@ CREATE INDEX idx_auditoria_usuario_fecha
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION actualizar_updated_at()
-RETURNS TRIGGER AS $biofloc$$
+RETURNS TRIGGER AS $
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
@@ -751,7 +751,7 @@ EXECUTE FUNCTION actualizar_updated_at();
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION validar_lote_activo()
-RETURNS TRIGGER AS $biofloc$$
+RETURNS TRIGGER AS $
 DECLARE
     es_activo BOOLEAN;
 BEGIN
@@ -1108,7 +1108,7 @@ FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 -- Integridad de inventario: tipos cerrados, ajustes direccionales,
 -- entradas valoradas y prohibición de movimientos futuros.
 CREATE OR REPLACE FUNCTION biofloc.validar_integridad_movimiento_inventario()
-RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$$
+RETURNS TRIGGER LANGUAGE plpgsql AS $
 DECLARE
     v_nombre VARCHAR(30);
     v_efecto SMALLINT;
@@ -1207,7 +1207,7 @@ COMMIT;
 CREATE OR REPLACE FUNCTION biofloc.validar_trazabilidad_movimiento_automatico()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $biofloc$$
+AS $
 DECLARE
     v_tipo VARCHAR(30);
     v_producto BIGINT;
@@ -1289,7 +1289,7 @@ EXECUTE FUNCTION biofloc.validar_trazabilidad_movimiento_automatico();
 CREATE OR REPLACE FUNCTION biofloc.validar_secuencia_poblacion_historica()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $biofloc$$
+AS $
 DECLARE
     v_sembrados INTEGER;
     v_max_salidas BIGINT;
