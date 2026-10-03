@@ -28,12 +28,18 @@ def _verificar_referencias(db: Session, data: LoteCreate | LoteUpdate) -> None:
             raise HTTPException(status_code=404, detail=f"Estanque id={data.estanque_id} no existe o está inactivo")
 
     if hasattr(data, "especie_id") and data.especie_id is not None:
-        if not db.query(Especie).filter(Especie.id == data.especie_id).first():
+        especie = db.query(Especie).filter(Especie.id == data.especie_id).first()
+        if not especie:
             raise HTTPException(status_code=404, detail=f"Especie id={data.especie_id} no existe")
+        if not especie.activo:
+            raise HTTPException(status_code=422, detail=f"Especie id={data.especie_id} está inactiva")
 
     if hasattr(data, "etapa_productiva_id") and data.etapa_productiva_id is not None:
-        if not db.query(EtapaProductiva).filter(EtapaProductiva.id == data.etapa_productiva_id).first():
+        etapa = db.query(EtapaProductiva).filter(EtapaProductiva.id == data.etapa_productiva_id).first()
+        if not etapa:
             raise HTTPException(status_code=404, detail=f"EtapaProductiva id={data.etapa_productiva_id} no existe")
+        if not etapa.activo:
+            raise HTTPException(status_code=422, detail=f"EtapaProductiva id={data.etapa_productiva_id} está inactiva")
 
     if hasattr(data, "estado_id") and data.estado_id is not None:
         if not db.query(EstadoLote).filter(EstadoLote.id == data.estado_id).first():
