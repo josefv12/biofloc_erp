@@ -566,3 +566,15 @@ def test_cierre_de_lote_usa_fecha_local_de_colombia():
     for content in (migracion, esquema):
         assert "(NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date" in content
         assert "(v_ultimo AT TIME ZONE 'America/Bogota')::date" in content
+
+
+def test_movimientos_protegen_stock_historico_negativo():
+    from pathlib import Path
+    servicio = (Path(__file__).parents[1] / "app/services/movimiento_inventario_service.py").read_text(encoding="utf-8")
+    migracion = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    esquema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "_validar_no_stock_negativo_historico" in servicio
+    assert "with_for_update()" in servicio
+    for content in (migracion, esquema):
+        assert "trg_validar_stock_historico_no_negativo" in content
+        assert "pg_advisory_xact_lock(2147482000, NEW.producto_id)" in content
