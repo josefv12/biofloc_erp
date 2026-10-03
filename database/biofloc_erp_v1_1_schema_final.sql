@@ -1274,3 +1274,48 @@ CREATE TRIGGER trg_validar_trazabilidad_movimiento_automatico
 BEFORE INSERT OR UPDATE ON movimientos_inventario
 FOR EACH ROW
 EXECUTE FUNCTION biofloc.validar_trazabilidad_movimiento_automatico();
+
+
+-- Integridad de secuencia histórica de población.
+CREATE OR REPLACE FUNCTION biofloc.validar_secuencia_poblacion_historica()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_sembrados INTEGER;
+    v_max_salidas BIGINT;
+BEGIN
+    SELECT cantidad_sembrada INTO v_sembrados
+      FROM lotes WHERE id = NEW.lote_id FOR UPDATE;
+
+    SELECT COALESCE(MAX(salidas_acumuladas), 0) INTO v_max_salidas
+      FROM (
+          SELECT fecha_hora,
+                 SUM(cantidad_salida) OVER (ORDER BY fecha_hora
+                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS salidas_acumuladas
+          FROM (
+              SELECT fecha_hora, cantidad AS cantidad_salida
+                FROM mortalidades WHERE lote_id = NEW.lote_id
+              UNION ALL
+              SELECT fecha_hora, cantidad_peces AS cantidad_salida
+                FROM cosechas WHERE lote_id = NEW.lote_id
+          ) eventos
+      ) secuencia;
+
+    IF v_max_salidas > v_sembrados THEN
+        RAISE EXCEPTION 'La secuencia histórica del lote % deja la población negativa', NEW.lote_id
+            USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER trg_validar_secuencia_poblacion_mortalidad
+AFTER INSERT OR UPDATE ON mortalidades
+DEFERRABLE INITIALLY IMMEDIATE
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_secuencia_poblacion_historica();
+
+CREATE CONSTRAINT TRIGGER trg_validar_secuencia_poblacion_cosecha
+AFTER INSERT OR UPDATE ON cosechas
+DEFERRABLE INITIALLY IMMEDIATE
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_secuencia_poblacion_historica();
