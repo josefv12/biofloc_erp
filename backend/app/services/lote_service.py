@@ -73,6 +73,41 @@ def obtener_lote(db: Session, lote_id: int) -> Lote:
     return lote
 
 
+def _validar_solapamiento_historico_estanque(
+    db: Session,
+    estanque_id: int,
+    fecha_siembra,
+    fecha_cierre,
+    lote_id: int | None = None,
+) -> None:
+    """Un estanque no puede alojar dos ciclos productivos en fechas superpuestas."""
+    from sqlalchemy import text
+
+    conflicto = db.execute(
+        text("""
+            SELECT l.codigo
+            FROM biofloc.lotes l
+            WHERE l.estanque_id = :estanque_id
+              AND (:lote_id IS NULL OR l.id <> :lote_id)
+              AND l.fecha_siembra <= COALESCE(:fecha_cierre, DATE '9999-12-31')
+              AND COALESCE(l.fecha_cierre, DATE '9999-12-31') >= :fecha_siembra
+            LIMIT 1
+        """),
+        {
+            "estanque_id": estanque_id,
+            "fecha_siembra": fecha_siembra,
+            "fecha_cierre": fecha_cierre,
+            "lote_id": lote_id,
+        },
+    ).scalar()
+
+    if conflicto is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"El estanque ya tiene un ciclo histórico que se solapa con el periodo del lote (lote {conflicto})",
+        )
+
+
 def _validar_estanque_operativo_para_lote(db: Session, estanque_id: int, estado_id: int) -> None:
     estado_lote = db.query(EstadoLote).filter(EstadoLote.id == estado_id).first()
     if not estado_lote:
@@ -97,6 +132,9 @@ def crear_lote(db: Session, data: LoteCreate, usuario_id: int) -> Lote:
     validar_fecha_no_futura(data.fecha_siembra, "La fecha de siembra")
     _verificar_referencias(db, data)
     _validar_estanque_operativo_para_lote(db, data.estanque_id, data.estado_id)
+    _validar_solapamiento_historico_estanque(
+        db, data.estanque_id, data.fecha_siembra, data.fecha_cierre
+    )
 
     # Verificar código único
     if db.query(Lote).filter(Lote.codigo == data.codigo).first():
@@ -207,6 +245,14 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
                 status_code=422,
                 detail="La etapa productiva es inmutable una vez iniciado o cerrado el historial del lote",
             )
+
+    _validar_solapamiento_historico_estanque(
+        db,
+        cambios.get("estanque_id", lote.estanque_id),
+        cambios.get("fecha_siembra", lote.fecha_siembra),
+        cambios.get("fecha_cierre", lote.fecha_cierre),
+        lote.id,
+    )
 
     estado_id_nuevo = cambios.get("estado_id", lote.estado_id)
     estanque_id_nuevo = cambios.get("estanque_id", lote.estanque_id)
