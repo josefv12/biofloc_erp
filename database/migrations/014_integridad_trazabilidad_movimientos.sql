@@ -22,7 +22,23 @@ BEGIN
       FROM biofloc.tipos_movimiento_inventario
      WHERE id = NEW.tipo_movimiento_id;
 
-    IF NEW.referencia_tipo = 'ALIMENTACION' THEN
+    IF NEW.referencia_tipo = 'DETALLE_COMPRA' THEN
+        IF v_tipo <> 'ENTRADA' THEN
+            RAISE EXCEPTION 'Un detalle de compra solo puede generar un movimiento ENTRADA'
+                USING ERRCODE='check_violation';
+        END IF;
+
+        SELECT producto_id, cantidad
+          INTO v_producto, v_cantidad
+          FROM biofloc.detalles_compra
+         WHERE id = NEW.referencia_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Detalle de compra % no existe para la trazabilidad',
+                NEW.referencia_id USING ERRCODE='foreign_key_violation';
+        END IF;
+
+    ELSIF NEW.referencia_tipo = 'ALIMENTACION' THEN
         IF v_tipo <> 'SALIDA' THEN
             RAISE EXCEPTION 'Una alimentación solo puede generar un movimiento SALIDA'
                 USING ERRCODE='check_violation';
