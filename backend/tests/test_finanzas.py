@@ -110,3 +110,11 @@ def test_dashboard_timestamps_use_colombia_local_date():
     text = source.read_text(encoding="utf-8")
     assert "(AT TIME ZONE 'America/Bogota')::date" in text
     assert "CAST({col} AS date)" not in text
+
+
+def test_dashboard_inventario_ajuste_usa_efecto_real():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/dashboard_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END" in text
+    assert 'r["efecto_stock"]' in text
