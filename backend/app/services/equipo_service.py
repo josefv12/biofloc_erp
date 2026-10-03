@@ -69,7 +69,11 @@ def crear_equipo(db: Session, data: EquipoCreate, usuario_id: int) -> Equipo:
     payload = data.model_dump(); payload["codigo"] = codigo; payload["nombre"] = data.nombre.strip()
     for campo in ("marca", "modelo", "numero_serie", "ubicacion", "observaciones"): payload[campo] = _strip(getattr(data, campo))
     payload["valor_adquisicion"] = valor
-    if payload.get("activo") is None: payload["activo"] = True
+    estado = db.query(EstadoEquipo).filter(EstadoEquipo.id == data.estado_id).first()
+    if estado and estado.nombre == "BAJA":
+        payload["activo"] = False
+    elif payload.get("activo") is None:
+        payload["activo"] = True
     try:
         nuevo = Equipo(**payload); db.add(nuevo); db.flush()
         _audit(db, usuario_id, "INSERT", nuevo.id, {"codigo": nuevo.codigo, "nombre": nuevo.nombre, "tipo_equipo_id": nuevo.tipo_equipo_id, "estado_id": nuevo.estado_id, "valor_adquisicion": Decimal(nuevo.valor_adquisicion) if nuevo.valor_adquisicion is not None else None, "activo": nuevo.activo})
