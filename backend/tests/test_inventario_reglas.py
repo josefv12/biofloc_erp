@@ -555,3 +555,14 @@ def test_fecha_siembra_se_protege_despues_de_iniciar_historial():
         assert "trg_proteger_fecha_siembra_historica" in content
         assert "proteger_fecha_siembra_historica" in content
         assert "biofloc.detalles_venta" in content
+
+
+def test_cierre_de_lote_usa_fecha_local_de_colombia():
+    from pathlib import Path
+    validaciones = (Path(__file__).parents[1] / "app/services/validaciones_fecha.py").read_text(encoding="utf-8")
+    migracion = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    esquema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "astimezone(TZ_COLOMBIA).date()" in validaciones
+    for content in (migracion, esquema):
+        assert "(NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date" in content
+        assert "(v_ultimo AT TIME ZONE 'America/Bogota')::date" in content
