@@ -146,11 +146,12 @@ def test_salidas_no_aceptan_costeo_manual_y_se_congelan_al_promedio_historico():
 
 def test_migracion_inventario_refuerza_valoracion_y_fecha():
     from pathlib import Path
-    migration = Path(__file__).parents[2] / "database" / "migrations" / "009_inventario_ajuste_costeo.sql"
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "012_integridad_inventario_valorado.sql"
     text = migration.read_text(encoding="utf-8")
     assert "v_efecto = 1 AND NEW.costo_unitario IS NULL" in text
     assert "NEW.fecha_hora > NOW()" in text
     assert "No se acepta una valoración manual" not in text
+    assert "Se separa de 009" in text
 
 
 def test_costo_promedio_ponderado_con_entradas_a_distinto_costo():
