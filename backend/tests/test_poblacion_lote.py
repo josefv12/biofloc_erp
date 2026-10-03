@@ -175,3 +175,12 @@ def test_finalizado_exige_poblacion_cero_y_cancelado_puede_conservar_peces():
         assert "trg_validar_lote_finalizado_sin_peces" in content
         assert "v_estado = 'FINALIZADO'" in content
         assert "SUM(cantidad_peces)" in content
+
+
+def test_validacion_cierre_servicio_usa_fecha_local_colombia():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/019_integridad_temporal_cierre_lote.sql").read_text(encoding="utf-8")
+    assert "ultimo.astimezone(TZ_COLOMBIA).date()" in source
+    assert "(NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date" in migration
+    assert "(v_ultimo AT TIME ZONE 'America/Bogota')::date" in migration
