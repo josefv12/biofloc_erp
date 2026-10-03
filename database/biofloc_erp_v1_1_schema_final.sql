@@ -1512,3 +1512,22 @@ FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_historico();
 CREATE TRIGGER trg_inmutabilidad_detalles_compra
 BEFORE UPDATE OR DELETE ON biofloc.detalles_compra
 FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_historico();
+
+
+-- Integridad: ventas y detalles comerciales son históricos e inmutables.
+CREATE OR REPLACE FUNCTION biofloc.impedir_modificacion_venta_historica()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_inmutabilidad_venta$
+BEGIN
+    RAISE EXCEPTION 'La venta histórica % es inmutable; registre una corrección mediante un nuevo documento', OLD.id USING ERRCODE='check_violation';
+END;
+$fn_inmutabilidad_venta$;
+
+CREATE TRIGGER trg_inmutabilidad_ventas
+BEFORE UPDATE OR DELETE ON ventas
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_venta_historica();
+
+CREATE TRIGGER trg_inmutabilidad_detalles_venta
+BEFORE UPDATE OR DELETE ON detalles_venta
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_venta_historica();
