@@ -521,3 +521,38 @@ BEFORE INSERT OR UPDATE OF estanque_id, estado_id
 ON biofloc.lotes
 FOR EACH ROW
 EXECUTE FUNCTION biofloc.validar_lote_estanque_operativo();
+
+
+-- La fecha de siembra es una referencia histórica base del lote.
+-- Una vez iniciado/cerrado el historial no puede reinterpretarse.
+CREATE OR REPLACE FUNCTION biofloc.proteger_fecha_siembra_historica()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_proteger_fecha_siembra_historica$
+BEGIN
+    IF NEW.fecha_siembra IS DISTINCT FROM OLD.fecha_siembra
+       AND (
+           OLD.fecha_cierre IS NOT NULL
+           OR EXISTS (SELECT 1 FROM biofloc.biometrias WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.mortalidades WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.cosechas WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.alimentaciones WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.mediciones_biofloc WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.mediciones_agua WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.aplicaciones_biofloc WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.gastos WHERE lote_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.detalles_venta WHERE lote_id = OLD.id)
+       )
+    THEN
+        RAISE EXCEPTION
+            'La fecha de siembra del lote % es inmutable una vez iniciado o cerrado su historial',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_proteger_fecha_siembra_historica$;
+
+DROP TRIGGER IF EXISTS trg_proteger_fecha_siembra_historica ON biofloc.lotes;
+CREATE TRIGGER trg_proteger_fecha_siembra_historica
+BEFORE UPDATE OF fecha_siembra ON biofloc.lotes
+FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_fecha_siembra_historica();
