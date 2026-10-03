@@ -37,7 +37,6 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
                  AND tm.nombre = 'SALIDA'
                 WHERE mi.referencia_tipo = 'ALIMENTACION'
                   AND mi.referencia_id IS NOT NULL
-                  AND mi.referencia_id IS NOT NULL
                   AND a.lote_id = :lote_id
                   AND mi.costo_total IS NOT NULL
             ), 0) AS alimento,
