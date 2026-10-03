@@ -58,9 +58,13 @@ def obtener_referencia_biofloc(db: Session, referencia_id: int) -> ReferenciaBio
 def crear_referencia_biofloc(
     db: Session, data: ReferenciaBioflocCreate, usuario_id: int
 ) -> ReferenciaBiofloc:
-    if not db.query(Especie).filter(Especie.id == data.especie_id).first():
+    especie = db.query(Especie).filter(Especie.id == data.especie_id).first()
+    if not especie:
         raise HTTPException(status_code=404, detail=f"Especie id={data.especie_id} no existe")
-    if not db.query(EtapaProductiva).filter(EtapaProductiva.id == data.etapa_productiva_id).first():
+    if not especie.activo:
+        raise HTTPException(status_code=422, detail="La especie está inactiva y no admite nuevas referencias Biofloc")
+    etapa = db.query(EtapaProductiva).filter(EtapaProductiva.id == data.etapa_productiva_id).first()
+    if not etapa or not etapa.activo:
         raise HTTPException(
             status_code=404, detail=f"Etapa productiva id={data.etapa_productiva_id} no existe"
         )
