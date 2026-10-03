@@ -139,3 +139,10 @@ def test_reportes_timestamps_use_colombia_local_date():
     text = source.read_text(encoding="utf-8")
     assert "AT TIME ZONE 'America/Bogota'" in text
     assert "CAST({col} AS date)" not in text
+
+
+def test_reporte_movimientos_ajuste_usa_efecto_real():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/reportes_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END AS afecta_stock" in text
