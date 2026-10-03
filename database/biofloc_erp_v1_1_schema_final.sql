@@ -2449,3 +2449,34 @@ DROP TRIGGER IF EXISTS trg_finalizar_lote_por_mortalidad_total ON biofloc.mortal
 CREATE TRIGGER trg_finalizar_lote_por_mortalidad_total
 AFTER INSERT ON biofloc.mortalidades
 FOR EACH ROW EXECUTE FUNCTION biofloc.finalizar_lote_por_mortalidad_total();
+
+
+-- FINALIZADO representa un ciclo agotado: exige población cero.
+CREATE OR REPLACE FUNCTION biofloc.validar_lote_finalizado_sin_peces()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_lote_finalizado_sin_peces$
+DECLARE
+    v_estado TEXT;
+    v_poblacion INTEGER;
+BEGIN
+    SELECT nombre INTO v_estado FROM biofloc.estados_lote WHERE id = NEW.estado_id;
+    IF v_estado = 'FINALIZADO' THEN
+        SELECT NEW.cantidad_sembrada
+             - COALESCE((SELECT SUM(cantidad) FROM biofloc.mortalidades WHERE lote_id = NEW.id), 0)
+             - COALESCE((SELECT SUM(cantidad_peces) FROM biofloc.cosechas WHERE lote_id = NEW.id), 0)
+        INTO v_poblacion;
+        IF v_poblacion <> 0 THEN
+            RAISE EXCEPTION 'Un lote FINALIZADO debe tener población cero; población disponible: %',
+                v_poblacion USING ERRCODE='check_violation';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$fn_validar_lote_finalizado_sin_peces$;
+
+DROP TRIGGER IF EXISTS trg_validar_lote_finalizado_sin_peces ON biofloc.lotes;
+CREATE TRIGGER trg_validar_lote_finalizado_sin_peces
+BEFORE INSERT OR UPDATE OF estado_id, cantidad_sembrada
+ON biofloc.lotes
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_lote_finalizado_sin_peces();
