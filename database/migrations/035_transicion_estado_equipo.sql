@@ -556,3 +556,45 @@ DROP TRIGGER IF EXISTS trg_proteger_fecha_siembra_historica ON biofloc.lotes;
 CREATE TRIGGER trg_proteger_fecha_siembra_historica
 BEFORE UPDATE OF fecha_siembra ON biofloc.lotes
 FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_fecha_siembra_historica();
+
+
+-- Un movimiento histórico no puede dejar existencias negativas en ningún punto
+-- posterior de la línea temporal del producto.
+CREATE OR REPLACE FUNCTION biofloc.validar_stock_historico_no_negativo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_stock_historico_no_negativo$
+DECLARE
+    v_stock NUMERIC := 0;
+    v_efecto INTEGER;
+    v_row RECORD;
+BEGIN
+    FOR v_row IN
+        SELECT
+            mi.cantidad,
+            CASE
+                WHEN tm.nombre = 'AJUSTE' THEN mi.efecto_stock
+                ELSE tm.afecta_stock
+            END AS efecto
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = NEW.producto_id
+        ORDER BY mi.fecha_hora ASC, mi.id ASC
+    LOOP
+        v_efecto := v_row.efecto;
+        v_stock := v_stock + (v_row.cantidad * v_efecto);
+        IF v_stock < 0 THEN
+            RAISE EXCEPTION
+                'El movimiento del producto % dejaría stock negativo en algún punto de su historia',
+                NEW.producto_id USING ERRCODE='check_violation';
+        END IF;
+    END LOOP;
+    RETURN NEW;
+END;
+$fn_validar_stock_historico_no_negativo$;
+
+DROP TRIGGER IF EXISTS trg_validar_stock_historico_no_negativo ON biofloc.movimientos_inventario;
+CREATE CONSTRAINT TRIGGER trg_validar_stock_historico_no_negativo
+AFTER INSERT ON biofloc.movimientos_inventario
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_stock_historico_no_negativo();
