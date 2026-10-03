@@ -58,3 +58,17 @@ def test_update_de_referencia_valida_rango_de_raciones_con_valor_existente():
     assert 'cambios.get("raciones_min", row.raciones_min)' in source
     assert 'cambios.get("raciones_max", row.raciones_max)' in source
     assert "raciones_max no puede ser menor que raciones_min" in source
+
+
+def test_referencias_no_permiten_cero_raciones():
+    from app.schemas.referencia_produccion import ReferenciaProduccionCreate
+    import pytest
+    with pytest.raises(Exception):
+        ReferenciaProduccionCreate(
+            especie_id=1,
+            etapa_productiva_id=1,
+            semana_desde=1,
+            semana_hasta=1,
+            raciones_min=0,
+            raciones_max=0,
+        )
