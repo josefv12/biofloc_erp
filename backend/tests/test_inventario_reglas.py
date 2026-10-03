@@ -350,3 +350,10 @@ def test_schema_final_tiene_guardias_temporales_financieras_e_inventario():
     assert "trg_validar_fecha_compra_no_futura" in source
     assert "trg_validar_fecha_venta_no_futura" in source
     assert "trg_validar_fecha_movimiento_no_futura" in source
+
+
+def test_schema_final_protege_unidades_de_producto_con_historico():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_unidad_producto_historica" in source
+    assert "movimientos_inventario WHERE producto_id = OLD.id" in source
