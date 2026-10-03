@@ -72,3 +72,22 @@ def test_referencias_no_permiten_cero_raciones():
             raciones_min=0,
             raciones_max=0,
         )
+
+
+def test_update_schema_rechaza_cero_raciones():
+    from app.schemas.referencia_produccion import ReferenciaProduccionUpdate
+    import pytest
+
+    with pytest.raises(Exception):
+        ReferenciaProduccionUpdate(raciones_min=0)
+    with pytest.raises(Exception):
+        ReferenciaProduccionUpdate(raciones_max=0)
+
+
+def test_precedencia_prefiere_misma_etapa_si_el_rango_es_igual():
+    candidatas = [
+        SimpleNamespace(id=1, semana_desde=9, semana_hasta=10, etapa_productiva_id=20, activo=True),
+        SimpleNamespace(id=2, semana_desde=9, semana_hasta=10, etapa_productiva_id=10, activo=True),
+    ]
+    elegida = _resolver(candidatas, 10, etapa_preferida_id=10)
+    assert elegida.id == 2
