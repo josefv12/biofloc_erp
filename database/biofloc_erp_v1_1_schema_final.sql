@@ -2535,3 +2535,53 @@ AFTER INSERT OR UPDATE OF venta_id, lote_id ON biofloc.detalles_venta
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_detalle_venta_dentro_ciclo_lote();
 
+
+
+-- Protege la secuencia histórica de ventas frente a inserciones retroactivas.
+CREATE OR REPLACE FUNCTION biofloc.validar_secuencia_historica_ventas()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_secuencia_historica_ventas$
+DECLARE
+    v_lote_id BIGINT;
+    v_fecha DATE;
+    v_cosechado NUMERIC;
+    v_vendido NUMERIC;
+BEGIN
+    FOR v_lote_id IN
+        SELECT DISTINCT d.lote_id FROM biofloc.detalles_venta d WHERE d.venta_id = NEW.id
+    LOOP
+        PERFORM pg_advisory_xact_lock(2147481000, v_lote_id);
+        FOR v_fecha, v_cosechado, v_vendido IN
+            WITH cosechas AS (
+                SELECT (c.fecha_hora AT TIME ZONE 'America/Bogota')::date AS fecha, SUM(c.peso_total_kg) AS kg
+                FROM biofloc.cosechas c WHERE c.lote_id = v_lote_id GROUP BY 1
+            ),
+            ventas AS (
+                SELECT v.fecha, SUM(d.cantidad) AS kg
+                FROM biofloc.ventas v
+                JOIN biofloc.detalles_venta d ON d.venta_id = v.id
+                WHERE d.lote_id = v_lote_id GROUP BY v.fecha
+            ),
+            fechas AS (SELECT fecha FROM cosechas UNION SELECT fecha FROM ventas)
+            SELECT f.fecha,
+                   COALESCE((SELECT SUM(c.kg) FROM cosechas c WHERE c.fecha <= f.fecha), 0),
+                   COALESCE((SELECT SUM(v.kg) FROM ventas v WHERE v.fecha <= f.fecha), 0)
+            FROM fechas f ORDER BY f.fecha
+        LOOP
+            IF v_vendido > v_cosechado THEN
+                RAISE EXCEPTION 'La secuencia histórica de ventas del lote % supera la biomasa cosechada al %',
+                    v_lote_id, v_fecha USING ERRCODE='check_violation';
+            END IF;
+        END LOOP;
+    END LOOP;
+    RETURN NEW;
+END;
+$fn_validar_secuencia_historica_ventas$;
+
+DROP TRIGGER IF EXISTS trg_validar_secuencia_historica_ventas ON biofloc.ventas;
+CREATE CONSTRAINT TRIGGER trg_validar_secuencia_historica_ventas
+AFTER INSERT ON biofloc.ventas
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_secuencia_historica_ventas();
+
