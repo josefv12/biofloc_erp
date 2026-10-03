@@ -18,6 +18,8 @@ from fastapi import HTTPException
 
 from app.models.aplicacion_biofloc import AplicacionBiofloc
 from app.models.lote import Lote
+from app.models.producto import Producto
+from app.models.categoria_inventario import CategoriaInventario
 from app.models.tipo_aplicacion_biofloc import TipoAplicacionBiofloc
 from app.models.auditoria import Auditoria
 from app.schemas.aplicacion_biofloc import AplicacionBioflocCreate
@@ -80,6 +82,28 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
     # 4. Validar cantidad >= 0 si se proporciona
     if data.cantidad is not None and data.cantidad < 0:
         raise HTTPException(status_code=422, detail="La cantidad debe ser mayor o igual a 0")
+
+    # Validar que el producto corresponda al tipo de aplicación seleccionado.
+    if data.producto_id is not None:
+        producto = db.query(Producto).filter(Producto.id == data.producto_id).first()
+        if not producto:
+            raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe")
+        if not producto.activo:
+            raise HTTPException(status_code=422, detail="El producto seleccionado está inactivo")
+        categoria = db.query(CategoriaInventario).filter(CategoriaInventario.id == producto.categoria_id).first()
+        if not categoria:
+            raise HTTPException(status_code=422, detail="El producto seleccionado no tiene una categoría válida")
+        tipo_nombre = tipo.nombre.strip().upper()
+        categoria_esperada = {
+            "FUENTE_CARBONO": "FUENTE_CARBONO",
+            "PROBIOTICO": "PROBIOTICO",
+            "CORRECTIVO": "CORRECTIVO",
+        }.get(tipo_nombre)
+        if categoria_esperada is None:
+            if tipo_nombre == "PURGA":
+                raise HTTPException(status_code=422, detail="Una PURGA no debe registrar producto ni consumo de inventario")
+        elif categoria.nombre != categoria_esperada:
+            raise HTTPException(status_code=422, detail=f"El producto no corresponde al tipo de aplicación {tipo.nombre}")
 
     # Determinar si debe generar movimiento de inventario
     generar_movimiento = (
