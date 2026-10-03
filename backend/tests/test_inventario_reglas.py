@@ -162,6 +162,17 @@ def test_costo_promedio_ponderado_con_entradas_a_distinto_costo():
     assert _calcular_costo_promedio_desde_movimientos(rows) == 1500
 
 
+def test_costo_promedio_no_conserva_lote_barato_ya_consumido():
+    rows = [
+        {"cantidad": "100", "costo_unitario": "1000", "costo_total": "100000", "efecto": 1},
+        {"cantidad": "100", "costo_unitario": None, "costo_total": "100000", "efecto": -1},
+        {"cantidad": "100", "costo_unitario": "2000", "costo_total": "200000", "efecto": 1},
+    ]
+    # El lote barato ya fue consumido por completo; el stock remanente
+    # corresponde al lote caro y su costo promedio debe ser $2.000/kg.
+    assert _calcular_costo_promedio_desde_movimientos(rows) == Decimal("2000")
+
+
 def test_costo_salida_historica_ignora_entrada_posterior():
     rows = [
         {"cantidad": "100", "costo_unitario": "1000", "costo_total": "100000", "efecto": 1},
