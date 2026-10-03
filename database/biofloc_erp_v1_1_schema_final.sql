@@ -1726,6 +1726,11 @@ BEGIN
         UNION ALL SELECT fecha_hora FROM biofloc.mediciones_biofloc WHERE lote_id = NEW.id
         UNION ALL SELECT fecha_hora FROM biofloc.mediciones_agua WHERE lote_id = NEW.id
         UNION ALL SELECT fecha_hora FROM biofloc.aplicaciones_biofloc WHERE lote_id = NEW.id
+        UNION ALL
+        SELECT v.fecha::timestamp AT TIME ZONE 'America/Bogota'
+        FROM biofloc.ventas v
+        JOIN biofloc.detalles_venta d ON d.venta_id = v.id
+        WHERE d.lote_id = NEW.id
     ) eventos;
     IF v_ultimo IS NOT NULL AND (v_ultimo AT TIME ZONE 'America/Bogota')::date > NEW.fecha_cierre THEN
         RAISE EXCEPTION 'La fecha de cierre no puede ser anterior al último evento histórico del lote %', NEW.id USING ERRCODE='check_violation';
