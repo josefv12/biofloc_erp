@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from fastapi import HTTPException
 
+from app.models.auditoria import Auditoria
+
 from app.models.cosecha import Cosecha
 from app.models.lote import EstadoLote, Lote
 from app.models.mortalidad import Mortalidad
@@ -93,6 +95,43 @@ def obtener_estado_lote_por_nombre(db: Session, nombre: str) -> EstadoLote:
             detail=f"No existe el estado de lote '{nombre}' en el catálogo.",
         )
     return estado
+
+
+def cerrar_lote_si_sin_peces(
+    db: Session,
+    lote: Lote,
+    usuario_id: int,
+    fecha_hora,
+    origen: str,
+) -> None:
+    """Cierra el lote cuando la población disponible llega exactamente a cero."""
+    restante = obtener_poblacion_disponible(db, lote.id, lote.cantidad_sembrada)
+    if restante != 0:
+        return
+
+    estado_fin = obtener_estado_lote_por_nombre(db, ESTADO_LOTE_FINALIZADO)
+    if lote.estado_id == estado_fin.id:
+        return
+
+    lote.estado_id = estado_fin.id
+    if lote.fecha_cierre is None:
+        lote.fecha_cierre = fecha_hora.date()
+
+    db.add(
+        Auditoria(
+            usuario_id=usuario_id,
+            tabla="lotes",
+            registro_id=lote.id,
+            accion="UPDATE",
+            detalle={
+                "estado": ESTADO_LOTE_FINALIZADO,
+                "fecha_cierre": lote.fecha_cierre.isoformat()
+                if lote.fecha_cierre
+                else None,
+                "origen": origen,
+            },
+        )
+    )
 
 
 def listar_lotes_poblacion_negativa(db: Session) -> list[dict]:
