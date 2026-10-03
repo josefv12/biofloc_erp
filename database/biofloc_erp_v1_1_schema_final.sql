@@ -707,12 +707,12 @@ CREATE INDEX idx_auditoria_usuario_fecha
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION actualizar_updated_at()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER AS $fn_actualizar_updated_at$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn_actualizar_updated_at$2
 
 CREATE TRIGGER trg_referencias_produccion_updated_at
 BEFORE UPDATE ON referencias_produccion
@@ -751,7 +751,7 @@ EXECUTE FUNCTION actualizar_updated_at();
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION validar_lote_activo()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER AS $fn_validar_lote_activo$
 DECLARE
     es_activo BOOLEAN;
 BEGIN
@@ -783,7 +783,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn_validar_lote_activo$2
 
 CREATE TRIGGER trg_validar_lote_activo
 BEFORE INSERT OR UPDATE OF estanque_id, estado_id ON lotes
@@ -1023,7 +1023,7 @@ VALUES
     
 -- Integridad productiva a nivel de base de datos.
 CREATE OR REPLACE FUNCTION biofloc.validar_fecha_evento_lote()
-RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn_biofloc_validar_fecha_evento_lote$
 DECLARE v_siembra DATE;
 BEGIN
     SELECT fecha_siembra INTO v_siembra FROM lotes WHERE id=NEW.lote_id;
@@ -1047,7 +1047,7 @@ BEFORE INSERT OR UPDATE ON cosechas
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
 
 CREATE OR REPLACE FUNCTION biofloc.validar_muestra_biometria()
-RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn_biofloc_validar_muestra_biometria$
 DECLARE v_sembrados INTEGER; v_salidas INTEGER;
 BEGIN
     SELECT cantidad_sembrada INTO v_sembrados FROM lotes WHERE id=NEW.lote_id;
@@ -1066,7 +1066,7 @@ BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_muestra_biometria();
 
 CREATE OR REPLACE FUNCTION biofloc.validar_promedio_cosecha()
-RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn_biofloc_validar_promedio_cosecha$
 DECLARE v_esperado NUMERIC;
 BEGIN
     v_esperado := (NEW.peso_total_kg * 1000) / NULLIF(NEW.cantidad_peces, 0);
@@ -1081,7 +1081,7 @@ BEFORE INSERT OR UPDATE ON cosechas
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_promedio_cosecha();
 
 CREATE OR REPLACE FUNCTION biofloc.validar_fecha_evento_no_futura()
-RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn_biofloc_validar_fecha_evento_no_futura$
 BEGIN
     IF NEW.fecha_hora > NOW() THEN
         RAISE EXCEPTION 'La fecha/hora del evento no puede estar en el futuro'
@@ -1108,7 +1108,7 @@ FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 -- Integridad de inventario: tipos cerrados, ajustes direccionales,
 -- entradas valoradas y prohibición de movimientos futuros.
 CREATE OR REPLACE FUNCTION biofloc.validar_integridad_movimiento_inventario()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn_biofloc_validar_integridad_movimiento_inventario$
 DECLARE
     v_nombre VARCHAR(30);
     v_efecto SMALLINT;
@@ -1193,7 +1193,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$;
+$fn_biofloc_validar_integridad_movimiento_inventario$2
 
 CREATE TRIGGER trg_validar_integridad_movimiento_inventario
 BEFORE INSERT OR UPDATE ON movimientos_inventario
@@ -1207,7 +1207,7 @@ COMMIT;
 CREATE OR REPLACE FUNCTION biofloc.validar_trazabilidad_movimiento_automatico()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $
+AS $fn_biofloc_validar_trazabilidad_movimiento_automatico$
 DECLARE
     v_tipo VARCHAR(30);
     v_producto BIGINT;
@@ -1277,7 +1277,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$;
+$fn_biofloc_validar_trazabilidad_movimiento_automatico$2
 
 CREATE TRIGGER trg_validar_trazabilidad_movimiento_automatico
 BEFORE INSERT OR UPDATE ON movimientos_inventario
@@ -1289,7 +1289,7 @@ EXECUTE FUNCTION biofloc.validar_trazabilidad_movimiento_automatico();
 CREATE OR REPLACE FUNCTION biofloc.validar_secuencia_poblacion_historica()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $
+AS $fn_biofloc_validar_secuencia_poblacion_historica$
 DECLARE
     v_sembrados INTEGER;
     v_max_salidas BIGINT;
@@ -1317,7 +1317,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$$;
+$fn_biofloc_validar_secuencia_poblacion_historica$2
 
 CREATE CONSTRAINT TRIGGER trg_validar_secuencia_poblacion_mortalidad
 AFTER INSERT OR UPDATE ON mortalidades
