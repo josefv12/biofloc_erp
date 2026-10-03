@@ -57,9 +57,7 @@ def crear_alimentacion(db: Session, data: AlimentacionCreate, usuario_id: int) -
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
 
-    # Validar fecha_hora contra fecha_siembra
-    if data.fecha_hora.date() < lote.fecha_siembra:
-        raise HTTPException(status_code=422, detail="La fecha de la alimentación no puede ser anterior a la siembra del lote")
+    validar_evento_lote(data.fecha_hora, lote.fecha_siembra, "la alimentación")
 
     # Obtener tipo SALIDA antes de empezar la transacción
     tipo_salida_id = _obtener_tipo_salida_id(db)
