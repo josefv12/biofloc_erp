@@ -95,6 +95,11 @@ Migraciones numeradas de integridad actualmente auditadas:
 - `018_referencias_semana_minima.sql` — referencias productivas desde semana 1.
 - `019_integridad_temporal_cierre_lote.sql` — coherencia entre fecha de cierre y eventos del lote.
 - `020_integridad_fecha_siembra.sql` — impide siembras futuras.
+- `021_referencias_raciones_positivas.sql` — impide raciones cero/negativas.
+- `022_integridad_fecha_gasto.sql` — impide gastos futuros.
+- `023_integridad_fechas_financieras_inventario.sql` — segunda barrera temporal para compras, ventas e inventario.
+- `024_proteger_unidades_historicas_producto.sql` — impide cambiar unidades/factor tras movimientos.
+- `025_inmutabilidad_historicos_inventario.sql` — refuerza la inmutabilidad de movimientos y registros ligados a inventario.
 
 También existen migraciones con nombre de fecha para cambios de unidades, catálogos y referencias productivas; deben ejecutarse después de las numeradas según su orden cronológico y solo sobre una base compatible.
 
