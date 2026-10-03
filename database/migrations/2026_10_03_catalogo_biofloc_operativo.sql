@@ -123,7 +123,6 @@ SELECT
   'Referencia presupuestal del ciclo 1.100 peces / 400 kg. Ajustar según TAN, alcalinidad, pH, sólidos, salinidad/cloruros y ficha técnica del producto.',
   TRUE
 FROM especies e
-JOIN productos p ON p.codigo = v.codigo
 CROSS JOIN (
   VALUES
     (1,'Inicio','BF-MELAZA',6.1969,6.00875),
@@ -207,6 +206,7 @@ CROSS JOIN (
     (20,'Engorde','BF-PROBIOTICO',0.0500,400.0),
     (20,'Engorde','BF-SAL-MARINA',5.5280,400.0)
 ) AS v(semana,fase,codigo,cantidad,biomasa)
+JOIN productos p ON p.codigo = v.codigo
 WHERE e.nombre_comun = 'Tilapia roja'
 ON CONFLICT (especie_id, semana, producto_id) DO UPDATE
 SET fase = EXCLUDED.fase,
