@@ -123,3 +123,16 @@ def test_poblacion_historica_secuencia_usa_bloqueo_del_lote():
     text = migration.read_text(encoding="utf-8")
     assert "FROM biofloc.lotes" in text
     assert "FOR UPDATE" in text
+
+
+def test_lote_rechaza_fecha_siembra_futura():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    assert 'validar_fecha_no_futura(data.fecha_siembra, "La fecha de siembra")' in source
+
+
+def test_schema_final_tiene_guardia_de_siembra_no_futura():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_fecha_siembra_no_futura" in source
+    assert "NOW() AT TIME ZONE 'America/Bogota'" in source
