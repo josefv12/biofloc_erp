@@ -172,7 +172,7 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
                         SELECT 1 FROM biofloc.gastos
                         WHERE lote_id = :lote_id
                     ) OR EXISTS (
-                        SELECT 1 FROM biofloc.ventas
+                        SELECT 1 FROM biofloc.detalles_venta
                         WHERE lote_id = :lote_id
                     )
                 """),
