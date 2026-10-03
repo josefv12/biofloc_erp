@@ -99,7 +99,8 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
     # Los insumos Biofloc salen de inventario como costo directo del lote.
     # Se agregan a otros_costos_directos para no dejar ese consumo fuera
     # del costo por kg sin romper el contrato actual de la API.
-    otros = otros + biofloc_insumos
+    otros_sin_biofloc = otros
+    otros = otros_sin_biofloc + biofloc_insumos
     directo = alimento + alevinos + otros
     kg_cosechados = _d(row["kg_cosechados"], D3)
     kg_vendidos = _d(row["kg_vendidos"], D3)
