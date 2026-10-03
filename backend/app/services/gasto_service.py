@@ -12,6 +12,7 @@ from app.models.categoria_gasto import CategoriaGasto
 from app.models.lote import Lote
 from app.models.estanque import Estanque
 from app.schemas.gasto import GastoCreate
+from app.services.validaciones_fecha import validar_fecha_no_futura
 
 
 def _audit(db, usuario_id, accion, registro_id, detalle: dict):
@@ -61,6 +62,7 @@ def obtener_gasto(db: Session, gasto_id: int) -> Gasto:
 
 
 def crear_gasto(db: Session, data: GastoCreate, usuario_id: int) -> Gasto:
+    validar_fecha_no_futura(data.fecha, "La fecha del gasto")
     cat = db.query(CategoriaGasto).filter(CategoriaGasto.id == data.categoria_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail=f"Categoría de gasto {data.categoria_id} no existe")
