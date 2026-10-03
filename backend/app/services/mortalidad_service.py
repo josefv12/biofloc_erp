@@ -19,6 +19,7 @@ from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.mortalidad import MortalidadCreate
 from app.services.poblacion_lote import exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_mortalidad_excede, obtener_poblacion_disponible
+from app.services.validaciones_temporales import validar_evento_lote
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -48,8 +49,7 @@ def crear_mortalidad(db: Session, data: MortalidadCreate, usuario_id: int) -> Mo
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
 
-    if data.fecha_hora.date() < lote.fecha_siembra:
-        raise HTTPException(status_code=422, detail="La fecha de la mortalidad no puede ser anterior a la siembra del lote")
+    validar_evento_lote(data.fecha_hora, lote.fecha_siembra, "la mortalidad")
 
     disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
     exigir_dentro_de_disponible(data.cantidad, disponible, mensaje_mortalidad_excede(data.cantidad, disponible))
