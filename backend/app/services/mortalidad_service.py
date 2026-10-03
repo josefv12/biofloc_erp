@@ -52,7 +52,8 @@ def crear_mortalidad(db: Session, data: MortalidadCreate, usuario_id: int) -> Mo
     validar_no_futuro(data.fecha_hora, "La fecha de la mortalidad")
     validar_no_despues_cierre(data.fecha_hora, lote.fecha_cierre, "La fecha de la mortalidad")
 
-    if data.fecha_hora.date() < lote.fecha_siembra:
+    fecha_local = data.fecha_hora.astimezone(TZ_COLOMBIA).date() if data.fecha_hora.tzinfo else data.fecha_hora.date()
+    if fecha_local < lote.fecha_siembra:
         raise HTTPException(status_code=422, detail="La fecha de la mortalidad no puede ser anterior a la siembra del lote")
 
     disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)
