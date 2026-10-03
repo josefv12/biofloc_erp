@@ -25,7 +25,7 @@ from app.schemas.alimentacion import AlimentacionCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
 from app.services.movimiento_inventario_service import crear_movimiento_inventario, _obtener_tipo_salida_id
 from app.services.poblacion_lote import exigir_lote_en_produccion
-from app.services.validaciones_fecha import validar_no_futuro
+from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -59,6 +59,8 @@ def crear_alimentacion(db: Session, data: AlimentacionCreate, usuario_id: int) -
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
+    validar_no_futuro(data.fecha_hora, "La fecha de la alimentación")
+    validar_no_despues_cierre(data.fecha_hora, lote.fecha_cierre, "La fecha de la alimentación")
 
     # Validar fecha_hora contra fecha_siembra
     if data.fecha_hora.date() < lote.fecha_siembra:
