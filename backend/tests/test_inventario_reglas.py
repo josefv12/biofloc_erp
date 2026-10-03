@@ -117,3 +117,36 @@ def test_trigger_venta_es_historico_y_no_usa_stock_actual():
     assert "cosechas" in text
     assert "v.fecha <= v_fecha_venta" in text
     assert "v_limite_cosecha" in text
+
+
+def test_movimiento_inventario_valida_fecha_futura():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "movimiento_inventario_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "validar_no_futuro(fecha_hora, \"La fecha del movimiento de inventario\")" in text
+
+
+def test_entradas_de_inventario_quedan_valoradas():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "movimiento_inventario_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'if efecto == 1 and data.costo_unitario is None:' in text
+    assert 'positivo requiere costo_unitario' in text
+
+
+def test_salidas_no_aceptan_costeo_manual_y_se_congelan_al_promedio_historico():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "movimiento_inventario_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'if efecto == -1:' in text
+    assert 'costo_unitario = _costo_promedio_stock_as_of(db, producto.id, fecha_hora)' in text
+    assert 'datos["costo_total"] = (costo_unitario * cantidad).quantize' in text
+
+
+def test_migracion_inventario_refuerza_valoracion_y_fecha():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "009_inventario_ajuste_costeo.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "v_efecto = 1 AND NEW.costo_unitario IS NULL" in text
+    assert "NEW.fecha_hora > NOW()" in text
+    assert "No se acepta una valoración manual" not in text
