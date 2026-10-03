@@ -113,6 +113,29 @@ def main():
     })
     log(8, "POST respaldo equipo inexistente -> 404", r.status_code == 404)
 
+    r = requests.put(f"{BASE}/api/v1/equipos/{T['equipo_id']}", headers=h(tok_a), json={"activo": False})
+    log("8.1", "Desactivar equipo de respaldo", r.status_code == 200 and r.json()["activo"] is False)
+    r = requests.post(f"{BASE}/api/v1/eventos-energia/", headers=h(tok_a), json={
+        "fecha_hora_inicio": inicio.isoformat(),
+        "respaldo_activado": True,
+        "equipo_respaldo_id": T["equipo_id"],
+        "observaciones": f"{PREF} respaldo inactivo",
+    })
+    log("8.2", "POST respaldo equipo inactivo -> 422", r.status_code == 422)
+    r = requests.put(f"{BASE}/api/v1/equipos/{T['equipo_id']}", headers=h(tok_a), json={"activo": True})
+    log("8.3", "Reactivar equipo de respaldo", r.status_code == 200 and r.json()["activo"] is True)
+    r = requests.put(f"{BASE}/api/v1/equipos/{T['equipo_id']}", headers=h(tok_a), json={"estado_id": est_no_op})
+    log("8.4", "Pasar respaldo a FUERA_DE_SERVICIO", r.status_code == 200)
+    r = requests.post(f"{BASE}/api/v1/eventos-energia/", headers=h(tok_a), json={
+        "fecha_hora_inicio": inicio.isoformat(),
+        "respaldo_activado": True,
+        "equipo_respaldo_id": T["equipo_id"],
+        "observaciones": f"{PREF} respaldo fuera de servicio",
+    })
+    log("8.5", "POST respaldo FUERA_DE_SERVICIO -> 422", r.status_code == 422)
+    r = requests.put(f"{BASE}/api/v1/equipos/{T['equipo_id']}", headers=h(tok_a), json={"estado_id": est})
+    log("8.6", "Restaurar estado OPERATIVO", r.status_code == 200)
+
     r = requests.post(f"{BASE}/api/v1/eventos-energia/", headers=h(tok_a), json={
         "fecha_hora_inicio": inicio.isoformat(),
         "fecha_hora_fin": (inicio - timedelta(hours=1)).isoformat(),
