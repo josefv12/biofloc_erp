@@ -51,17 +51,50 @@ def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id:
     ))
 
 
-def _validar_referencia(db: Session, referencia_tipo: str | None, referencia_id: int | None):
+def _validar_referencia(
+    db: Session,
+    referencia_tipo: str | None,
+    referencia_id: int | None,
+    *,
+    producto_id: int,
+    cantidad: Decimal,
+    fecha_hora: datetime,
+    tipo_nombre: str,
+):
     if referencia_id is None or referencia_tipo is None:
         return
+
+    if referencia_tipo == "ALIMENTACION":
+        from app.models.alimentacion import Alimentacion
+        origen = db.query(Alimentacion).filter(Alimentacion.id == referencia_id).first()
+        if not origen:
+            raise HTTPException(status_code=404, detail=f"Alimentación id={referencia_id} no existe para la trazabilidad")
+        if tipo_nombre != "SALIDA":
+            raise HTTPException(status_code=422, detail="Una alimentación solo puede generar un movimiento SALIDA")
+        if origen.producto_id != producto_id:
+            raise HTTPException(status_code=422, detail="El producto del movimiento no coincide con la alimentación")
+        if Decimal(str(origen.cantidad)) != Decimal(str(cantidad)):
+            raise HTTPException(status_code=422, detail="La cantidad del movimiento no coincide con la alimentación")
+        if origen.fecha_hora != fecha_hora:
+            raise HTTPException(status_code=422, detail="La fecha del movimiento no coincide con la alimentación")
+        return
+
     if referencia_tipo == "APLICACION_BIOFLOC":
         from app.models.aplicacion_biofloc import AplicacionBiofloc
-        if not db.query(AplicacionBiofloc).filter(AplicacionBiofloc.id == referencia_id).first():
+        origen = db.query(AplicacionBiofloc).filter(AplicacionBiofloc.id == referencia_id).first()
+        if not origen:
             raise HTTPException(status_code=404, detail=f"Aplicación Biofloc id={referencia_id} no existe para la trazabilidad")
-    elif referencia_tipo == "ALIMENTACION":
-        from app.models.alimentacion import Alimentacion
-        if not db.query(Alimentacion).filter(Alimentacion.id == referencia_id).first():
-            raise HTTPException(status_code=404, detail=f"Alimentación id={referencia_id} no existe para la trazabilidad")
+        if tipo_nombre != "SALIDA":
+            raise HTTPException(status_code=422, detail="Una aplicación Biofloc solo puede generar un movimiento SALIDA")
+        if origen.producto_id != producto_id:
+            raise HTTPException(status_code=422, detail="El producto del movimiento no coincide con la aplicación Biofloc")
+        if origen.cantidad is None or Decimal(str(origen.cantidad)) != Decimal(str(cantidad)):
+            raise HTTPException(status_code=422, detail="La cantidad del movimiento no coincide con la aplicación Biofloc")
+        if origen.fecha_hora != fecha_hora:
+            raise HTTPException(status_code=422, detail="La fecha del movimiento no coincide con la aplicación Biofloc")
+        return
+
+    raise HTTPException(status_code=422, detail=f"Referencia de inventario no permitida: {referencia_tipo}")
 
 
 def _obtener_tipo_salida_id(db: Session) -> int:
@@ -243,7 +276,7 @@ def crear_movimiento_inventario(
                 ),
             )
 
-    _validar_referencia(db, data.referencia_tipo, data.referencia_id)
+    _validar_referencia(\n        db, data.referencia_tipo, data.referencia_id,\n        producto_id=producto.id, cantidad=Decimal(str(data.cantidad)),\n        fecha_hora=fecha_hora, tipo_nombre=tipo.nombre,\n    )
 
     datos = data.model_dump()
     datos["fecha_hora"] = fecha_hora
