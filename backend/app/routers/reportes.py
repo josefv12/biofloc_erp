@@ -61,11 +61,11 @@ def reporte_compras(
 def reporte_gastos(
     fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None,
     categoria_id: Optional[int] = None, lote_id: Optional[int] = None,
-    proveedor: Optional[str] = None, registrado_por: Optional[int] = None,
+    estanque_id: Optional[int] = None, proveedor: Optional[str] = None, registrado_por: Optional[int] = None,
     db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user),
 ):
     _guard(db, current_user, fecha_desde, fecha_hasta)
-    return svc.gastos(db, fecha_desde, fecha_hasta, categoria_id, lote_id, proveedor, registrado_por)
+    return svc.gastos(db, fecha_desde, fecha_hasta, categoria_id, lote_id, estanque_id, proveedor, registrado_por)
 
 
 @router.get("/inventario", response_model=ReporteInventarioOut)
