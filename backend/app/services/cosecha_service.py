@@ -27,7 +27,7 @@ from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.cosecha import CosechaCreate
 from app.services.poblacion_lote import ESTADO_LOTE_FINALIZADO, exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_cosecha_excede, obtener_estado_lote_por_nombre, obtener_poblacion_disponible
-from app.services.validaciones_fecha import validar_no_futuro
+from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -71,6 +71,7 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
     validar_no_futuro(data.fecha_hora, "La fecha de la cosecha")
+    validar_no_despues_cierre(data.fecha_hora, lote.fecha_cierre, "La fecha de la cosecha")
 
     if data.fecha_hora.date() < lote.fecha_siembra:
         raise HTTPException(status_code=422, detail="La fecha de la cosecha no puede ser anterior a la fecha de siembra del lote")
