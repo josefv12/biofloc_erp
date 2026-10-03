@@ -49,7 +49,9 @@ def _params(fecha_desde: Optional[date], fecha_hasta: Optional[date]) -> dict:
 
 
 def _filtro(col: str, fecha_desde: Optional[date], fecha_hasta: Optional[date], *, ts: bool = False) -> str:
-    expr = f"CAST({col} AS date)" if ts else col
+    # Los timestamps son timestamptz; el periodo comercial/operativo del ERP usa
+    # America/Bogota y no la zona horaria de la sesión PostgreSQL.
+    expr = f"({col} AT TIME ZONE 'America/Bogota')::date" if ts else col
     s = ""
     if fecha_desde is not None:
         s += f" AND {expr} >= :fecha_desde"
