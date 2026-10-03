@@ -6,10 +6,11 @@ servicio entrega.
 Unidad canónica de masa (declarada en el DDL con COMMENT ON COLUMN):
   g  → lotes.peso_inicial_promedio_g, biometrias.peso_total_muestra_g,
        cosechas.peso_promedio_g, referencias_produccion.peso_esperado_g
-  kg → cosechas.peso_total_kg, biomasa, alimento para FCA
+  kg → cosechas.peso_total_kg, biomasa y alimento para FCA
 
-La conversión g → kg se hace en un único punto (MIL para pesos, FACTOR_A_KG
-para alimento). No se mezclan gramos y kilogramos en una misma suma.
+El alimento no se convierte desde gramos: en el ERP la alimentación se registra
+directamente en kg. Los gramos continúan siendo válidos únicamente para pesos
+individuales y de muestra de peces.
 
 Cuando un indicador no se puede calcular se devuelve None y la razón técnica
 queda en el mapa `pendientes`. Nunca se devuelve NaN, Infinity ni un valor
@@ -105,7 +106,7 @@ CIEN = Decimal("100")
 MIL = Decimal("1000")
 
 # Factores hacia kg para las unidades de masa declaradas en `unidades.simbolo`.
-FACTOR_A_KG = {"kg": Decimal("1"), "g": Decimal("0.001")}
+FACTOR_A_KG = {"kg": Decimal("1")}
 
 logger = logging.getLogger(__name__)
 
@@ -358,7 +359,7 @@ def _porcentaje(parte: int, total: int) -> Optional[Decimal]:
 
 
 def _alimento_kg(por_unidad: list[AlimentoUnidadOut]) -> tuple[Optional[Decimal], Optional[str]]:
-    """Suma el alimento real en kg. Devuelve (kg, razón si no es convertible)."""
+    """Suma alimento registrado directamente en kg. No convierte gramos."""
     if not por_unidad:
         return None, RAZON_SIN_ALIMENTO
     total = Decimal("0")

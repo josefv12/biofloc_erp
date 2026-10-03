@@ -1,12 +1,12 @@
-"""
-Servicio para movimientos_inventario.
-- Histórico INMUTABLE: solo listar / obtener / crear. Sin update/delete.
-- Regla STOCK NEGATIVO: antes de INSERT con tipo.afecta_stock == -1,
-  validar stock disponible.
-- Las salidas sin costo explícito se valoran al costo promedio ponderado de las
-  entradas históricas con costo hasta la fecha del movimiento. Esto permite que
-  cada alimentación lleve al lote el costo del alimento realmente suministrado.
-- Trazabilidad Biofloc y alimentación.
+"""Servicio para movimientos históricos de inventario.
+
+Reglas:
+- Movimientos inmutables: solo listar / obtener / crear.
+- Solo existen ENTRADA, SALIDA y AJUSTE.
+- ENTRADA suma stock; SALIDA resta stock; AJUSTE requiere efecto_stock (+1 o -1).
+- Las salidas se validan AS-OF a la fecha del movimiento.
+- El costo de una salida se congela al registrarse usando el costo promedio
+  ponderado del stock disponible en ese momento; no se revaloran salidas futuras.
 """
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone
@@ -21,6 +21,10 @@ from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
 from app.models.unidad import Unidad
 from app.models.auditoria import Auditoria
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
+from app.services.validaciones_fecha import validar_no_futuro
+
+
+D2 = Decimal("0.01")
 
 
 def _formato_cantidad_unidad(valor: Decimal, simbolo: str) -> str:
@@ -28,9 +32,7 @@ def _formato_cantidad_unidad(valor: Decimal, simbolo: str) -> str:
     if "." in texto:
         texto = texto.rstrip("0").rstrip(".")
     texto = texto.replace(".", ",")
-    if simbolo:
-        return f"{texto} {simbolo}"
-    return texto
+    return f"{texto} {simbolo}" if simbolo else texto
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -40,67 +42,196 @@ def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id:
             detalle_safe[k] = float(v)
         else:
             detalle_safe[k] = v
-    entrada = Auditoria(
+    db.add(Auditoria(
         usuario_id=usuario_id,
         tabla="movimientos_inventario",
         registro_id=registro_id,
         accion=accion,
         detalle=detalle_safe,
-    )
-    db.add(entrada)
+    ))
 
 
-def _validar_referencia(db: Session, referencia_tipo: str | None, referencia_id: int | None):
+def _validar_referencia(
+    db: Session,
+    referencia_tipo: str | None,
+    referencia_id: int | None,
+    *,
+    producto_id: int,
+    cantidad: Decimal,
+    fecha_hora: datetime,
+    tipo_nombre: str,
+):
     if referencia_id is None or referencia_tipo is None:
         return
+
+    if referencia_tipo == "ALIMENTACION":
+        from app.models.alimentacion import Alimentacion
+        origen = db.query(Alimentacion).filter(Alimentacion.id == referencia_id).first()
+        if not origen:
+            raise HTTPException(status_code=404, detail=f"Alimentación id={referencia_id} no existe para la trazabilidad")
+        if tipo_nombre != "SALIDA":
+            raise HTTPException(status_code=422, detail="Una alimentación solo puede generar un movimiento SALIDA")
+        if origen.producto_id != producto_id:
+            raise HTTPException(status_code=422, detail="El producto del movimiento no coincide con la alimentación")
+        if Decimal(str(origen.cantidad)) != Decimal(str(cantidad)):
+            raise HTTPException(status_code=422, detail="La cantidad del movimiento no coincide con la alimentación")
+        if origen.fecha_hora != fecha_hora:
+            raise HTTPException(status_code=422, detail="La fecha del movimiento no coincide con la alimentación")
+        return
+
+    if referencia_tipo == "DETALLE_COMPRA":
+        from app.models.detalle_compra import DetalleCompra
+        origen = db.query(DetalleCompra).filter(DetalleCompra.id == referencia_id).first()
+        if not origen:
+            raise HTTPException(status_code=404, detail=f"Detalle de compra id={referencia_id} no existe para la trazabilidad")
+        if tipo_nombre != "ENTRADA":
+            raise HTTPException(status_code=422, detail="Un detalle de compra solo puede generar un movimiento ENTRADA")
+        if origen.producto_id != producto_id:
+            raise HTTPException(status_code=422, detail="El producto del movimiento no coincide con el detalle de compra")
+        if Decimal(str(origen.cantidad)) != Decimal(str(cantidad)):
+            raise HTTPException(status_code=422, detail="La cantidad del movimiento no coincide con el detalle de compra")
+        return
+
     if referencia_tipo == "APLICACION_BIOFLOC":
         from app.models.aplicacion_biofloc import AplicacionBiofloc
-        apl = db.query(AplicacionBiofloc).filter(AplicacionBiofloc.id == referencia_id).first()
-        if not apl:
+        origen = db.query(AplicacionBiofloc).filter(AplicacionBiofloc.id == referencia_id).first()
+        if not origen:
             raise HTTPException(status_code=404, detail=f"Aplicación Biofloc id={referencia_id} no existe para la trazabilidad")
-    elif referencia_tipo == "ALIMENTACION":
-        from app.models.alimentacion import Alimentacion
-        alim = db.query(Alimentacion).filter(Alimentacion.id == referencia_id).first()
-        if not alim:
-            raise HTTPException(status_code=404, detail=f"Alimentación id={referencia_id} no existe para la trazabilidad")
+        if tipo_nombre != "SALIDA":
+            raise HTTPException(status_code=422, detail="Una aplicación Biofloc solo puede generar un movimiento SALIDA")
+        if origen.producto_id != producto_id:
+            raise HTTPException(status_code=422, detail="El producto del movimiento no coincide con la aplicación Biofloc")
+        if origen.cantidad is None or Decimal(str(origen.cantidad)) != Decimal(str(cantidad)):
+            raise HTTPException(status_code=422, detail="La cantidad del movimiento no coincide con la aplicación Biofloc")
+        if origen.fecha_hora != fecha_hora:
+            raise HTTPException(status_code=422, detail="La fecha del movimiento no coincide con la aplicación Biofloc")
+        return
+
+    raise HTTPException(status_code=422, detail=f"Referencia de inventario no permitida: {referencia_tipo}")
 
 
 def _obtener_tipo_salida_id(db: Session) -> int:
-    """Obtiene el ID del tipo de movimiento SALIDA."""
     tipo = db.query(TipoMovimientoInventario).filter(TipoMovimientoInventario.nombre == "SALIDA").first()
     if not tipo:
         raise HTTPException(status_code=500, detail="Tipo de movimiento SALIDA no encontrado en catálogo")
     return tipo.id
 
 
-def _costo_promedio_entrada(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
-    """Costo promedio ponderado de entradas con costo hasta el momento del consumo."""
-    row = db.execute(text("""
+def _tipo_y_efecto(tipo: TipoMovimientoInventario, efecto_stock: int | None) -> int:
+    if tipo.nombre == "ENTRADA":
+        if efecto_stock is not None:
+            raise HTTPException(status_code=422, detail="ENTRADA no recibe efecto_stock; su efecto es +1")
+        return 1
+    if tipo.nombre == "SALIDA":
+        if efecto_stock is not None:
+            raise HTTPException(status_code=422, detail="SALIDA no recibe efecto_stock; su efecto es -1")
+        return -1
+    if tipo.nombre == "AJUSTE":
+        if efecto_stock not in (-1, 1):
+            raise HTTPException(status_code=422, detail="AJUSTE requiere efecto_stock = 1 o -1")
+        return efecto_stock
+    raise HTTPException(status_code=422, detail="Tipo de movimiento no permitido. Use ENTRADA, SALIDA o AJUSTE")
+
+
+def _calcular_costo_promedio_desde_movimientos(rows) -> Decimal:
+    """Aplica promedio ponderado móvil sobre movimientos ya ordenados cronológicamente."""
+    cantidad_stock = Decimal("0")
+    valor_stock = Decimal("0")
+
+    for row in rows:
+        cantidad = Decimal(str(row["cantidad"] or 0))
+        efecto = int(row["efecto"])
+        costo_unitario = Decimal(str(row["costo_unitario"])) if row["costo_unitario"] is not None else None
+        costo_total = Decimal(str(row["costo_total"])) if row["costo_total"] is not None else None
+
+        if efecto == 1:
+            cantidad_stock += cantidad
+            if costo_total is not None:
+                valor_stock += costo_total
+            elif costo_unitario is not None:
+                valor_stock += cantidad * costo_unitario
+        else:
+            if cantidad_stock <= 0:
+                continue
+            cantidad_salida = min(cantidad, cantidad_stock)
+            promedio = valor_stock / cantidad_stock
+            valor_stock -= promedio * cantidad_salida
+            cantidad_stock -= cantidad_salida
+            if valor_stock < 0:
+                valor_stock = Decimal("0")
+
+    if cantidad_stock <= 0:
+        return Decimal("0")
+    return (valor_stock / cantidad_stock).quantize(D2, rounding=ROUND_HALF_UP)
+
+
+def _costo_promedio_stock_as_of(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
+    """Calcula el promedio ponderado del stock que existía en la fecha del evento."""
+    rows = db.execute(text("""
         SELECT
-            COALESCE(SUM(cantidad), 0) AS cantidad,
-            COALESCE(SUM(costo_total), 0) AS costo
+            mi.cantidad,
+            mi.costo_unitario,
+            mi.costo_total,
+            CASE
+                WHEN tm.nombre = 'AJUSTE' THEN mi.efecto_stock
+                ELSE tm.afecta_stock
+            END AS efecto
         FROM biofloc.movimientos_inventario mi
         JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
         WHERE mi.producto_id = :pid
-          AND tm.afecta_stock = 1
           AND mi.fecha_hora <= :fecha_hora
-          AND mi.costo_unitario IS NOT NULL
-          AND mi.costo_total IS NOT NULL
-    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().one()
-    cantidad = Decimal(str(row["cantidad"] or 0))
-    costo = Decimal(str(row["costo"] or 0))
-    if cantidad <= 0 or costo < 0:
-        return Decimal("0")
-    return (costo / cantidad).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        ORDER BY mi.fecha_hora ASC, mi.id ASC
+    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().all()
 
+    return _calcular_costo_promedio_desde_movimientos(rows)
 
 def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
-    """Retorna el stock actual de un producto desde la vista."""
     row = db.execute(text("""
         SELECT COALESCE(stock_actual, 0)
         FROM biofloc.vista_stock_productos
         WHERE producto_id = :pid
     """), {"pid": producto_id}).scalar()
+    return Decimal(str(row or 0))
+
+
+def _validar_no_stock_negativo_historico(db: Session, producto_id: int) -> None:
+    """Verifica toda la línea temporal del producto después de insertar un movimiento."""
+    rows = db.execute(text("""
+        SELECT
+            mi.cantidad,
+            CASE
+                WHEN tm.nombre = 'AJUSTE' THEN mi.efecto_stock
+                ELSE tm.afecta_stock
+            END AS efecto
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = :pid
+        ORDER BY mi.fecha_hora ASC, mi.id ASC
+    """), {"pid": producto_id}).mappings().all()
+
+    stock = Decimal("0")
+    for row in rows:
+        stock += Decimal(str(row["cantidad"])) * Decimal(str(row["efecto"]))
+        if stock < 0:
+            raise HTTPException(
+                status_code=422,
+                detail="El movimiento dejaría stock negativo en algún punto de la historia del producto",
+            )
+
+
+def obtener_stock_as_of(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
+    row = db.execute(text("""
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN tm.nombre = 'AJUSTE' THEN mi.cantidad * mi.efecto_stock
+                ELSE mi.cantidad * tm.afecta_stock
+            END
+        ), 0)
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = :pid
+          AND mi.fecha_hora <= :fecha_hora
+    """), {"pid": producto_id, "fecha_hora": fecha_hora}).scalar()
     return Decimal(str(row or 0))
 
 
@@ -126,7 +257,7 @@ def listar_movimientos_inventario(
         q = q.filter(MovimientoInventario.fecha_hora >= fecha_desde)
     if fecha_hasta:
         q = q.filter(MovimientoInventario.fecha_hora <= fecha_hasta)
-    return q.order_by(MovimientoInventario.fecha_hora.desc()).all()
+    return q.order_by(MovimientoInventario.fecha_hora.desc(), MovimientoInventario.id.desc()).all()
 
 
 def obtener_movimiento_inventario(db: Session, movimiento_id: int) -> MovimientoInventario:
@@ -145,48 +276,102 @@ def crear_movimiento_inventario(
     producto = db.query(Producto).filter(Producto.id == data.producto_id).first()
     if not producto:
         raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe")
-    tipo = db.query(TipoMovimientoInventario).filter(TipoMovimientoInventario.id == data.tipo_movimiento_id).first()
+
+    tipo = db.query(TipoMovimientoInventario).filter(
+        TipoMovimientoInventario.id == data.tipo_movimiento_id
+    ).first()
     if not tipo:
         raise HTTPException(status_code=404, detail=f"Tipo movimiento id={data.tipo_movimiento_id} no existe")
 
+    efecto = _tipo_y_efecto(tipo, data.efecto_stock)
     fecha_hora = data.fecha_hora or datetime.now(timezone.utc)
+    validar_no_futuro(fecha_hora, "La fecha del movimiento de inventario")
 
-    if tipo.afecta_stock == -1:
-        row = db.execute(text("""
-            SELECT COALESCE(stock_actual, 0)
-            FROM biofloc.vista_stock_productos
-            WHERE producto_id = :pid
-        """), {"pid": producto.id}).scalar()
-        stock_actual = Decimal(str(row or 0))
-        if (stock_actual - data.cantidad) < Decimal("0"):
+    # Serializa cualquier movimiento del producto para que una inserción
+    # histórica no pueda competir con otra y producir un stock negativo.
+    producto = (
+        db.query(Producto)
+        .filter(Producto.id == data.producto_id)
+        .with_for_update()
+        .one()
+    )
+
+    if tipo.nombre == "AJUSTE" and not (data.observaciones and data.observaciones.strip()):
+        raise HTTPException(status_code=422, detail="AJUSTE requiere una observación que explique el motivo")
+
+    if efecto == -1:
+        stock_as_of = obtener_stock_as_of(db, producto.id, fecha_hora)
+        if stock_as_of < data.cantidad:
             unidad = db.query(Unidad).filter(Unidad.id == producto.unidad_id).first()
             simbolo = unidad.simbolo if unidad else ""
             raise HTTPException(
                 status_code=422,
                 detail=(
                     "No hay stock suficiente. Disponible: "
-                    f"{_formato_cantidad_unidad(stock_actual, simbolo)}; solicitado: "
+                    f"{_formato_cantidad_unidad(stock_as_of, simbolo)}; solicitado: "
                     f"{_formato_cantidad_unidad(Decimal(str(data.cantidad)), simbolo)}."
                 ),
             )
 
-    _validar_referencia(db, data.referencia_tipo, data.referencia_id)
+    _validar_referencia(
+        db, data.referencia_tipo, data.referencia_id,
+        producto_id=producto.id,
+        cantidad=Decimal(str(data.cantidad)),
+        fecha_hora=fecha_hora,
+        tipo_nombre=tipo.nombre,
+    )
+
+    # Una referencia automática representa exactamente un movimiento.
+    # Impide duplicar manualmente la salida/entrada ya generada por el evento origen.
+    if data.referencia_tipo is not None and data.referencia_id is not None:
+        existente = db.query(MovimientoInventario.id).filter(
+            MovimientoInventario.referencia_tipo == data.referencia_tipo,
+            MovimientoInventario.referencia_id == data.referencia_id,
+        ).first()
+        if existente:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ya existe un movimiento de inventario para "
+                    f"{data.referencia_tipo} id={data.referencia_id}."
+                ),
+            )
 
     datos = data.model_dump()
     datos["fecha_hora"] = fecha_hora
     datos["registrado_por"] = usuario_id
 
-    # Si una salida no trae costo, calcularlo desde las entradas históricas.
-    if tipo.afecta_stock == -1 and (datos.get("costo_unitario") is None or datos.get("costo_total") is None):
-        costo_unitario = _costo_promedio_entrada(db, producto.id, fecha_hora)
+    # Toda entrada que incremente existencias debe quedar valorada. Sin costo,
+    # el promedio ponderado posterior quedaría artificialmente subvalorado.
+    if efecto == 1 and data.costo_unitario is None:
+        raise HTTPException(status_code=422, detail=f"{tipo.nombre} positivo requiere costo_unitario")
+
+    # Las salidas y ajustes negativos SIEMPRE toman el costo promedio histórico
+    # del stock existente en el momento del evento. No se acepta una valoración
+    # manual distinta porque el costo de salida debe quedar congelado por la
+    # política de promedio ponderado.
+    if efecto == -1:
+        costo_unitario = _costo_promedio_stock_as_of(db, producto.id, fecha_hora)
+        if costo_unitario <= 0 and data.cantidad > 0:
+            raise HTTPException(status_code=422, detail="No existe costo histórico disponible para valorar la salida")
         cantidad = Decimal(str(data.cantidad))
         datos["costo_unitario"] = costo_unitario
-        datos["costo_total"] = (costo_unitario * cantidad).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        datos["costo_total"] = (costo_unitario * cantidad).quantize(D2, rounding=ROUND_HALF_UP)
+
+    if tipo.nombre in ("ENTRADA", "AJUSTE") and efecto == 1 and datos.get("costo_total") is None:
+        datos["costo_total"] = (
+            Decimal(str(data.cantidad)) * Decimal(str(data.costo_unitario))
+        ).quantize(D2, rounding=ROUND_HALF_UP)
 
     nuevo = MovimientoInventario(**datos)
     db.add(nuevo)
     try:
         db.flush()
+        _validar_no_stock_negativo_historico(db, producto.id)
+    except HTTPException:
+        if not flush_only:
+            db.rollback()
+        raise
     except IntegrityError as e:
         if not flush_only:
             db.rollback()
@@ -198,6 +383,7 @@ def crear_movimiento_inventario(
             "producto_id": nuevo.producto_id,
             "tipo_movimiento_id": nuevo.tipo_movimiento_id,
             "cantidad": nuevo.cantidad,
+            "efecto_stock": nuevo.efecto_stock,
             "fecha_hora": nuevo.fecha_hora.isoformat() if nuevo.fecha_hora else None,
             "referencia_tipo": nuevo.referencia_tipo,
             "referencia_id": nuevo.referencia_id,

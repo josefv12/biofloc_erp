@@ -7,7 +7,7 @@ import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
-import { listProductos } from "../../api/inventory";
+import { listCategoriasInventario, listProductos } from "../../api/inventory";
 import { createCompra, listCompras } from "../../api/purchases";
 import { listUnidades } from "../../api/operations";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -43,8 +43,10 @@ export function ComprasPage() {
   const comprasQuery = useQuery({ queryKey: ["compras", fechaDesde, fechaHasta], queryFn: () => listCompras({ fechaDesde: fechaDesde || undefined, fechaHasta: fechaHasta || undefined }) });
   const productosQuery = useQuery({ queryKey: ["productos", { soloActivos: true }], queryFn: () => listProductos({ soloActivos: true }) });
   const unidadesQuery = useQuery({ queryKey: ["unidades"], queryFn: listUnidades });
+  const categoriasQuery = useQuery({ queryKey: ["categorias-inventario"], queryFn: () => listCategoriasInventario(true) });
   const unidades = useMemo(() => new Map((unidadesQuery.data ?? []).map((row) => [row.id, row])), [unidadesQuery.data]);
   const productos = useMemo(() => new Map((productosQuery.data ?? []).map((row) => [row.id, row])), [productosQuery.data]);
+  const categorias = useMemo(() => new Map((categoriasQuery.data ?? []).map((row) => [row.id, row.nombre])), [categoriasQuery.data]);
 
   const mutation = useMutation({
     mutationFn: (data: CompraCreate) => createCompra(data),
@@ -106,16 +108,17 @@ export function ComprasPage() {
             const simboloInterno = unidadInterna?.simbolo;
             const factor = producto?.factor_conversion;
             if (!producto_id || !Number.isFinite(cantidadPresentada) || !Number.isFinite(precioPresentado)) { setFormError("Cada línea requiere producto, cantidad y precio unitario."); return; }
-            const cantidad = cantidadDesdePresentacion(cantidadPresentada, simboloInterno, factor);
-            const precio_unitario = precioDesdePresentacion(precioPresentado, simboloInterno, factor);
+            const esAlimento = producto ? (categorias.get(producto.categoria_id) ?? "").trim().toUpperCase() === "ALIMENTO" : false;
+            const cantidad = esAlimento ? cantidadPresentada : cantidadDesdePresentacion(cantidadPresentada, simboloInterno, factor);
+            const precio_unitario = esAlimento ? precioPresentado : precioDesdePresentacion(precioPresentado, simboloInterno, factor);
             if (!Number.isFinite(cantidad) || !Number.isFinite(precio_unitario) || cantidad <= 0 || precio_unitario < 0) { setFormError("La cantidad debe ser mayor que 0 y el precio unitario no puede ser negativo."); return; }
             detalles.push({ producto_id, cantidad, precio_unitario });
           }
           mutation.mutate({ fecha, proveedor: proveedor.trim() || null, observaciones: observaciones.trim() || null, detalles });
         }}>
           {formError ? <ErrorAlert message={formError} /> : null}
-          {productosQuery.isLoading || unidadesQuery.isLoading ? <p className="text-sm text-[var(--bf-muted)]">Cargando catálogo…</p> : null}
-          {productosQuery.isError || unidadesQuery.isError ? <ErrorAlert message={apiErrorMessage(productosQuery.error ?? unidadesQuery.error)} /> : null}
+          {productosQuery.isLoading || unidadesQuery.isLoading || categoriasQuery.isLoading ? <p className="text-sm text-[var(--bf-muted)]">Cargando catálogo…</p> : null}
+          {productosQuery.isError || unidadesQuery.isError || categoriasQuery.isError ? <ErrorAlert message={apiErrorMessage(productosQuery.error ?? unidadesQuery.error ?? categoriasQuery.error)} /> : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Fecha"><input type="date" className="bf-input" required value={fecha} onChange={(e) => setFecha(e.target.value)} /></Field>
             <Field label="Proveedor (opcional)"><input className="bf-input" value={proveedor} onChange={(e) => setProveedor(e.target.value)} /></Field>
@@ -132,8 +135,8 @@ export function ComprasPage() {
               return <div key={linea.key} className="rounded-lg border border-[var(--bf-border)] p-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Producto"><select className="bf-input" value={linea.producto_id} onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, producto_id: e.target.value } : row))}><option value="">Seleccione</option>{(productosQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{etiquetaProducto(row.nombre, row.codigo)}</option>)}</select></Field>
-                  <Field label={`Cantidad${unidad ? ` (${unidad})` : ""}`}><input type="number" step="any" min="0.0001" className="bf-input" value={linea.cantidad} onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, cantidad: e.target.value } : row))} /></Field>
-                  <Field label={unidad ? `Precio unitario ($ / ${unidad})` : "Precio unitario"}><input type="number" step="any" min="0" className="bf-input" value={linea.precio_unitario} onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, precio_unitario: e.target.value } : row))} /></Field>
+                  <Field label={`Cantidad${unidad ? ` (${unidad})` : ""}`}><input type="number" step={unidad === "kg" ? "0.001" : "any"} min="0.0001" className="bf-input" value={linea.cantidad} onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, cantidad: e.target.value } : row))} /></Field>
+                  <Field label={unidad ? `Precio unitario (COP / ${unidad})` : "Precio unitario"}><input type="number" step="any" min="0" className="bf-input" value={linea.precio_unitario} onChange={(e) => setLineas((rows) => rows.map((row) => row.key === linea.key ? { ...row, precio_unitario: e.target.value } : row))} /></Field>
                   <div className="text-sm"><p className="mb-1 font-medium text-[var(--bf-ink)]">Subtotal (ayuda visual)</p><p className="rounded-md bg-[var(--bf-chip)] px-3 py-2">{subtotal == null ? "—" : formatCop(subtotal)}</p></div>
                 </div>
                 {lineas.length > 1 ? <button type="button" className="bf-btn-secondary mt-3 !py-1 text-xs" onClick={() => setLineas((rows) => rows.filter((row) => row.key !== linea.key))}>Quitar línea {index + 1}</button> : null}

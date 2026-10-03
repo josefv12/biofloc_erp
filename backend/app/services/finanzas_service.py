@@ -39,6 +39,19 @@ def calcular_costos_financieros_lote(
     vendidos = Decimal(str(kg_vendidos or 0))
     ingresos = Decimal(str(ventas or 0))
 
+    if alimento < ZERO:
+        raise HTTPException(status_code=422, detail="El costo del alimento no puede ser negativo")
+    if gastos < ZERO:
+        raise HTTPException(status_code=422, detail="Los gastos del lote no pueden ser negativos")
+    if ingresos < ZERO:
+        raise HTTPException(status_code=422, detail="Las ventas no pueden ser negativas")
+    if cosechados < ZERO:
+        raise HTTPException(status_code=422, detail="Los kg cosechados no pueden ser negativos")
+    if vendidos < ZERO:
+        raise HTTPException(status_code=422, detail="Los kg vendidos no pueden ser negativos")
+    if vendidos > cosechados:
+        raise HTTPException(status_code=422, detail="Los kg vendidos no pueden superar los kg cosechados")
+
     costo_produccion = alimento + gastos
     costo_por_kg = costo_produccion / cosechados if cosechados > ZERO else None
     cogs = vendidos * costo_por_kg if costo_por_kg is not None else ZERO
@@ -81,16 +94,23 @@ def calcular_finanzas(
                 SELECT SUM(cos.peso_total_kg)
                 FROM biofloc.cosechas cos
                 WHERE cos.lote_id = l.id
-                  AND CAST(cos.fecha_hora AS date) <= v.fecha
+                  AND (cos.fecha_hora AT TIME ZONE 'America/Bogota')::date <= v.fecha
             ), 0) AS kg_cosechados,
             COALESCE((
                 SELECT SUM(mi.costo_total)
                 FROM biofloc.movimientos_inventario mi
                 JOIN biofloc.alimentaciones a
                   ON a.id = mi.referencia_id
+                 AND a.producto_id = mi.producto_id
+                 AND a.cantidad = mi.cantidad
+                 AND a.fecha_hora = mi.fecha_hora
+                JOIN biofloc.tipos_movimiento_inventario tm
+                  ON tm.id = mi.tipo_movimiento_id
+                 AND tm.nombre = 'SALIDA'
                 WHERE mi.referencia_tipo = 'ALIMENTACION'
+                  AND mi.referencia_id IS NOT NULL
                   AND a.lote_id = l.id
-                  AND CAST(a.fecha_hora AS date) <= v.fecha
+                  AND (a.fecha_hora AT TIME ZONE 'America/Bogota')::date <= v.fecha
                   AND mi.costo_total IS NOT NULL
             ), 0) AS costo_alimento,
             COALESCE((
@@ -152,7 +172,7 @@ def calcular_finanzas(
         ZERO,
     )
 
-    gasto_periodo = db.execute(text("""
+    gastos_periodo = db.execute(text("""
         SELECT COALESCE(SUM(g.valor), 0)
         FROM biofloc.gastos g
         WHERE g.lote_id IS NULL
@@ -160,10 +180,40 @@ def calcular_finanzas(
           AND (:fecha_desde IS NULL OR g.fecha >= :fecha_desde)
           AND (:fecha_hasta IS NULL OR g.fecha <= :fecha_hasta)
     """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
-    gastos_operativos = Decimal(str(gasto_periodo or 0))
+    gastos_operativos = Decimal(str(gastos_periodo or 0))
+
+    # Los gastos de estanque son overhead de infraestructura/productivo. Se
+    # mantienen fuera del costo directo de cada lote para no duplicarlos cuando
+    # varios lotes comparten el mismo estanque, pero sí deben entrar una sola
+    # vez en la rentabilidad global del periodo.
+    costos_estanque_periodo = db.execute(text("""
+        SELECT COALESCE(SUM(g.valor), 0)
+        FROM biofloc.gastos g
+        WHERE g.lote_id IS NULL
+          AND g.estanque_id IS NOT NULL
+          AND (:fecha_desde IS NULL OR g.fecha >= :fecha_desde)
+          AND (:fecha_hasta IS NULL OR g.fecha <= :fecha_hasta)
+    """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
+    costos_estanque_no_asignados = Decimal(str(costos_estanque_periodo or 0))
+
+    costos_mantenimiento_fallas_periodo = db.execute(text("""
+        SELECT COALESCE(SUM(x.costo), 0)
+        FROM (
+            SELECT m.costo
+            FROM biofloc.mantenimientos m
+            WHERE (:fecha_desde IS NULL OR m.fecha >= :fecha_desde)
+              AND (:fecha_hasta IS NULL OR m.fecha <= :fecha_hasta)
+            UNION ALL
+            SELECT f.costo
+            FROM biofloc.fallas f
+            WHERE (:fecha_desde IS NULL OR (f.fecha_hora AT TIME ZONE 'America/Bogota')::date >= :fecha_desde)
+              AND (:fecha_hasta IS NULL OR (f.fecha_hora AT TIME ZONE 'America/Bogota')::date <= :fecha_hasta)
+        ) x
+    """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
+    costos_mantenimiento_fallas = Decimal(str(costos_mantenimiento_fallas_periodo or 0))
 
     utilidad_bruta = total_ventas - total_cogs
-    utilidad_neta = utilidad_bruta - gastos_operativos
+    utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados - costos_mantenimiento_fallas
     margen_bruto = (utilidad_bruta / total_ventas * 100) if total_ventas else None
     margen_neto = (utilidad_neta / total_ventas * 100) if total_ventas else None
     costo_promedio = total_cogs / total_kg if total_kg else ZERO
@@ -194,6 +244,8 @@ def calcular_finanzas(
         costo_ventas_estimado=_d2(total_cogs),
         utilidad_bruta=_d2(utilidad_bruta),
         gastos_operativos=_d2(gastos_operativos),
+        costos_estanque_no_asignados=_d2(costos_estanque_no_asignados),
+        costos_mantenimiento_fallas=_d2(costos_mantenimiento_fallas),
         utilidad_neta=_d2(utilidad_neta),
         margen_bruto_pct=(Decimal(str(margen_bruto)).quantize(D2, rounding=ROUND_HALF_UP) if margen_bruto is not None else None),
         margen_neto_pct=(Decimal(str(margen_neto)).quantize(D2, rounding=ROUND_HALF_UP) if margen_neto is not None else None),
@@ -205,7 +257,7 @@ def calcular_finanzas(
         metodologia=(
             "Costo por lote: el alimento se toma del costo registrado en cada salida de inventario generada por una alimentación del lote; "
             "por tanto, solo se imputa al lote el alimento realmente suministrado. Los demás costos directos se toman de gastos asociados al lote. "
-            "Los costos registrados a nivel de estanque se conservan separados para su posterior asignación entre lotes, evitando repartirlos arbitrariamente. "
+            "Los costos registrados a nivel de estanque se conservan separados del costo directo de los lotes para evitar duplicarlos cuando varios lotes comparten un estanque; se incluyen una sola vez en la rentabilidad global del periodo. Los costos monetarios de mantenimientos y fallas también se incluyen una sola vez como costos operativos. "
             "El costo por kg se obtiene sobre kg cosechados acumulados hasta cada venta; el costo de ventas es kg vendidos × costo promedio/kg. "
             "Costo producción de lotes corresponde al costo acumulado de producción de los lotes con ventas en el periodo; no es COGS."
         ),

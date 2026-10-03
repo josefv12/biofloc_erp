@@ -4,7 +4,7 @@ export const UNAUTHORIZED_EVENT = "biofloc:unauthorized";
 
 // In production the frontend talks directly to the Render API.
 // In local development Vite can override this with VITE_API_BASE_URL.
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "https://biofloc-erp.onrender.com").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
   readonly status: number;

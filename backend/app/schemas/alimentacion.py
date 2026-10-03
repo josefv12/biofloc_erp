@@ -1,4 +1,5 @@
-from pydantic import BaseModel, field_validator
+from decimal import Decimal
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
@@ -7,15 +8,8 @@ class AlimentacionCreate(BaseModel):
     lote_id: int
     producto_id: int
     fecha_hora: datetime
-    cantidad: float
+    cantidad: Decimal = Field(..., gt=0, max_digits=12, decimal_places=3)
     observaciones: Optional[str] = None
-
-    @field_validator("cantidad")
-    @classmethod
-    def cantidad_positiva(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("cantidad debe ser mayor que 0")
-        return v
 
 
 class AlimentacionOut(BaseModel):
@@ -23,7 +17,7 @@ class AlimentacionOut(BaseModel):
     lote_id: int
     producto_id: int
     fecha_hora: datetime
-    cantidad: float
+    cantidad: Decimal
     observaciones: Optional[str] = None
     registrado_por: int
     created_at: datetime
@@ -33,4 +27,4 @@ class AlimentacionOut(BaseModel):
 
 
 class AlimentacionConStockOut(AlimentacionOut):
-    stock_restante: Optional[float] = None
+    stock_restante: Optional[Decimal] = None

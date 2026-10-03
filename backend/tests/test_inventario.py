@@ -278,30 +278,24 @@ def t20_stock_producto_individual(admin_token, p_id):
 # =========================================================================
 # BLOQUE V — Tipos Movimiento Inventario
 # =========================================================================
-def t21_post_tipo_mov_valido(admin_token):
+def t21_catalogo_cerrado_incluye_ajuste(admin_token):
+    r = requests.get(f"{BASE}/api/v1/tipos-movimiento-inventario/",
+                     headers=auth_header(admin_token))
+    rows = r.json() if r.status_code == 200 else []
+    ajuste = next((row for row in rows if row.get("nombre") == "AJUSTE"), None)
+    ok = r.status_code == 200 and ajuste is not None and ajuste.get("afecta_stock") == 1
+    log(21, "Catálogo cerrado incluye AJUSTE (+1 base) -> 200", ok,
+        f"status={r.status_code} ajuste={ajuste}")
+
+def t22_tipo_mov_rechaza_tipo_personalizado(admin_token):
     payload = {"nombre": f"{PREFIJO_TEST} AJUSTE_POS",
-               "descripcion": "Ajuste positivo inventario",
+               "descripcion": "No permitido",
                "afecta_stock": 1}
     r = requests.post(f"{BASE}/api/v1/tipos-movimiento-inventario/",
                       json=payload, headers=auth_header(admin_token))
-    ok = r.status_code == 201
-    if ok:
-        CREATED["tipos_mov_ids"].append(r.json()["id"])
-    log(21, "POST tipo_mov válido afecta_stock=1 -> 201", ok,
+    ok = r.status_code == 422
+    log(22, "POST tipo personalizado fuera del catálogo -> 422", ok,
         f"status={r.status_code} body={r.text[:120]}")
-
-def t22_put_tipo_mov(admin_token):
-    if not CREATED["tipos_mov_ids"]:
-        log(22, "PUT tipo_mov -> SKIP", False); return
-    t_id = CREATED["tipos_mov_ids"][0]
-    payload = {"nombre": f"{PREFIJO_TEST} AJUSTE_POS_EDIT",
-               "descripcion": "Editado por test",
-               "afecta_stock": 1}
-    r = requests.put(f"{BASE}/api/v1/tipos-movimiento-inventario/{t_id}",
-                     json=payload, headers=auth_header(admin_token))
-    ok = r.status_code == 200 and "EDIT" in r.json().get("nombre", "")
-    log(22, "PUT tipo_mov -> 200 nombre editado", ok,
-        f"status={r.status_code} nombre={r.json().get('nombre') if r.status_code==200 else 'N/A'}")
 
 # =========================================================================
 # BLOQUE VI — Movimientos Inventario (INMUTABLES, Stock Negativo, Trazabilidad)
@@ -574,8 +568,8 @@ def main():
 
     # --- Bloque V Tipos Mov ---
     print("  [ Bloque V — Tipos Movimiento Inventario ]")
-    t21_post_tipo_mov_valido(admin_tok)
-    t22_put_tipo_mov(admin_tok)
+    t21_catalogo_cerrado_incluye_ajuste(admin_tok)
+    t22_tipo_mov_rechaza_tipo_personalizado(admin_tok)
     print()
 
     # --- Bloque VI Movimientos ---

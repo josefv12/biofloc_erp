@@ -5,7 +5,7 @@
  * unidad comercial = cómo el usuario ingresa/visualiza cantidades y precios.
  * factor = cantidad de unidades internas equivalentes a 1 unidad comercial.
  *
- * Ejemplo alimento: g -> kg, factor 1000.
+ * Para alimento, el ERP usa kg directamente y factor 1; estas conversiones son genéricas para otros productos.
  */
 
 function factorValido(factor: number | string | null | undefined): number | null {

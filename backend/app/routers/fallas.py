@@ -54,4 +54,4 @@ def crear(data: FallaCreate, db: Session = Depends(get_db), current_user: Usuari
 @router.put("/{falla_id}", response_model=FallaOut)
 def actualizar(falla_id: int, data: FallaUpdate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     _require_roles(current_user, db, ROLES_TODOS)
-    return svc.actualizar_falla(db, falla_id, data, usuario_id=current_user.id)
+    raise HTTPException(status_code=405, detail="Las fallas históricas son inmutables; registre una nueva corrección.")

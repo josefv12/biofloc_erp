@@ -19,11 +19,14 @@ from fastapi import HTTPException
 from app.models.aplicacion_biofloc import AplicacionBiofloc
 from app.models.lote import Lote
 from app.models.tipo_aplicacion_biofloc import TipoAplicacionBiofloc
+from app.models.producto import Producto
+from app.models.unidad import Unidad
 from app.models.auditoria import Auditoria
 from app.schemas.aplicacion_biofloc import AplicacionBioflocCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
 from app.services.movimiento_inventario_service import crear_movimiento_inventario, _obtener_tipo_salida_id
 from app.services.poblacion_lote import exigir_lote_en_produccion
+from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -60,11 +63,15 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
+    validar_no_futuro(data.fecha_hora, "La fecha de la aplicación")
+    validar_no_despues_cierre(data.fecha_hora, lote.fecha_cierre, "La fecha de la aplicación")
 
     # 2. Validar tipo_aplicacion_id
     tipo = db.query(TipoAplicacionBiofloc).filter(TipoAplicacionBiofloc.id == data.tipo_aplicacion_id).first()
     if not tipo:
         raise HTTPException(status_code=404, detail=f"Tipo de aplicación Biofloc id={data.tipo_aplicacion_id} no existe")
+    if not tipo.activo:
+        raise HTTPException(status_code=422, detail="El tipo de aplicación Biofloc está inactivo y no admite nuevas aplicaciones")
 
     # 3. Validar fecha_hora contra fecha_siembra
     if data.fecha_hora.date() < lote.fecha_siembra:
@@ -73,6 +80,16 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
     # 4. Validar cantidad >= 0 si se proporciona
     if data.cantidad is not None and data.cantidad < 0:
         raise HTTPException(status_code=422, detail="La cantidad debe ser mayor o igual a 0")
+
+    producto = None
+    unidad_producto = None
+    if data.producto_id is not None:
+        producto = db.query(Producto).filter(Producto.id == data.producto_id).first()
+        if not producto or not producto.activo:
+            raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe o está inactivo")
+        unidad_producto = db.query(Unidad).filter(Unidad.id == producto.unidad_id).first()
+        if not unidad_producto:
+            raise HTTPException(status_code=422, detail="El producto no tiene una unidad interna válida")
 
     # Determinar si debe generar movimiento de inventario
     generar_movimiento = (
@@ -83,7 +100,10 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
 
     tipo_salida_id = _obtener_tipo_salida_id(db) if generar_movimiento else None
 
-    nuevo = AplicacionBiofloc(**data.model_dump(), registrado_por=usuario_id)
+    payload = data.model_dump()
+    if producto is not None and unidad_producto is not None:
+        payload["unidad"] = unidad_producto.simbolo
+    nuevo = AplicacionBiofloc(**payload, registrado_por=usuario_id)
     db.add(nuevo)
 
     try:

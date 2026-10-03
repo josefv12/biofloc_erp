@@ -4,7 +4,7 @@ from app.core.database import Base
 
 
 class TipoMovimientoInventario(Base):
-    """Clasificación de movimientos de inventario (ENTRADA, SALIDA, etc.)."""
+    """Catálogo cerrado: ENTRADA, SALIDA y AJUSTE."""
     __tablename__ = "tipos_movimiento_inventario"
     __table_args__ = (
         CheckConstraint("afecta_stock IN (-1, 1)", name="tipos_movimiento_inventario_afecta_stock_check"),

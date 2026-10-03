@@ -27,24 +27,26 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
             COALESCE((
                 SELECT SUM(mi.costo_total)
                 FROM biofloc.movimientos_inventario mi
-                JOIN biofloc.alimentaciones a ON a.id = mi.referencia_id
+                JOIN biofloc.alimentaciones a
+                  ON a.id = mi.referencia_id
+                 AND a.producto_id = mi.producto_id
+                 AND a.cantidad = mi.cantidad
+                 AND a.fecha_hora = mi.fecha_hora
+                JOIN biofloc.tipos_movimiento_inventario tm
+                  ON tm.id = mi.tipo_movimiento_id
+                 AND tm.nombre = 'SALIDA'
                 WHERE mi.referencia_tipo = 'ALIMENTACION'
                   AND mi.referencia_id IS NOT NULL
                   AND a.lote_id = :lote_id
                   AND mi.costo_total IS NOT NULL
             ), 0) AS alimento,
             COALESCE((
-                SELECT SUM(
-                    CASE LOWER(TRIM(u.simbolo))
-                        WHEN 'kg' THEN a.cantidad
-                        WHEN 'g' THEN a.cantidad / 1000
-                        ELSE 0
-                    END
-                )
+                SELECT SUM(a.cantidad)
                 FROM biofloc.alimentaciones a
                 JOIN biofloc.productos p ON p.id = a.producto_id
                 JOIN biofloc.unidades u ON u.id = p.unidad_id
                 WHERE a.lote_id = :lote_id
+                  AND LOWER(TRIM(u.simbolo)) = 'kg'
             ), 0) AS alimento_suministrado,
             COALESCE((
                 SELECT SUM(g.valor)
@@ -88,6 +90,10 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
     directo = alimento + alevinos + otros
     kg_cosechados = _d(row["kg_cosechados"], D3)
     kg_vendidos = _d(row["kg_vendidos"], D3)
+    if kg_cosechados < 0 or kg_vendidos < 0:
+        raise HTTPException(status_code=422, detail="Los kg cosechados y vendidos no pueden ser negativos")
+    if kg_vendidos > kg_cosechados:
+        raise HTTPException(status_code=422, detail="Los kg vendidos no pueden superar los kg cosechados")
     costo_por_kg = (directo / kg_cosechados).quantize(D2, rounding=ROUND_HALF_UP) if kg_cosechados > 0 else None
     costo_ventas = (kg_vendidos * costo_por_kg).quantize(D2, rounding=ROUND_HALF_UP) if costo_por_kg is not None else Decimal("0.00")
     ventas = _d(row["ventas"], D2)

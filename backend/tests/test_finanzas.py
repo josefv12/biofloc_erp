@@ -50,3 +50,168 @@ def test_calculo_financiero_admite_costos_cero():
     assert resultado["costo_ventas_estimado"] == Decimal("0.00")
     assert resultado["utilidad_bruta"] == Decimal("300000.00")
     assert resultado["margen_bruto_pct"] == Decimal("100.00")
+
+
+def test_finanzas_historical_uses_colombia_local_date_expression():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "finanzas_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "AT TIME ZONE 'America/Bogota'" in text
+    assert "CAST(cos.fecha_hora AS date)" not in text
+    assert "CAST(a.fecha_hora AS date)" not in text
+
+
+def test_calculo_financiero_rechaza_kg_vendidos_superiores_a_cosechados():
+    import pytest
+    with pytest.raises(Exception):
+        calcular_costos_financieros_lote(
+            costo_alimento=Decimal("100000"),
+            gastos_lote=Decimal("50000"),
+            kg_cosechados=Decimal("100"),
+            kg_vendidos=Decimal("101"),
+            ventas=Decimal("500000"),
+        )
+
+
+def test_calculo_financiero_rechaza_cantidades_negativas():
+    import pytest
+    with pytest.raises(Exception):
+        calcular_costos_financieros_lote(
+            costo_alimento=Decimal("100000"),
+            gastos_lote=Decimal("50000"),
+            kg_cosechados=Decimal("100"),
+            kg_vendidos=Decimal("-1"),
+            ventas=Decimal("500000"),
+        )
+
+
+def test_calculo_financiero_rechaza_costos_negativos():
+    import pytest
+
+    casos = [
+        {"costo_alimento": Decimal("-1"), "gastos_lote": Decimal("0"), "kg_cosechados": Decimal("100")},
+        {"costo_alimento": Decimal("0"), "gastos_lote": Decimal("-1"), "kg_cosechados": Decimal("100")},
+        {"costo_alimento": Decimal("0"), "gastos_lote": Decimal("0"), "kg_cosechados": Decimal("100"), "ventas": Decimal("-1")},
+    ]
+    for caso in casos:
+        with pytest.raises(Exception):
+            calcular_costos_financieros_lote(
+                kg_vendidos=Decimal("0"),
+                ventas=caso.get("ventas", Decimal("0")),
+                costo_alimento=caso["costo_alimento"],
+                gastos_lote=caso["gastos_lote"],
+                kg_cosechados=caso["kg_cosechados"],
+            )
+
+
+def test_dashboard_timestamps_use_colombia_local_date():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/dashboard_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "AT TIME ZONE 'America/Bogota'" in text
+    assert "::date" in text
+    assert "CAST({col} AS date)" not in text
+
+
+def test_dashboard_inventario_ajuste_usa_efecto_real():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/dashboard_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END" in text
+    assert 'r["efecto_stock"]' in text
+
+
+def test_gasto_rechaza_fecha_futura_en_servicio():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/gasto_service.py").read_text(encoding="utf-8")
+    assert 'validar_fecha_no_futura(data.fecha, "La fecha del gasto")' in source
+
+
+def test_schema_final_tiene_guardia_de_gasto_no_futuro():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_fecha_gasto_no_futura" in source
+
+
+def test_reportes_timestamps_use_colombia_local_date():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/reportes_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "AT TIME ZONE 'America/Bogota'" in text
+    assert "CAST({col} AS date)" not in text
+
+
+def test_reporte_movimientos_ajuste_usa_efecto_real():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/reportes_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END AS afecta_stock" in text
+
+
+def test_schema_final_protege_ventas_historicas():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_inmutabilidad_ventas" in source
+    assert "trg_inmutabilidad_detalles_venta" in source
+
+
+def test_schema_final_protege_compras_y_gastos_historicos():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_inmutabilidad_compras" in source
+    assert "trg_inmutabilidad_gastos" in source
+
+
+def test_finanzas_incluye_costos_de_estanque_una_sola_vez_en_rentabilidad_global():
+    from pathlib import Path
+    schema = (Path(__file__).parents[1] / "app/schemas/finanzas.py").read_text(encoding="utf-8")
+    service = (Path(__file__).parents[1] / "app/services/finanzas_service.py").read_text(encoding="utf-8")
+
+    assert "costos_estanque_no_asignados: Decimal = MONEY" in schema
+    assert "g.estanque_id IS NOT NULL" in service
+    assert "utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados" in service
+    assert "costos_estanque_no_asignados=_d2(costos_estanque_no_asignados)" in service
+
+
+def test_costos_lote_no_mezcla_costos_de_estanque_con_costo_directo():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/costos_lote_service.py").read_text(encoding="utf-8")
+    assert "costos_estanque_no_asignados" in source
+    assert "directo = alimento + alevinos + otros" in source
+    assert 'g.estanque_id = :estanque_id' in source
+
+
+def test_reporte_gastos_expone_y_filtra_estanque():
+    from pathlib import Path
+    router = (Path(__file__).parents[1] / "app/routers/reportes.py").read_text(encoding="utf-8")
+    service = (Path(__file__).parents[1] / "app/services/reportes_service.py").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[1] / "app/schemas/reportes.py").read_text(encoding="utf-8")
+
+    assert "estanque_id: Optional[int] = None" in router
+    assert "g.estanque_id = :estanque_id" in service
+    assert "e.codigo AS estanque_codigo" in service
+    assert "def compras(" in service and "if estanque_id is not None" not in service.split("def gastos(", 1)[0]
+    assert "estanque_codigo: Optional[str] = None" in schema
+
+
+def test_finanzas_incluye_costos_monetarios_de_mantenimiento_y_fallas():
+    from pathlib import Path
+    schema = (Path(__file__).parents[1] / "app/schemas/finanzas.py").read_text(encoding="utf-8")
+    service = (Path(__file__).parents[1] / "app/services/finanzas_service.py").read_text(encoding="utf-8")
+
+    assert "costos_mantenimiento_fallas: Decimal = MONEY" in schema
+    assert "FROM biofloc.mantenimientos m" in service
+    assert "FROM biofloc.fallas f" in service
+    assert "f.fecha_hora AT TIME ZONE 'America/Bogota'" in service
+    assert "utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados - costos_mantenimiento_fallas" in service
+
+
+def test_gasto_directo_de_lote_no_puede_preceder_siembra():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/gasto_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/028_integridad_fecha_gasto_lote.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+
+    assert "data.fecha < lo.fecha_siembra" in service
+    assert "trg_validar_fecha_gasto_lote" in migration
+    assert "trg_validar_fecha_gasto_lote" in schema

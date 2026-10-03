@@ -1,12 +1,16 @@
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime, date, timezone
+from datetime import datetime, date, time, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.compra import Compra
+from app.services.validaciones_fecha import validar_fecha_no_futura
 from app.models.detalle_compra import DetalleCompra
 from app.models.producto import Producto
+from app.models.unidad import Unidad
+from app.models.categoria_inventario import CategoriaInventario
 from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
 from app.models.auditoria import Auditoria
 from app.schemas.compra import CompraCreate
@@ -59,6 +63,7 @@ def _quant3(d: Decimal) -> Decimal:
 
 
 def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
+    validar_fecha_no_futura(payload.fecha, "La fecha de la compra")
     if not payload.detalles or len(payload.detalles) == 0:
         raise HTTPException(status_code=422, detail="La compra requiere al menos 1 detalle")
 
@@ -71,6 +76,15 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
             raise HTTPException(status_code=404, detail=f"El producto no existe (detalle #{idx})")
         if not prod.activo:
             raise HTTPException(status_code=422, detail=f"El producto está inactivo (detalle #{idx})")
+
+        categoria = db.query(CategoriaInventario).filter(CategoriaInventario.id == prod.categoria_id).first()
+        if categoria and categoria.nombre.strip().upper() == "ALIMENTO":
+            unidades = db.query(Unidad).filter(Unidad.id.in_([prod.unidad_id, prod.unidad_comercial_id])).all()
+            por_id = {u.id: u for u in unidades}
+            interna = por_id.get(prod.unidad_id)
+            comercial = por_id.get(prod.unidad_comercial_id)
+            if not interna or interna.simbolo.strip().lower() != "kg" or not comercial or comercial.simbolo.strip().lower() != "kg" or Decimal(str(prod.factor_conversion)) != Decimal("1"):
+                raise HTTPException(status_code=422, detail=f"El producto ALIMENTO debe estar configurado en kg/kg con factor 1 (detalle #{idx})")
 
         cantidad = _quant3(din.cantidad)
         pu = _quant2(din.precio_unitario)
@@ -99,6 +113,19 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
         db.add(compra)
         db.flush()
 
+        # Adquirir todos los bloqueos de producto en orden determinista antes
+        # de generar movimientos. Evita deadlocks entre compras concurrentes
+        # con productos en distinto orden.
+        for producto_id in sorted({dp["producto_id"] for dp in detalles_procesados}):
+            producto = (
+                db.query(Producto)
+                .filter(Producto.id == producto_id)
+                .with_for_update()
+                .first()
+            )
+            if not producto:
+                raise HTTPException(status_code=404, detail=f"El producto {producto_id} no existe")
+
         detalle_objetos: list[tuple[DetalleCompra, int]] = []
 
         for dp in detalles_procesados:
@@ -116,7 +143,7 @@ def crear_compra(db: Session, payload: CompraCreate, usuario_id: int) -> Compra:
                 producto_id=dp["producto_id"],
                 tipo_movimiento_id=tipo_entrada.id,
                 cantidad=dp["cantidad"],
-                fecha_hora=datetime.now(timezone.utc),
+                fecha_hora=datetime.combine(payload.fecha, time.min, tzinfo=ZoneInfo("America/Bogota")).astimezone(timezone.utc),
                 referencia_tipo=REFERENCIA_TIPO_DETALLE_COMPRA,
                 referencia_id=detalle.id,
                 observaciones=f"Compra #{compra.id} generada",

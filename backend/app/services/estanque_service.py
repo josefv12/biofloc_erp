@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.models.estanque import Estanque, EstadoEstanque
+from app.models.lote import Lote, EstadoLote
 from app.models.auditoria import Auditoria
 from app.schemas.estanque import EstanqueCreate, EstanqueUpdate
 
@@ -72,6 +73,21 @@ def actualizar_estanque(db: Session, estanque_id: int, data: EstanqueUpdate, usu
         _get_estado_or_404(db, data.estado_id)
 
     cambios = data.model_dump(exclude_none=True)
+    estado_id_nuevo = cambios.get("estado_id", estanque.estado_id)
+    estado_nuevo = _get_estado_or_404(db, estado_id_nuevo)
+    lote_activo = db.query(Lote).join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(
+        Lote.estanque_id == estanque.id, EstadoLote.nombre == "ACTIVO"
+    ).first()
+    if lote_activo and estado_nuevo.nombre != "OCUPADO":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Un estanque con lote ACTIVO debe permanecer en estado OCUPADO; no puede pasar a {estado_nuevo.nombre}",
+        )
+    if cambios.get("activo") is False:
+        if db.query(Lote).join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(
+            Lote.estanque_id == estanque.id, EstadoLote.nombre == "ACTIVO"
+        ).first():
+            raise HTTPException(status_code=422, detail="No se puede desactivar un estanque con un lote ACTIVO")
     for campo, valor in cambios.items():
         setattr(estanque, campo, valor)
 

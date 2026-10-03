@@ -170,9 +170,13 @@ def _detalle_auditoria(cambios: dict) -> dict:
 
 
 def _validar_fks(db: Session, especie_id: int, etapa_productiva_id: int) -> None:
-    if not db.query(Especie).filter(Especie.id == especie_id).first():
+    especie = db.query(Especie).filter(Especie.id == especie_id).first()
+    if not especie:
         raise HTTPException(status_code=404, detail=f"Especie id={especie_id} no existe")
-    if not db.query(EtapaProductiva).filter(EtapaProductiva.id == etapa_productiva_id).first():
+    if not especie.activo:
+        raise HTTPException(status_code=422, detail=f"Especie id={especie_id} está inactiva")
+    etapa = db.query(EtapaProductiva).filter(EtapaProductiva.id == etapa_productiva_id).first()
+    if not etapa or not etapa.activo:
         raise HTTPException(
             status_code=404,
             detail=f"Etapa productiva id={etapa_productiva_id} no existe",
@@ -180,10 +184,12 @@ def _validar_fks(db: Session, especie_id: int, etapa_productiva_id: int) -> None
 
 
 def _validar_rango(semana_desde: int, semana_hasta: int) -> None:
-    if semana_desde < 0:
-        raise HTTPException(status_code=422, detail="semana_desde debe ser >= 0")
+    if semana_desde < 1:
+        raise HTTPException(status_code=422, detail="semana_desde debe ser >= 1")
     if semana_hasta < semana_desde:
         raise HTTPException(status_code=422, detail="semana_hasta debe ser >= semana_desde")
+    if semana_hasta < 1:
+        raise HTTPException(status_code=422, detail="semana_hasta debe ser >= 1")
 
 
 def _conflicto_unico(
@@ -266,6 +272,11 @@ def actualizar_referencia_produccion(
     if "especie_id" in cambios or "etapa_productiva_id" in cambios:
         _validar_fks(db, especie_id, etapa_id)
     _validar_rango(semana_desde, semana_hasta)
+
+    raciones_min = cambios.get("raciones_min", row.raciones_min)
+    raciones_max = cambios.get("raciones_max", row.raciones_max)
+    if raciones_min is not None and raciones_max is not None and raciones_max < raciones_min:
+        raise HTTPException(status_code=422, detail="raciones_max no puede ser menor que raciones_min")
 
     if _conflicto_unico(db, especie_id, etapa_id, semana_desde, semana_hasta, excluir_id=row.id):
         raise HTTPException(

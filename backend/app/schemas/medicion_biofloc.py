@@ -1,13 +1,13 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 from decimal import Decimal
 
 class MedicionBioflocBase(BaseModel):
     lote_id: int
     fecha_hora: datetime
     volumen_sedimentable: Decimal = Field(..., ge=0)
-    unidad: str = Field("mL/L", max_length=20)
+    unidad: Literal["mL/L"] = "mL/L"
     observaciones: Optional[str] = None
     relacion_cn: Optional[Decimal] = Field(None, ge=0)
 

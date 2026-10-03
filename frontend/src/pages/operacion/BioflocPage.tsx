@@ -61,7 +61,7 @@ export function BioflocPage() {
     <div>
       <PageHeader
         title="Biofloc"
-        description="Mediciones de volumen sedimentable y aplicaciones. No se genera movimiento de inventario."
+        description="Mediciones de volumen sedimentable y aplicaciones. Las aplicaciones con producto descuentan inventario automáticamente."
       />
       <label className="mb-4 block max-w-xs text-sm">
         <span className="mb-1 block text-[var(--bf-muted)]">Lote</span>
@@ -188,7 +188,7 @@ export function MedicionesBioflocPanel({
     [usuariosQuery.data],
   );
   const rows = compact ? (query.data ?? []).slice(0, 5) : (query.data ?? []);
-  const unidadCatalogo = query.data?.[0]?.unidad ?? "";
+
 
   return (
     <div>
@@ -204,7 +204,7 @@ export function MedicionesBioflocPanel({
                   lote_id: loteId ?? enProduccion[0]?.id ?? 0,
                   fecha_hora: toDatetimeLocalValue(),
                   volumen_sedimentable: "",
-                  unidad: unidadCatalogo,
+                  unidad: "mL/L",
                   relacion_cn: "",
                   observaciones: "",
                 });
@@ -314,9 +314,9 @@ export function MedicionesBioflocPanel({
             />
           </Field>
           <Field label="Unidad">
-            <input className="bf-input" {...form.register("unidad")} />
+            <input className="bf-input" value="mL/L" readOnly {...form.register("unidad")} />
             <p className="mt-1 text-xs text-[var(--bf-muted)]">
-              Use la unidad del catálogo o de la última medición. No se asume mL/L si el registro usa otra.
+              Los sólidos sedimentables se registran únicamente en mililitros por litro (mL/L).
             </p>
           </Field>
           <Field label="Relación C/N (opcional)">
@@ -524,17 +524,20 @@ export function AplicacionesBioflocPanel({
           <Field label="Fecha y hora">
             <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
           </Field>
-          <Field label="Cantidad (opcional)">
+          <Field label="Cantidad aplicada (opcional)">
             <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
           </Field>
-          <Field label="Unidad (opcional, texto del API)">
-            <input className="bf-input" {...form.register("unidad")} />
+          <Field label="Unidad">
+            <input className="bf-input" value={form.watch("producto_id") ? "Unidad interna del producto" : "Unidad informada"} readOnly />
+            <p className="mt-1 text-xs text-[var(--bf-muted)]">
+              Si selecciona un producto, el sistema usa automáticamente su unidad interna; no se permite alterar esa unidad.
+            </p>
           </Field>
           <Field label="Observaciones">
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
           </Field>
           <p className="text-xs text-[var(--bf-muted)]">
-            Esta aplicación no descuenta inventario. No se llama a movimientos.
+            Si se selecciona un producto y una cantidad mayor que 0, la aplicación genera automáticamente una salida de inventario en la misma fecha y hora.
           </p>
           <button
             type="submit"

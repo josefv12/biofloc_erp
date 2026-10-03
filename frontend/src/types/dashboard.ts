@@ -69,6 +69,8 @@ export type DashboardFinanzas = {
   costo_ventas_estimado: string | number;
   utilidad_bruta: string | number;
   gastos_operativos: string | number;
+  costos_estanque_no_asignados: string | number;
+  costos_mantenimiento_fallas: string | number;
   utilidad_neta: string | number;
   margen_bruto_pct: string | number | null;
   margen_neto_pct: string | number | null;

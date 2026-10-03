@@ -44,10 +44,18 @@ def obtener_equipo(db: Session, equipo_id: int) -> Equipo:
 
 
 def _validar_fks(db: Session, tipo_equipo_id: Optional[int], estado_id: Optional[int]):
-    if tipo_equipo_id is not None and not db.query(TipoEquipo).filter(TipoEquipo.id == tipo_equipo_id).first():
-        raise HTTPException(status_code=404, detail=f"Tipo de equipo {tipo_equipo_id} no existe")
-    if estado_id is not None and not db.query(EstadoEquipo).filter(EstadoEquipo.id == estado_id).first():
-        raise HTTPException(status_code=404, detail=f"Estado de equipo {estado_id} no existe")
+    if tipo_equipo_id is not None:
+        tipo = db.query(TipoEquipo).filter(TipoEquipo.id == tipo_equipo_id).first()
+        if not tipo:
+            raise HTTPException(status_code=404, detail=f"Tipo de equipo {tipo_equipo_id} no existe")
+        if not tipo.activo:
+            raise HTTPException(status_code=422, detail=f"Tipo de equipo {tipo_equipo_id} está inactivo")
+    if estado_id is not None:
+        estado = db.query(EstadoEquipo).filter(EstadoEquipo.id == estado_id).first()
+        if not estado:
+            raise HTTPException(status_code=404, detail=f"Estado de equipo {estado_id} no existe")
+        if not estado.activo:
+            raise HTTPException(status_code=422, detail=f"Estado de equipo {estado_id} está inactivo")
 
 
 def crear_equipo(db: Session, data: EquipoCreate, usuario_id: int) -> Equipo:
@@ -61,7 +69,11 @@ def crear_equipo(db: Session, data: EquipoCreate, usuario_id: int) -> Equipo:
     payload = data.model_dump(); payload["codigo"] = codigo; payload["nombre"] = data.nombre.strip()
     for campo in ("marca", "modelo", "numero_serie", "ubicacion", "observaciones"): payload[campo] = _strip(getattr(data, campo))
     payload["valor_adquisicion"] = valor
-    if payload.get("activo") is None: payload["activo"] = True
+    estado = db.query(EstadoEquipo).filter(EstadoEquipo.id == data.estado_id).first()
+    if estado and estado.nombre == "BAJA":
+        payload["activo"] = False
+    elif payload.get("activo") is None:
+        payload["activo"] = True
     try:
         nuevo = Equipo(**payload); db.add(nuevo); db.flush()
         _audit(db, usuario_id, "INSERT", nuevo.id, {"codigo": nuevo.codigo, "nombre": nuevo.nombre, "tipo_equipo_id": nuevo.tipo_equipo_id, "estado_id": nuevo.estado_id, "valor_adquisicion": Decimal(nuevo.valor_adquisicion) if nuevo.valor_adquisicion is not None else None, "activo": nuevo.activo})
@@ -79,6 +91,13 @@ def actualizar_equipo(db: Session, equipo_id: int, data: EquipoUpdate, usuario_i
     e = obtener_equipo(db, equipo_id); cambios = data.model_dump(exclude_unset=True)
     if not cambios: return e
     _validar_fks(db, cambios.get("tipo_equipo_id"), cambios.get("estado_id"))
+    if "estado_id" in cambios and cambios["estado_id"] != e.estado_id:
+        estado_actual = e.estado.nombre if e.estado else None
+        estado_nuevo = db.query(EstadoEquipo).filter(EstadoEquipo.id == cambios["estado_id"]).first()
+        if estado_actual == "BAJA":
+            raise HTTPException(status_code=422, detail="Un equipo en estado BAJA no puede volver a otro estado")
+        if estado_nuevo and estado_nuevo.nombre == "BAJA":
+            cambios["activo"] = False
     if "codigo" in cambios:
         codigo = cambios["codigo"].strip()
         if db.query(Equipo).filter(Equipo.codigo == codigo, Equipo.id != e.id).first(): raise HTTPException(status_code=409, detail=f"Ya existe otro equipo con el código '{codigo}'")

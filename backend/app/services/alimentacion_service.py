@@ -17,11 +17,15 @@ from fastapi import HTTPException
 
 from app.models.alimentacion import Alimentacion
 from app.models.lote import Lote
+from app.models.producto import Producto
+from app.models.categoria_inventario import CategoriaInventario
+from app.models.unidad import Unidad
 from app.models.auditoria import Auditoria
 from app.schemas.alimentacion import AlimentacionCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
 from app.services.movimiento_inventario_service import crear_movimiento_inventario, _obtener_tipo_salida_id
 from app.services.poblacion_lote import exigir_lote_en_produccion
+from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -55,10 +59,28 @@ def crear_alimentacion(db: Session, data: AlimentacionCreate, usuario_id: int) -
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
+    validar_no_futuro(data.fecha_hora, "La fecha de la alimentación")
+    validar_no_despues_cierre(data.fecha_hora, lote.fecha_cierre, "La fecha de la alimentación")
 
     # Validar fecha_hora contra fecha_siembra
     if data.fecha_hora.date() < lote.fecha_siembra:
         raise HTTPException(status_code=422, detail="La fecha de la alimentación no puede ser anterior a la siembra del lote")
+
+    producto = db.query(Producto).filter(Producto.id == data.producto_id).first()
+    if not producto or not producto.activo:
+        raise HTTPException(status_code=404, detail=f"Producto id={data.producto_id} no existe o está inactivo")
+
+    categoria = db.query(CategoriaInventario).filter(CategoriaInventario.id == producto.categoria_id).first()
+    unidad = db.query(Unidad).filter(Unidad.id == producto.unidad_id).first()
+    unidad_comercial = db.query(Unidad).filter(Unidad.id == producto.unidad_comercial_id).first()
+    if not categoria or categoria.nombre.strip().upper() != "ALIMENTO":
+        raise HTTPException(status_code=422, detail="El producto seleccionado no pertenece a la categoría ALIMENTO")
+    if not unidad or unidad.simbolo.strip().lower() != "kg":
+        raise HTTPException(status_code=422, detail="El alimento debe tener unidad interna kg")
+    if not unidad_comercial or unidad_comercial.simbolo.strip().lower() != "kg":
+        raise HTTPException(status_code=422, detail="El alimento debe tener unidad comercial kg")
+    if Decimal(str(producto.factor_conversion)) != Decimal("1"):
+        raise HTTPException(status_code=422, detail="El alimento debe tener factor de conversión 1")
 
     # Obtener tipo SALIDA antes de empezar la transacción
     tipo_salida_id = _obtener_tipo_salida_id(db)
@@ -98,7 +120,7 @@ def crear_alimentacion(db: Session, data: AlimentacionCreate, usuario_id: int) -
         usuario_id,
         "INSERT",
         nuevo.id,
-        {"lote_id": data.lote_id, "producto_id": data.producto_id, "cantidad": float(data.cantidad), "inventario": True}
+        {"lote_id": data.lote_id, "producto_id": data.producto_id, "cantidad": data.cantidad, "inventario": True}
     )
     db.commit()
     db.refresh(nuevo)

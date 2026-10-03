@@ -49,7 +49,9 @@ def _params(fecha_desde: Optional[date], fecha_hasta: Optional[date]) -> dict:
 
 
 def _filtro(col: str, fecha_desde: Optional[date], fecha_hasta: Optional[date], *, ts: bool = False) -> str:
-    expr = f"CAST({col} AS date)" if ts else col
+    # Los timestamps son timestamptz; el periodo comercial/operativo del ERP usa
+    # America/Bogota y no la zona horaria de la sesión PostgreSQL.
+    expr = f"({col} AT TIME ZONE 'America/Bogota')::date" if ts else col
     s = ""
     if fecha_desde is not None:
         s += f" AND {expr} >= :fecha_desde"
@@ -155,7 +157,8 @@ def inventario(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
     """, {})
     fm = _filtro("mi.fecha_hora", fecha_desde, fecha_hasta, ts=True)
     mov = _rows(db, f"""
-        SELECT u.simbolo AS unidad, tmi.afecta_stock,
+        SELECT u.simbolo AS unidad,
+               CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END AS efecto_stock,
                COUNT(*) AS n,
                COALESCE(SUM(mi.cantidad), 0) AS cantidad,
                COALESCE(SUM(mi.costo_total), 0) AS costo
@@ -164,15 +167,15 @@ def inventario(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
         JOIN unidades u ON u.id = p.unidad_id
         JOIN tipos_movimiento_inventario tmi ON tmi.id = mi.tipo_movimiento_id
         WHERE 1=1 {fm}
-        GROUP BY u.simbolo, tmi.afecta_stock
+        GROUP BY u.simbolo, CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END
         ORDER BY u.simbolo
     """, p)
     tot = _one(db, f"""
         SELECT
-          COUNT(*) FILTER (WHERE tmi.afecta_stock = 1) AS n_entradas,
-          COUNT(*) FILTER (WHERE tmi.afecta_stock = -1) AS n_salidas,
-          COALESCE(SUM(mi.costo_total) FILTER (WHERE tmi.afecta_stock = 1), 0) AS costo_entradas,
-          COALESCE(SUM(mi.costo_total) FILTER (WHERE tmi.afecta_stock = -1), 0) AS costo_salidas
+          COUNT(*) FILTER (WHERE (CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END) = 1) AS n_entradas,
+          COUNT(*) FILTER (WHERE (CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END) = -1) AS n_salidas,
+          COALESCE(SUM(mi.costo_total) FILTER (WHERE (CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END) = 1), 0) AS costo_entradas,
+          COALESCE(SUM(mi.costo_total) FILTER (WHERE (CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END) = -1), 0) AS costo_salidas
         FROM movimientos_inventario mi
         JOIN tipos_movimiento_inventario tmi ON tmi.id = mi.tipo_movimiento_id
         WHERE 1=1 {fm}
@@ -182,7 +185,7 @@ def inventario(db: Session, fecha_desde: Optional[date] = None, fecha_hasta: Opt
         item = UnidadMovimientoOut(
             unidad=str(r["unidad"]), n=_i(r["n"]), cantidad=_d3(r["cantidad"]), costo=_d2(r["costo"]),
         )
-        if int(r["afecta_stock"]) == 1:
+        if int(r["efecto_stock"]) == 1:
             entradas.append(item)
         else:
             salidas.append(item)

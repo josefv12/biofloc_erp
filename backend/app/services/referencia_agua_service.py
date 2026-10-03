@@ -55,16 +55,22 @@ def crear_referencia_agua(db: Session, data: ReferenciaAguaCreate, usuario_id: i
     especie = db.query(Especie).filter(Especie.id == data.especie_id).first()
     if not especie:
         raise HTTPException(status_code=404, detail=f"Especie id={data.especie_id} no existe")
+    if not especie.activo:
+        raise HTTPException(status_code=422, detail="La especie está inactiva y no admite nuevas referencias de agua")
 
     # 2. Validar etapa_productiva_id
     etapa = db.query(EtapaProductiva).filter(EtapaProductiva.id == data.etapa_productiva_id).first()
     if not etapa:
         raise HTTPException(status_code=404, detail=f"Etapa productiva id={data.etapa_productiva_id} no existe")
+    if not etapa.activo:
+        raise HTTPException(status_code=422, detail="La etapa productiva está inactiva y no admite nuevas referencias de agua")
 
     # 3. Validar parametro_id
     parametro = db.query(ParametroAgua).filter(ParametroAgua.id == data.parametro_id).first()
     if not parametro:
         raise HTTPException(status_code=404, detail=f"Parámetro de agua id={data.parametro_id} no existe")
+    if not parametro.activo:
+        raise HTTPException(status_code=422, detail="El parámetro de agua está inactivo y no admite nuevas referencias")
 
     # 4. Validar unicidad (especie, etapa, parametro)
     existente = db.query(ReferenciaAgua).filter(

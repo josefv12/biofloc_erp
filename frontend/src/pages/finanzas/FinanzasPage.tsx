@@ -76,6 +76,8 @@ export function FinanzasPage() {
 
           <section className="mt-8 grid gap-3 sm:grid-cols-3">
             <KpiCard label="Gastos operativos" value={formatCop(query.data.gastos_operativos)} />
+            <KpiCard label="Costos de estanque" value={formatCop(query.data.costos_estanque_no_asignados)} hint="Overhead de estanque incluido una sola vez en la utilidad neta" />
+            <KpiCard label="Mantenimientos y fallas" value={formatCop(query.data.costos_mantenimiento_fallas)} hint="Costos monetarios incluidos una sola vez en utilidad neta" />
             <KpiCard label="Kg vendidos" value={formatNumber(query.data.kg_vendidos, { maximumFractionDigits: 3 })} hint="Biomasa comercializada" />
             <KpiCard label="Costo promedio/kg" value={formatCop(query.data.costo_promedio_kg_vendido)} hint={`${formatNumber(query.data.lotes_con_ventas)} lote(s) con ventas`} />
           </section>

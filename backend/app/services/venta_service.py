@@ -7,7 +7,8 @@
 - Una venta nunca puede superar la biomasa cosechada y aún disponible del lote.
 """
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +16,7 @@ from sqlalchemy import func
 from fastapi import HTTPException
 
 from app.models.venta import Venta, DetalleVenta
+from app.services.validaciones_fecha import validar_fecha_no_futura
 from app.models.auditoria import Auditoria
 from app.models.lote import Lote
 from app.models.cosecha import Cosecha
@@ -70,7 +72,17 @@ def obtener_venta(db: Session, venta_id: int) -> Venta:
     return v
 
 
-def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
+def _fin_dia_colombia_utc(fecha: date) -> datetime:
+    """Límite superior exclusivo para una fecha comercial en America/Bogota."""
+    siguiente = fecha + timedelta(days=1)
+    return datetime.combine(
+        siguiente,
+        time.min,
+        tzinfo=ZoneInfo("America/Bogota"),
+    ).astimezone(timezone.utc)
+
+
+def _validar_disponibilidad_lotes(db: Session, detalles: list, fecha_venta: date) -> None:
     """Bloquea cada lote y valida la biomasa disponible para venta.
 
     La cantidad comercial de ventas es kg de biomasa cosechada. El bloqueo de la
@@ -82,7 +94,10 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
     for d in detalles:
         solicitada_por_lote[d.lote_id] = solicitada_por_lote.get(d.lote_id, Decimal("0")) + Decimal(d.cantidad)
 
-    for lote_id, solicitada in solicitada_por_lote.items():
+    # Orden determinista de bloqueo: evita deadlocks entre ventas concurrentes
+    # que involucren los mismos lotes en distinto orden.
+    for lote_id in sorted(solicitada_por_lote):
+        solicitada = solicitada_por_lote[lote_id]
         lote = (
             db.query(Lote)
             .filter(Lote.id == lote_id)
@@ -91,12 +106,27 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
         )
         if not lote:
             raise HTTPException(status_code=404, detail=f"Lote {lote_id} no existe")
+        if fecha_venta < lote.fecha_siembra:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La fecha de la venta no puede ser anterior a la siembra del lote {lote.codigo}",
+            )
+        if lote.fecha_cierre is not None and fecha_venta > lote.fecha_cierre:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La fecha de la venta no puede ser posterior al cierre del lote {lote.codigo}",
+            )
 
+        limite_cosecha = _fin_dia_colombia_utc(fecha_venta)
         cosechado = db.query(func.coalesce(func.sum(Cosecha.peso_total_kg), 0)).filter(
-            Cosecha.lote_id == lote_id
+            Cosecha.lote_id == lote_id,
+            Cosecha.fecha_hora < limite_cosecha,
         ).scalar()
-        vendido = db.query(func.coalesce(func.sum(DetalleVenta.cantidad), 0)).filter(
-            DetalleVenta.lote_id == lote_id
+        vendido = db.query(func.coalesce(func.sum(DetalleVenta.cantidad), 0)).join(
+            Venta, Venta.id == DetalleVenta.venta_id
+        ).filter(
+            DetalleVenta.lote_id == lote_id,
+            Venta.fecha <= fecha_venta,
         ).scalar()
         disponible = max(Decimal(str(cosechado or 0)) - Decimal(str(vendido or 0)), Decimal("0"))
 
@@ -110,7 +140,55 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list) -> None:
             )
 
 
+def _validar_ventas_historicas_no_superan_cosechas(db: Session, lote_ids: list[int]) -> None:
+    """Reconstruye la disponibilidad comercial por fecha para detectar ventas retroactivas."""
+    from sqlalchemy import text
+
+    for lote_id in sorted(set(lote_ids)):
+        filas = db.execute(text("""
+            WITH cosechas AS (
+                SELECT
+                    (c.fecha_hora AT TIME ZONE 'America/Bogota')::date AS fecha,
+                    SUM(c.peso_total_kg) AS kg
+                FROM biofloc.cosechas c
+                WHERE c.lote_id = :lote_id
+                GROUP BY 1
+            ),
+            ventas AS (
+                SELECT
+                    v.fecha,
+                    SUM(d.cantidad) AS kg
+                FROM biofloc.ventas v
+                JOIN biofloc.detalles_venta d ON d.venta_id = v.id
+                WHERE d.lote_id = :lote_id
+                GROUP BY v.fecha
+            ),
+            fechas AS (
+                SELECT fecha FROM cosechas
+                UNION
+                SELECT fecha FROM ventas
+            )
+            SELECT
+                f.fecha,
+                COALESCE((SELECT SUM(c.kg) FROM cosechas c WHERE c.fecha <= f.fecha), 0) AS cosechado,
+                COALESCE((SELECT SUM(v.kg) FROM ventas v WHERE v.fecha <= f.fecha), 0) AS vendido
+            FROM fechas f
+            ORDER BY f.fecha
+        """), {"lote_id": lote_id}).mappings().all()
+
+        for fila in filas:
+            if Decimal(str(fila["vendido"])) > Decimal(str(fila["cosechado"])):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"La secuencia histórica de ventas del lote {lote_id} "
+                        f"supera la biomasa cosechada al {fila['fecha']}"
+                    ),
+                )
+
+
 def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
+    validar_fecha_no_futura(data.fecha, "La fecha de la venta")
     if not data.detalles:
         raise HTTPException(status_code=422, detail="La venta debe tener al menos 1 detalle")
 
@@ -123,7 +201,7 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
             raise HTTPException(status_code=422, detail=f"El precio unitario debe ser >= 0 (detalle #{idx})")
 
     try:
-        _validar_disponibilidad_lotes(db, data.detalles)
+        _validar_disponibilidad_lotes(db, data.detalles, data.fecha)
 
         total = Decimal(0)
         detalles_obj = []
@@ -150,6 +228,10 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
         )
         db.add(venta)
         db.flush()
+
+        _validar_ventas_historicas_no_superan_cosechas(
+            db, [d.lote_id for d in data.detalles]
+        )
 
         _audit(db, usuario_id, "INSERT", "ventas", venta.id, {
             "fecha": venta.fecha,

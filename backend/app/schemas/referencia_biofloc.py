@@ -34,6 +34,14 @@ class ReferenciaBioflocCreate(BaseModel):
         return valor or None
 
     @model_validator(mode="after")
+    def validar_unidad(self) -> "ReferenciaBioflocCreate":
+        if self.indicador == "VOLUMEN_SEDIMENTABLE" and self.unidad != "mL/L":
+            raise ValueError("VOLUMEN_SEDIMENTABLE debe usar la unidad mL/L")
+        if self.indicador == "RELACION_CN" and self.unidad != "C:N":
+            raise ValueError("RELACION_CN debe usar la unidad C:N")
+        return self
+
+    @model_validator(mode="after")
     def validar_rangos(self) -> "ReferenciaBioflocCreate":
         if self.valor_minimo is not None and self.valor_maximo is not None:
             if self.valor_minimo > self.valor_maximo:

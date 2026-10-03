@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
 from app.models.auditoria import Auditoria
-from app.models.lote import Especie
+from app.models.lote import Especie, Lote
 from app.models.referencia_agua import ReferenciaAgua
 from app.models.referencia_produccion import ReferenciaProduccion
 from app.schemas.catalogo_produccion import EspecieCatalogoOut, EspecieCreate, EspecieUpdate
@@ -126,6 +126,18 @@ def actualizar_especie(
             raise HTTPException(
                 status_code=409,
                 detail=f"Ya existe otra especie con el nombre común '{cambios['nombre_comun']}'",
+            )
+
+    if "nombre_comun" in cambios and cambios["nombre_comun"] != row.nombre_comun:
+        tiene_historial = (
+            db.query(Lote.id).filter(Lote.especie_id == row.id).first()
+            or db.query(ReferenciaProduccion.id).filter(ReferenciaProduccion.especie_id == row.id).first()
+            or db.query(ReferenciaAgua.id).filter(ReferenciaAgua.especie_id == row.id).first()
+        )
+        if tiene_historial:
+            raise HTTPException(
+                status_code=409,
+                detail="No se puede cambiar el nombre común de una especie con lotes o referencias históricas",
             )
 
     for key, value in cambios.items():

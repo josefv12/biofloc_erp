@@ -38,26 +38,24 @@ def test_mensajes_negocio():
     )
 
 
-def test_fca_factor_solo_g_y_kg():
-    assert FACTOR_A_KG == {"kg": Decimal("1"), "g": Decimal("0.001")}
+def test_fca_alimento_solo_kg():
+    assert FACTOR_A_KG == {"kg": Decimal("1")}
 
 
-def test_alimento_kg_gramos_queda_en_3_decimales():
+def test_alimento_kg_rechaza_gramos():
     total, razon = _alimento_kg(
         [AlimentoUnidadOut(unidad="g", cantidad=Decimal("3.500"))]
     )
-    assert razon is None
-    assert total == Decimal("0.004")
+    assert total is None
+    assert razon == "UNIDAD_ALIMENTO_INCOMPATIBLE"
 
+
+def test_alimento_kg_suma_solo_kg():
     total, razon = _alimento_kg(
-        [
-            AlimentoUnidadOut(unidad="kg", cantidad=Decimal("0.5")),
-            AlimentoUnidadOut(unidad="g", cantidad=Decimal("500")),
-        ]
+        [AlimentoUnidadOut(unidad="kg", cantidad=Decimal("0.5"))]
     )
-    assert total is not None
+    assert total == Decimal("0.500")
     assert razon is None
-    assert total == Decimal("0.5") + Decimal("0.5")
 
 
 def test_alimento_unidad_no_masica_no_se_convierte():
@@ -92,3 +90,127 @@ def test_lote_finalizado_rechaza_registros():
 def test_ciclo_estimado_es_seis_meses_calendario():
     assert sumar_meses(date(2026, 9, 11), 6) == date(2027, 3, 11)
     assert sumar_meses(date(2026, 8, 31), 6) == date(2027, 2, 28)
+
+
+def test_peso_promedio_cosecha_decimal_y_redondeo():
+    assert _peso_promedio_g(Decimal("1.001"), 3) == Decimal("333.667")
+
+
+def test_peso_promedio_no_depende_de_unidades_comerciales():
+    assert _peso_promedio_g(Decimal("2.500"), 5) == Decimal("500.000")
+
+
+def test_cosecha_cierre_usa_poblacion_historica():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "cosecha_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)" in text
+
+def test_poblacion_historica_revalida_eventos_posteriores():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "015_integridad_secuencia_poblacion.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "validar_secuencia_poblacion_historica" in text
+    assert "MAX(salidas_acumuladas)" in text
+    assert "UNION ALL" in text
+    assert "mortalidades" in text and "cosechas" in text
+    assert "DEFERRABLE INITIALLY IMMEDIATE" in text
+
+
+def test_poblacion_historica_secuencia_usa_bloqueo_del_lote():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "015_integridad_secuencia_poblacion.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "FROM biofloc.lotes" in text
+    assert "FOR UPDATE" in text
+
+
+def test_lote_rechaza_fecha_siembra_futura():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    assert 'validar_fecha_no_futura(data.fecha_siembra, "La fecha de siembra")' in source
+
+
+def test_schema_final_tiene_guardia_de_siembra_no_futura():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_fecha_siembra_no_futura" in source
+    assert "NOW() AT TIME ZONE 'America/Bogota'" in source
+
+
+def test_listar_lotes_honra_filtro_activos():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    assert 'if activos:' in source
+    assert 'EstadoLote.nombre == "ACTIVO"' in source
+
+
+def test_mortalidad_total_finaliza_lote_y_protege_reutilizacion():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/mortalidad_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "poblacion_restante" in service
+    assert "ESTADO_LOTE_FINALIZADO" in service
+    for content in (migration, schema):
+        assert "trg_finalizar_lote_por_mortalidad_total" in content
+        assert "fecha_hora <= NEW.fecha_hora" in content
+        assert "nombre = 'FINALIZADO'" in content
+
+
+def test_cierre_automatico_cosecha_usa_fecha_colombia():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/cosecha_service.py").read_text(encoding="utf-8")
+    assert "TZ_COLOMBIA" in source
+    assert "astimezone(TZ_COLOMBIA).date()" in source
+
+
+def test_finalizado_exige_poblacion_cero_y_cancelado_puede_conservar_peces():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "Un lote FINALIZADO debe tener población cero" in service
+    for content in (migration, schema):
+        assert "trg_validar_lote_finalizado_sin_peces" in content
+        assert "v_estado = 'FINALIZADO'" in content
+        assert "SUM(cantidad_peces)" in content
+
+
+def test_validacion_cierre_servicio_usa_fecha_local_colombia():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/019_integridad_temporal_cierre_lote.sql").read_text(encoding="utf-8")
+    assert "ultimo.astimezone(TZ_COLOMBIA).date()" in source
+    assert "(NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date" in migration
+    assert "(v_ultimo AT TIME ZONE 'America/Bogota')::date" in migration
+
+
+def test_cosecha_y_mortalidad_validan_fecha_de_siembra_en_hora_colombia():
+    from pathlib import Path
+    cosecha = (Path(__file__).parents[1] / "app/services/cosecha_service.py").read_text(encoding="utf-8")
+    mortalidad = (Path(__file__).parents[1] / "app/services/mortalidad_service.py").read_text(encoding="utf-8")
+    for content in (cosecha, mortalidad):
+        assert "astimezone(TZ_COLOMBIA).date()" in content
+        assert "fecha_local < lote.fecha_siembra" in content
+
+
+def test_historial_poblacion_es_inmutable_en_bd():
+    from pathlib import Path
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    for content in (migration, schema):
+        assert "trg_inmutabilidad_mortalidades" in content
+        assert "trg_inmutabilidad_cosechas" in content
+        assert "impedir_modificacion_poblacion_historica" in content
+
+
+def test_reutilizacion_estanque_tiene_barrera_de_concurrencia_en_bd():
+    from pathlib import Path
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    for content in (migration, schema):
+        assert "trg_validar_solapamiento_historico_estanque" in content
+        assert "pg_advisory_xact_lock(2147483000, NEW.estanque_id)" in content
+        assert "trg_validar_lote_estanque_operativo" in content
+        assert "pg_advisory_xact_lock(2147483000, NEW.id)" in content

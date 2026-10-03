@@ -74,6 +74,7 @@ export type MovimientoInventario = {
   observaciones: string | null;
   costo_unitario: string | number | null;
   costo_total: string | number | null;
+  efecto_stock: -1 | 1 | null;
   registrado_por: number;
   created_at: string;
 };
@@ -88,4 +89,5 @@ export type MovimientoInventarioCreate = {
   observaciones?: string | null;
   costo_unitario?: number | null;
   costo_total?: number | null;
+  efecto_stock?: -1 | 1 | null;
 };

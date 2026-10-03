@@ -12,6 +12,7 @@ from app.models.categoria_gasto import CategoriaGasto
 from app.models.lote import Lote
 from app.models.estanque import Estanque
 from app.schemas.gasto import GastoCreate
+from app.services.validaciones_fecha import validar_fecha_no_futura
 
 
 def _audit(db, usuario_id, accion, registro_id, detalle: dict):
@@ -61,6 +62,7 @@ def obtener_gasto(db: Session, gasto_id: int) -> Gasto:
 
 
 def crear_gasto(db: Session, data: GastoCreate, usuario_id: int) -> Gasto:
+    validar_fecha_no_futura(data.fecha, "La fecha del gasto")
     cat = db.query(CategoriaGasto).filter(CategoriaGasto.id == data.categoria_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail=f"Categoría de gasto {data.categoria_id} no existe")
@@ -68,6 +70,8 @@ def crear_gasto(db: Session, data: GastoCreate, usuario_id: int) -> Gasto:
         lo = db.query(Lote).filter(Lote.id == data.lote_id).first()
         if not lo:
             raise HTTPException(status_code=404, detail=f"Lote {data.lote_id} no existe")
+        if data.fecha < lo.fecha_siembra:
+            raise HTTPException(status_code=422, detail="La fecha del gasto no puede ser anterior a la fecha de siembra del lote")
     if data.estanque_id is not None:
         es = db.query(Estanque).filter(Estanque.id == data.estanque_id).first()
         if not es:

@@ -19,6 +19,8 @@ from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.mortalidad import MortalidadCreate
 from app.services.poblacion_lote import exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_mortalidad_excede, obtener_poblacion_disponible
+from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre, TZ_COLOMBIA
+from app.services.poblacion_lote import obtener_estado_lote_por_nombre, ESTADO_LOTE_FINALIZADO
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -47,18 +49,40 @@ def crear_mortalidad(db: Session, data: MortalidadCreate, usuario_id: int) -> Mo
     if not lote:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
+    validar_no_futuro(data.fecha_hora, "La fecha de la mortalidad")
+    validar_no_despues_cierre(data.fecha_hora, lote.fecha_cierre, "La fecha de la mortalidad")
 
-    if data.fecha_hora.date() < lote.fecha_siembra:
+    fecha_local = data.fecha_hora.astimezone(TZ_COLOMBIA).date() if data.fecha_hora.tzinfo else data.fecha_hora.date()
+    if fecha_local < lote.fecha_siembra:
         raise HTTPException(status_code=422, detail="La fecha de la mortalidad no puede ser anterior a la siembra del lote")
 
-    disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada)
+    disponible = obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)
     exigir_dentro_de_disponible(data.cantidad, disponible, mensaje_mortalidad_excede(data.cantidad, disponible))
 
     nuevo = Mortalidad(**data.model_dump(), registrado_por=usuario_id)
     db.add(nuevo)
     try:
         db.flush()
-        _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad": data.cantidad, "causa": data.causa})
+        restante = obtener_poblacion_disponible(
+            db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora
+        )
+        if restante == 0:
+            estado_fin = obtener_estado_lote_por_nombre(db, ESTADO_LOTE_FINALIZADO)
+            lote.estado_id = estado_fin.id
+            if lote.fecha_cierre is None:
+                lote.fecha_cierre = data.fecha_hora.astimezone(TZ_COLOMBIA).date() if data.fecha_hora.tzinfo else data.fecha_hora.date()
+            db.add(Auditoria(
+                usuario_id=usuario_id,
+                tabla="lotes",
+                registro_id=lote.id,
+                accion="UPDATE",
+                detalle={
+                    "estado": ESTADO_LOTE_FINALIZADO,
+                    "fecha_cierre": lote.fecha_cierre.isoformat() if lote.fecha_cierre else None,
+                    "origen": "mortalidad_poblacion_cero",
+                },
+            ))
+        _registrar_auditoria(db, usuario_id, "INSERT", nuevo.id, {"lote_id": data.lote_id, "cantidad": data.cantidad, "causa": data.causa, "poblacion_restante": restante})
         db.commit()
     except HTTPException:
         db.rollback()

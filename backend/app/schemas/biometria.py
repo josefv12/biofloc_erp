@@ -1,4 +1,5 @@
-from pydantic import BaseModel, field_validator
+from decimal import Decimal
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
@@ -6,32 +7,11 @@ from typing import Optional
 class BiometriaCreate(BaseModel):
     lote_id: int
     fecha_hora: datetime
-    cantidad_muestra: int
-    peso_total_muestra_g: float
+    cantidad_muestra: int = Field(..., gt=0)
+    peso_total_muestra_g: Decimal = Field(..., gt=0, max_digits=12, decimal_places=3)
     observaciones: Optional[str] = None
-    talla_promedio: Optional[float] = None
+    talla_promedio: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     unidad_talla: Optional[str] = None
-
-    @field_validator("cantidad_muestra")
-    @classmethod
-    def cantidad_positiva(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("cantidad_muestra debe ser mayor que 0")
-        return v
-
-    @field_validator("peso_total_muestra_g")
-    @classmethod
-    def peso_positivo(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("peso_total_muestra_g debe ser mayor que 0")
-        return v
-
-    @field_validator("talla_promedio")
-    @classmethod
-    def talla_no_negativa(cls, v: Optional[float]) -> Optional[float]:
-        if v is not None and v < 0:
-            raise ValueError("talla_promedio debe ser >= 0")
-        return v
 
 
 class BiometriaOut(BaseModel):
@@ -39,10 +19,10 @@ class BiometriaOut(BaseModel):
     lote_id: int
     fecha_hora: datetime
     cantidad_muestra: int
-    peso_total_muestra_g: float
+    peso_total_muestra_g: Decimal
     observaciones: Optional[str] = None
     registrado_por: int
-    talla_promedio: Optional[float] = None
+    talla_promedio: Decimal | None = None
     unidad_talla: Optional[str] = None
     created_at: datetime
 

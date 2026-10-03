@@ -3,12 +3,14 @@
 No hay estanque_id en el DDL. No se generan filas en alarmas (fase posterior).
 """
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.evento_energia import EventoEnergia
+from app.services.validaciones_fecha import validar_no_futuro
 from app.models.equipo import Equipo
 from app.models.auditoria import Auditoria
 from app.schemas.evento_energia import EventoEnergiaCreate, EventoEnergiaUpdate
@@ -23,7 +25,9 @@ def _audit(db, usuario_id, accion, registro_id, detalle: dict):
 
 
 def _aware(dt: datetime) -> datetime:
-    if dt.tzinfo is None: return dt.replace(tzinfo=timezone.utc)
+    """Normaliza datetimes ingenuos como hora local de Colombia."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=ZoneInfo("America/Bogota"))
     return dt
 
 
@@ -34,9 +38,21 @@ def _duracion_minutos(inicio: datetime, fin: Optional[datetime]) -> Optional[int
     return mins
 
 
-def _validar_respaldo(respaldo_activado: bool, equipo_respaldo_id: Optional[int], db: Session):
-    if respaldo_activado and equipo_respaldo_id is None: raise HTTPException(status_code=422, detail="equipo_respaldo_id es obligatorio cuando respaldo_activado=true")
-    if equipo_respaldo_id is not None and not db.query(Equipo).filter(Equipo.id == equipo_respaldo_id).first(): raise HTTPException(status_code=404, detail=f"Equipo de respaldo {equipo_respaldo_id} no existe")
+def _validar_respaldo(respaldo_activado: bool, equipo_respaldo_id: Optional[int], db: Session, fecha_evento: Optional[datetime] = None):
+    if respaldo_activado and equipo_respaldo_id is None:
+        raise HTTPException(status_code=422, detail="equipo_respaldo_id es obligatorio cuando respaldo_activado=true")
+    if equipo_respaldo_id is None:
+        return
+    equipo = db.query(Equipo).filter(Equipo.id == equipo_respaldo_id).first()
+    if not equipo:
+        raise HTTPException(status_code=404, detail=f"Equipo de respaldo {equipo_respaldo_id} no existe")
+    if respaldo_activado:
+        if fecha_evento is not None and equipo.fecha_adquisicion and _aware(fecha_evento).date() < equipo.fecha_adquisicion:
+            raise HTTPException(status_code=422, detail="El evento de energía no puede preceder la adquisición del equipo de respaldo")
+        if not equipo.activo:
+            raise HTTPException(status_code=422, detail="El equipo de respaldo está inactivo")
+        if not equipo.estado or not equipo.estado.activo or equipo.estado.nombre != "OPERATIVO":
+            raise HTTPException(status_code=422, detail="El equipo de respaldo debe estar en estado OPERATIVO y activo")
 
 
 def listar_eventos_energia(db: Session, tipo: Optional[str] = None, fecha_desde: Optional[datetime] = None, fecha_hasta: Optional[datetime] = None, respaldo_activado: Optional[bool] = None, equipo_respaldo_id: Optional[int] = None, registrado_por: Optional[int] = None):
@@ -57,7 +73,10 @@ def obtener_evento_energia(db: Session, evento_id: int) -> EventoEnergia:
 
 
 def crear_evento_energia(db: Session, data: EventoEnergiaCreate, usuario_id: int) -> EventoEnergia:
-    respaldo = bool(data.respaldo_activado); _validar_respaldo(respaldo, data.equipo_respaldo_id, db)
+    validar_no_futuro(data.fecha_hora_inicio, "La fecha/hora de inicio del evento de energía")
+    if data.fecha_hora_fin is not None:
+        validar_no_futuro(data.fecha_hora_fin, "La fecha/hora de fin del evento de energía")
+    respaldo = bool(data.respaldo_activado); _validar_respaldo(respaldo, data.equipo_respaldo_id, db, data.fecha_hora_inicio)
     if data.fecha_hora_fin is not None and _aware(data.fecha_hora_fin) < _aware(data.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
     duracion = data.duracion_minutos
     if data.fecha_hora_fin is not None: duracion = _duracion_minutos(data.fecha_hora_inicio, data.fecha_hora_fin)
@@ -78,11 +97,16 @@ def crear_evento_energia(db: Session, data: EventoEnergiaCreate, usuario_id: int
 def actualizar_evento_energia(db: Session, evento_id: int, data: EventoEnergiaUpdate, usuario_id: int) -> EventoEnergia:
     e = obtener_evento_energia(db, evento_id); cambios = data.model_dump(exclude_unset=True)
     if not cambios: return e
-    respaldo = cambios.get("respaldo_activado", e.respaldo_activado); equipo_id = cambios.get("equipo_respaldo_id", e.equipo_respaldo_id); _validar_respaldo(bool(respaldo), equipo_id, db)
+    respaldo = cambios.get("respaldo_activado", e.respaldo_activado); equipo_id = cambios.get("equipo_respaldo_id", e.equipo_respaldo_id); _validar_respaldo(bool(respaldo), equipo_id, db, e.fecha_hora_inicio)
     fin = cambios.get("fecha_hora_fin", e.fecha_hora_fin)
+    validar_no_futuro(e.fecha_hora_inicio, "La fecha/hora de inicio del evento de energía")
+    if fin is not None:
+        validar_no_futuro(fin, "La fecha/hora de fin del evento de energía")
     if fin is not None and _aware(fin) < _aware(e.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
-    if "fecha_hora_fin" in cambios: cambios["duracion_minutos"] = _duracion_minutos(e.fecha_hora_inicio, cambios["fecha_hora_fin"])
-    elif "duracion_minutos" in cambios and cambios["duracion_minutos"] is not None and cambios["duracion_minutos"] < 0: raise HTTPException(status_code=422, detail="duracion_minutos debe ser >= 0")
+    if "duracion_minutos" in cambios:
+        raise HTTPException(status_code=422, detail="duracion_minutos es un campo calculado; se determina a partir de fecha_hora_inicio y fecha_hora_fin")
+    if "fecha_hora_fin" in cambios:
+        cambios["duracion_minutos"] = _duracion_minutos(e.fecha_hora_inicio, cambios["fecha_hora_fin"])
     if "tipo" in cambios and cambios["tipo"] is not None: cambios["tipo"] = cambios["tipo"].strip() or e.tipo
     if "observaciones" in cambios and cambios["observaciones"] is not None: cambios["observaciones"] = cambios["observaciones"].strip() or None
     try:
