@@ -103,8 +103,10 @@ def actualizar_evento_energia(db: Session, evento_id: int, data: EventoEnergiaUp
     if fin is not None:
         validar_no_futuro(fin, "La fecha/hora de fin del evento de energía")
     if fin is not None and _aware(fin) < _aware(e.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
-    if "fecha_hora_fin" in cambios: cambios["duracion_minutos"] = _duracion_minutos(e.fecha_hora_inicio, cambios["fecha_hora_fin"])
-    elif "duracion_minutos" in cambios and cambios["duracion_minutos"] is not None and cambios["duracion_minutos"] < 0: raise HTTPException(status_code=422, detail="duracion_minutos debe ser >= 0")
+    if "duracion_minutos" in cambios:
+        raise HTTPException(status_code=422, detail="duracion_minutos es un campo calculado; se determina a partir de fecha_hora_inicio y fecha_hora_fin")
+    if "fecha_hora_fin" in cambios:
+        cambios["duracion_minutos"] = _duracion_minutos(e.fecha_hora_inicio, cambios["fecha_hora_fin"])
     if "tipo" in cambios and cambios["tipo"] is not None: cambios["tipo"] = cambios["tipo"].strip() or e.tipo
     if "observaciones" in cambios and cambios["observaciones"] is not None: cambios["observaciones"] = cambios["observaciones"].strip() or None
     try:
