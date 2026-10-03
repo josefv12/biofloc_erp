@@ -365,3 +365,19 @@ def test_schema_final_refuerza_inmutabilidad_de_historicos_inventario():
     assert "trg_inmutabilidad_movimientos_inventario" in source
     assert "trg_inmutabilidad_alimentaciones" in source
     assert "trg_inmutabilidad_aplicaciones_biofloc" in source
+
+
+def test_equipos_exigen_catalogos_activos_y_respaldo_operativo():
+    from pathlib import Path
+    equipo = (Path(__file__).parents[1] / "app/services/equipo_service.py").read_text(encoding="utf-8")
+    energia = (Path(__file__).parents[1] / "app/services/evento_energia_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/033_integridad_equipos_respaldo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "Tipo de equipo {tipo_equipo_id} está inactivo" in equipo
+    assert "Estado de equipo {estado_id} está inactivo" in equipo
+    assert "El equipo de respaldo está inactivo" in energia
+    assert 'equipo.estado.nombre != "OPERATIVO"' in energia
+    assert "trg_validar_catalogos_equipo_activos" in migration
+    assert "trg_validar_equipo_respaldo_operativo" in migration
+    assert "trg_validar_catalogos_equipo_activos" in schema
+    assert "trg_validar_equipo_respaldo_operativo" in schema
