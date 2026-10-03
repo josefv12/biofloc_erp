@@ -467,3 +467,25 @@ def test_catalogos_agua_biofloc_exigen_activos_y_protegen_historicos():
     assert "trg_validar_nombre_parametro_agua_historico" in schema
     assert "trg_validar_parametro_agua_referencia_activo" in schema
     assert "trg_validar_tipo_aplicacion_biofloc_activo" in schema
+
+    
+def test_especies_etapas_protegen_historicos_y_exigen_catalogos_activos():
+    from pathlib import Path
+    especie = (Path(__file__).parents[1] / "app/services/especie_service.py").read_text(encoding="utf-8")
+    lote = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    prod = (Path(__file__).parents[1] / "app/services/referencia_produccion_service.py").read_text(encoding="utf-8")
+    agua = (Path(__file__).parents[1] / "app/services/referencia_agua_service.py").read_text(encoding="utf-8")
+    bio = (Path(__file__).parents[1] / "app/services/referencia_biofloc_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "No se puede cambiar el nombre común de una especie con lotes o referencias históricas" in especie
+    assert "está inactiva" in lote
+    assert "está inactiva" in prod
+    assert "está inactiva" in agua
+    assert "está inactiva" in bio
+    assert "trg_validar_nombre_especie_historico" in migration
+    assert "trg_validar_nombre_etapa_historico" in migration
+    assert "trg_validar_referencia_produccion_catalogos_activos" in migration
+    assert "trg_validar_nombre_especie_historico" in schema
+    assert "trg_validar_nombre_etapa_historico" in schema
+    assert "trg_validar_referencia_produccion_catalogos_activos" in schema
