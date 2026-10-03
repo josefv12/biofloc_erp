@@ -2384,3 +2384,32 @@ CREATE TRIGGER trg_proteger_datos_fundacionales_lote
 BEFORE UPDATE OF estanque_id, especie_id, etapa_productiva_id, cantidad_sembrada, peso_inicial_promedio_g
 ON biofloc.lotes
 FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_datos_fundacionales_lote();
+
+
+-- Un estanque no puede alojar ciclos productivos con periodos superpuestos.
+CREATE OR REPLACE FUNCTION biofloc.validar_solapamiento_historico_estanque()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_solapamiento_historico_estanque$
+BEGIN
+    PERFORM pg_advisory_xact_lock(2147483000, NEW.estanque_id);
+    IF EXISTS (
+        SELECT 1 FROM biofloc.lotes l
+        WHERE l.estanque_id = NEW.estanque_id
+          AND l.id <> NEW.id
+          AND l.fecha_siembra <= COALESCE(NEW.fecha_cierre, DATE '9999-12-31')
+          AND COALESCE(l.fecha_cierre, DATE '9999-12-31') >= NEW.fecha_siembra
+    ) THEN
+        RAISE EXCEPTION
+            'El estanque % ya tiene un ciclo histórico que se solapa con el periodo del lote',
+            NEW.estanque_id USING ERRCODE='exclusion_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_validar_solapamiento_historico_estanque$;
+
+DROP TRIGGER IF EXISTS trg_validar_solapamiento_historico_estanque ON biofloc.lotes;
+CREATE TRIGGER trg_validar_solapamiento_historico_estanque
+BEFORE INSERT OR UPDATE OF estanque_id, fecha_siembra, fecha_cierre
+ON biofloc.lotes
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_solapamiento_historico_estanque();
