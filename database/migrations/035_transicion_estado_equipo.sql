@@ -328,9 +328,10 @@ AS $fn_validar_estado_lote_operativo$
 DECLARE
     nombre_nuevo TEXT;
     nombre_anterior TEXT;
+    activo_catalogo BOOLEAN;
 BEGIN
-    SELECT nombre, activo INTO nombre_nuevo, activo FROM biofloc.estados_lote WHERE id = NEW.estado_id;
-    IF NOT FOUND OR NOT activo THEN
+    SELECT nombre, activo INTO nombre_nuevo, activo_catalogo FROM biofloc.estados_lote WHERE id = NEW.estado_id;
+    IF NOT FOUND OR NOT activo_catalogo THEN
         RAISE EXCEPTION 'El estado de lote debe existir y estar activo' USING ERRCODE='check_violation';
     END IF;
 
@@ -363,11 +364,12 @@ LANGUAGE plpgsql
 AS $fn_validar_estado_estanque_operativo$
 DECLARE
     nombre_nuevo TEXT;
+    activo_catalogo BOOLEAN;
 BEGIN
-    SELECT nombre, activo INTO nombre_nuevo, activo
+    SELECT nombre, activo INTO nombre_nuevo, activo_catalogo
     FROM biofloc.estados_estanque WHERE id = NEW.estado_id;
 
-    IF NOT FOUND OR NOT activo THEN
+    IF NOT FOUND OR NOT activo_catalogo THEN
         RAISE EXCEPTION 'El estado de estanque debe existir y estar activo' USING ERRCODE='check_violation';
     END IF;
 
