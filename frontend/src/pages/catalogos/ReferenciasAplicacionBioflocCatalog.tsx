@@ -123,7 +123,7 @@ export function ReferenciasAplicacionBioflocCatalog({ canWrite }: { canWrite: bo
     const payload = {
       especie_id: Number(values.especie_id),
       semana: Number(values.semana),
-      fase: values.fase,
+      fase: values.fase as "Inicio" | "Levante" | "Engorde",
       producto_id: Number(values.producto_id),
       cantidad_referencia: parseDecimalInput(values.cantidad_referencia) ?? 0,
       unidad: values.unidad.trim() || "kg",
