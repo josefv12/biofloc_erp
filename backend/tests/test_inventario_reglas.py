@@ -440,3 +440,14 @@ def test_tipos_mantenimiento_protegen_historico_y_exigen_catalogo_activo():
     assert "trg_validar_tipo_mantenimiento_activo" in migration
     assert "trg_validar_tipo_mantenimiento_historico" in schema
     assert "trg_validar_tipo_mantenimiento_activo" in schema
+
+    
+def test_nombres_catalogos_equipo_no_reinterpretan_historicos():
+    from pathlib import Path
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_tipo_equipo_historico" in migration
+    assert "trg_validar_estado_equipo_historico" in migration
+    assert "trg_validar_tipo_equipo_historico" in schema
+    assert "trg_validar_estado_equipo_historico" in schema
+    assert "'OPERATIVO', 'BAJA', 'FUERA_DE_SERVICIO'" in migration
