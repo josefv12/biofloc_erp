@@ -249,3 +249,72 @@ DROP TRIGGER IF EXISTS trg_validar_tipo_aplicacion_biofloc_activo ON biofloc.apl
 CREATE TRIGGER trg_validar_tipo_aplicacion_biofloc_activo
 BEFORE INSERT OR UPDATE OF tipo_aplicacion_id ON biofloc.aplicaciones_biofloc
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_agua_biofloc();
+
+    
+-- Catálogos de especie y etapa: sus nombres son parte de la interpretación
+-- histórica de lotes y referencias.
+CREATE OR REPLACE FUNCTION biofloc.validar_catalogos_produccion_historicos()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_catalogos_produccion_historicos$
+BEGIN
+    IF TG_TABLE_NAME = 'especies'
+       AND NEW.nombre_comun IS DISTINCT FROM OLD.nombre_comun
+       AND (
+           EXISTS (SELECT 1 FROM biofloc.lotes WHERE especie_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.referencias_produccion WHERE especie_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.referencias_agua WHERE especie_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.referencias_biofloc WHERE especie_id = OLD.id)
+       )
+    THEN
+        RAISE EXCEPTION 'La especie % ya tiene historial o referencias y no puede renombrarse',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+
+    IF TG_TABLE_NAME = 'etapas_productivas'
+       AND NEW.nombre IS DISTINCT FROM OLD.nombre
+       AND (
+           EXISTS (SELECT 1 FROM biofloc.lotes WHERE etapa_productiva_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.referencias_produccion WHERE etapa_productiva_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.referencias_agua WHERE etapa_productiva_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.referencias_biofloc WHERE etapa_productiva_id = OLD.id)
+       )
+    THEN
+        RAISE EXCEPTION 'La etapa productiva % ya tiene historial o referencias y no puede renombrarse',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+
+    IF TG_TABLE_NAME = 'referencias_produccion'
+       AND (
+           TG_OP = 'INSERT'
+           OR NEW.especie_id IS DISTINCT FROM OLD.especie_id
+           OR NEW.etapa_productiva_id IS DISTINCT FROM OLD.etapa_productiva_id
+       )
+       AND (
+           NOT EXISTS (SELECT 1 FROM biofloc.especies WHERE id = NEW.especie_id AND activo = TRUE)
+           OR NOT EXISTS (SELECT 1 FROM biofloc.etapas_productivas WHERE id = NEW.etapa_productiva_id AND activo = TRUE)
+       )
+    THEN
+        RAISE EXCEPTION 'La especie y la etapa de una referencia de producción deben existir y estar activas'
+            USING ERRCODE='check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$fn_validar_catalogos_produccion_historicos$;
+
+DROP TRIGGER IF EXISTS trg_validar_nombre_especie_historico ON biofloc.especies;
+CREATE TRIGGER trg_validar_nombre_especie_historico
+BEFORE UPDATE OF nombre_comun ON biofloc.especies
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_produccion_historicos();
+
+DROP TRIGGER IF EXISTS trg_validar_nombre_etapa_historico ON biofloc.etapas_productivas;
+CREATE TRIGGER trg_validar_nombre_etapa_historico
+BEFORE UPDATE OF nombre ON biofloc.etapas_productivas
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_produccion_historicos();
+
+DROP TRIGGER IF EXISTS trg_validar_referencia_produccion_catalogos_activos ON biofloc.referencias_produccion;
+CREATE TRIGGER trg_validar_referencia_produccion_catalogos_activos
+BEFORE INSERT OR UPDATE OF especie_id, etapa_productiva_id
+ON biofloc.referencias_produccion
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_produccion_historicos();
