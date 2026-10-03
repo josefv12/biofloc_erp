@@ -128,3 +128,56 @@ CREATE TRIGGER trg_validar_tipo_mantenimiento_activo
 BEFORE INSERT OR UPDATE OF tipo_mantenimiento_id ON biofloc.mantenimientos
 FOR EACH ROW
 EXECUTE FUNCTION biofloc.validar_tipo_mantenimiento_historico();
+
+    
+-- Los nombres de catálogos de equipos son parte de la semántica de las
+-- referencias históricas y de reglas operativas (OPERATIVO/BAJA).
+CREATE OR REPLACE FUNCTION biofloc.validar_catalogo_equipo_historico()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_catalogo_equipo_historico$
+BEGIN
+    IF TG_TABLE_NAME = 'tipos_equipo'
+       AND NEW.nombre IS DISTINCT FROM OLD.nombre
+       AND EXISTS (
+           SELECT 1 FROM biofloc.equipos WHERE tipo_equipo_id = OLD.id
+       )
+    THEN
+        RAISE EXCEPTION
+            'El tipo de equipo % ya está referenciado y no puede renombrarse',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+
+    IF TG_TABLE_NAME = 'estados_equipo'
+       AND NEW.nombre IS DISTINCT FROM OLD.nombre
+       AND EXISTS (
+           SELECT 1 FROM biofloc.equipos WHERE estado_id = OLD.id
+       )
+    THEN
+        RAISE EXCEPTION
+            'El estado de equipo % ya está referenciado y no puede renombrarse',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+
+    IF TG_TABLE_NAME = 'estados_equipo'
+       AND NEW.nombre IS DISTINCT FROM OLD.nombre
+       AND OLD.nombre IN ('OPERATIVO', 'BAJA', 'FUERA_DE_SERVICIO')
+    THEN
+        RAISE EXCEPTION
+            'El estado de equipo % es un nombre reservado por las reglas operativas y no puede renombrarse',
+            OLD.nombre USING ERRCODE='check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$fn_validar_catalogo_equipo_historico$;
+
+DROP TRIGGER IF EXISTS trg_validar_tipo_equipo_historico ON biofloc.tipos_equipo;
+CREATE TRIGGER trg_validar_tipo_equipo_historico
+BEFORE UPDATE OF nombre ON biofloc.tipos_equipo
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogo_equipo_historico();
+
+DROP TRIGGER IF EXISTS trg_validar_estado_equipo_historico ON biofloc.estados_equipo;
+CREATE TRIGGER trg_validar_estado_equipo_historico
+BEFORE UPDATE OF nombre ON biofloc.estados_equipo
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogo_equipo_historico();
