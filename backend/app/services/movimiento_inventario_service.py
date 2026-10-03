@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text, select
+from sqlalchemy import text
 from fastapi import HTTPException
 
 from app.models.movimiento_inventario import MovimientoInventario
@@ -73,28 +73,8 @@ def _obtener_tipo_salida_id(db: Session) -> int:
     return tipo.id
 
 
-def _costo_promedio_entrada(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
-    """Calcula el promedio ponderado móvil vigente justo antes de una salida.
-
-    Recorre cronológicamente las entradas y salidas anteriores. Las entradas
-    aumentan el valor del inventario a su costo; las salidas reducen cantidad
-    y valor al promedio vigente. Así el costo no queda contaminado por compras
-    históricas que ya fueron consumidas.
-    """
-    rows = db.execute(text("""
-        SELECT
-            mi.cantidad,
-            mi.costo_unitario,
-            mi.costo_total,
-            tm.afecta_stock,
-            mi.id
-        FROM biofloc.movimientos_inventario mi
-        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
-        WHERE mi.producto_id = :pid
-          AND mi.fecha_hora <= :fecha_hora
-        ORDER BY mi.fecha_hora ASC, mi.id ASC
-    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().all()
-
+def _calcular_promedio_ponderado_movil(rows) -> Decimal:
+    """Calcula el valor promedio móvil a partir de movimientos cronológicos."""
     stock = Decimal("0")
     valor = Decimal("0")
     cent = Decimal("0.01")
@@ -141,6 +121,24 @@ def _costo_promedio_entrada(db: Session, producto_id: int, fecha_hora: datetime)
         )
 
     return (valor / stock).quantize(cent, rounding=ROUND_HALF_UP)
+
+
+def _costo_promedio_entrada(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
+    """Calcula el promedio ponderado móvil vigente justo antes de una salida."""
+    rows = db.execute(text("""
+        SELECT
+            mi.cantidad,
+            mi.costo_unitario,
+            mi.costo_total,
+            tm.afecta_stock,
+            mi.id
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = :pid
+          AND mi.fecha_hora <= :fecha_hora
+        ORDER BY mi.fecha_hora ASC, mi.id ASC
+    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().all()
+    return _calcular_promedio_ponderado_movil(rows)
 
 
 def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
