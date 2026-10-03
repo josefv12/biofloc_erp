@@ -222,6 +222,23 @@ def crear_movimiento_inventario(
                 ),
             )
 
+    if tipo.afecta_stock == 1:
+        if data.costo_unitario is None or data.costo_total is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Las entradas de inventario deben registrar costo_unitario y costo_total.",
+            )
+        costo_unitario = Decimal(str(data.costo_unitario))
+        costo_total = Decimal(str(data.costo_total))
+        if costo_unitario < 0 or costo_total < 0:
+            raise HTTPException(status_code=422, detail="Los costos de entrada no pueden ser negativos.")
+        costo_esperado = (costo_unitario * Decimal(str(data.cantidad))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if costo_total != costo_esperado:
+            raise HTTPException(
+                status_code=422,
+                detail=f"costo_total debe coincidir con cantidad × costo_unitario ({costo_esperado}).",
+            )
+
     _validar_referencia(db, data.referencia_tipo, data.referencia_id)
 
     datos = data.model_dump()
