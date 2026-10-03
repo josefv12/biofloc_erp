@@ -973,6 +973,7 @@ VALUES
     ('ADMINISTRATIVO', 'Gastos administrativos'),
     ('COMERCIAL', 'Gastos asociados a comercialización'),
     ('OTROS', 'Otros gastos');
+INSERT INTO categorias_gasto (nombre, descripcion) VALUES ('ALEVINOS', 'Compra de alevinos y material vivo de siembra');
 
 INSERT INTO tipos_equipo (nombre, descripcion)
 VALUES
