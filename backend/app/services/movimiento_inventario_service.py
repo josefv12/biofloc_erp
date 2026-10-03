@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text
+from sqlalchemy import text, select
 from fastapi import HTTPException
 
 from app.models.movimiento_inventario import MovimientoInventario
@@ -74,24 +74,73 @@ def _obtener_tipo_salida_id(db: Session) -> int:
 
 
 def _costo_promedio_entrada(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
-    """Costo promedio ponderado de entradas con costo hasta el momento del consumo."""
-    row = db.execute(text("""
+    """Calcula el promedio ponderado móvil vigente justo antes de una salida.
+
+    Recorre cronológicamente las entradas y salidas anteriores. Las entradas
+    aumentan el valor del inventario a su costo; las salidas reducen cantidad
+    y valor al promedio vigente. Así el costo no queda contaminado por compras
+    históricas que ya fueron consumidas.
+    """
+    rows = db.execute(text("""
         SELECT
-            COALESCE(SUM(cantidad), 0) AS cantidad,
-            COALESCE(SUM(costo_total), 0) AS costo
+            mi.cantidad,
+            mi.costo_unitario,
+            mi.costo_total,
+            tm.afecta_stock,
+            mi.id
         FROM biofloc.movimientos_inventario mi
         JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
         WHERE mi.producto_id = :pid
-          AND tm.afecta_stock = 1
           AND mi.fecha_hora <= :fecha_hora
-          AND mi.costo_unitario IS NOT NULL
-          AND mi.costo_total IS NOT NULL
-    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().one()
-    cantidad = Decimal(str(row["cantidad"] or 0))
-    costo = Decimal(str(row["costo"] or 0))
-    if cantidad <= 0 or costo < 0:
-        return Decimal("0")
-    return (costo / cantidad).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        ORDER BY mi.fecha_hora ASC, mi.id ASC
+    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().all()
+
+    stock = Decimal("0")
+    valor = Decimal("0")
+    cent = Decimal("0.01")
+
+    for row in rows:
+        cantidad = Decimal(str(row["cantidad"] or 0))
+        afecta = int(row["afecta_stock"])
+
+        if afecta == 1:
+            if row["costo_unitario"] is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "No se puede valorar la salida: existe una entrada de "
+                        "inventario sin costo unitario."
+                    ),
+                )
+            costo_unitario = Decimal(str(row["costo_unitario"]))
+            if costo_unitario < 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="No se puede valorar la salida: existe un costo de entrada inválido.",
+                )
+            stock += cantidad
+            valor += cantidad * costo_unitario
+        elif afecta == -1:
+            if cantidad > stock:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "No se puede calcular el costo histórico del inventario: "
+                        "las salidas anteriores dejan stock negativo."
+                    ),
+                )
+            if stock > 0:
+                promedio = valor / stock
+                valor -= cantidad * promedio
+            stock -= cantidad
+
+    if stock <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="No se puede determinar un costo promedio válido para este producto.",
+        )
+
+    return (valor / stock).quantize(cent, rounding=ROUND_HALF_UP)
 
 
 def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
@@ -152,6 +201,11 @@ def crear_movimiento_inventario(
     fecha_hora = data.fecha_hora or datetime.now(timezone.utc)
 
     if tipo.afecta_stock == -1:
+        # Serializar las salidas del mismo producto antes de calcular su costo.
+        db.execute(
+            text("SELECT id FROM biofloc.productos WHERE id = :pid FOR UPDATE"),
+            {"pid": producto.id},
+        )
         row = db.execute(text("""
             SELECT COALESCE(stock_actual, 0)
             FROM biofloc.vista_stock_productos
@@ -176,7 +230,7 @@ def crear_movimiento_inventario(
     datos["fecha_hora"] = fecha_hora
     datos["registrado_por"] = usuario_id
 
-    # Si una salida no trae costo, calcularlo desde las entradas históricas.
+    # Si una salida no trae costo, calcularlo con el promedio ponderado móvil vigente.
     if tipo.afecta_stock == -1 and (datos.get("costo_unitario") is None or datos.get("costo_total") is None):
         costo_unitario = _costo_promedio_entrada(db, producto.id, fecha_hora)
         cantidad = Decimal(str(data.cantidad))
