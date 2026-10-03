@@ -1036,7 +1036,6 @@ BEGIN
     END IF;
     RETURN NEW;
 END; $;
-
 CREATE TRIGGER trg_validar_fecha_biometria
 BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
@@ -1062,7 +1061,6 @@ BEGIN
     END IF;
     RETURN NEW;
 END; $;
-
 CREATE TRIGGER trg_validar_muestra_biometria
 BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_muestra_biometria();
@@ -1078,7 +1076,6 @@ BEGIN
     END IF;
     RETURN NEW;
 END; $;
-
 CREATE TRIGGER trg_validar_promedio_cosecha
 BEFORE INSERT OR UPDATE ON cosechas
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_promedio_cosecha();
@@ -1092,7 +1089,6 @@ BEGIN
     END IF;
     RETURN NEW;
 END; $;
-
 CREATE TRIGGER trg_validar_fecha_biometria_futura BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 CREATE TRIGGER trg_validar_fecha_mortalidad_futura BEFORE INSERT OR UPDATE ON mortalidades
