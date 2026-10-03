@@ -109,7 +109,7 @@ Migraciones numeradas de integridad actualmente auditadas:
 - `032_transiciones_estado_alarma.sql` — impide reabrir alarmas y limita las transiciones semilla a PENDIENTE → ATENDIDA → CERRADA.
 - `033_integridad_equipos_respaldo.sql` — impide asignar catálogos de equipo inactivos y usar como respaldo equipos inactivos o no OPERATIVOS.
 - `034_integridad_fecha_adquisicion_equipo.sql` — impide eventos de equipo anteriores a su adquisición y evita mover la adquisición después de históricos existentes.
-- `035_transicion_estado_equipo.sql` — hace `BAJA` un estado terminal y desactiva el equipo al retirarlo.
+- `035_transicion_estado_equipo.sql` — hace `BAJA` un estado terminal y desactiva el equipo al retirarlo; además protege duración derivada de eventos de energía y hace inmutables las fallas históricas.
 
 También existen migraciones con nombre de fecha para cambios de unidades, catálogos y referencias productivas; deben ejecutarse después de las numeradas según su orden cronológico y solo sobre una base compatible.
 
