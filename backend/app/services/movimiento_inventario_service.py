@@ -194,6 +194,31 @@ def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
     return Decimal(str(row or 0))
 
 
+def _validar_no_stock_negativo_historico(db: Session, producto_id: int) -> None:
+    """Verifica toda la línea temporal del producto después de insertar un movimiento."""
+    rows = db.execute(text("""
+        SELECT
+            mi.cantidad,
+            CASE
+                WHEN tm.nombre = 'AJUSTE' THEN mi.efecto_stock
+                ELSE tm.afecta_stock
+            END AS efecto
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = :pid
+        ORDER BY mi.fecha_hora ASC, mi.id ASC
+    """), {"pid": producto_id}).mappings().all()
+
+    stock = Decimal("0")
+    for row in rows:
+        stock += Decimal(str(row["cantidad"])) * Decimal(str(row["efecto"]))
+        if stock < 0:
+            raise HTTPException(
+                status_code=422,
+                detail="El movimiento dejaría stock negativo en algún punto de la historia del producto",
+            )
+
+
 def obtener_stock_as_of(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
     row = db.execute(text("""
         SELECT COALESCE(SUM(
@@ -343,6 +368,11 @@ def crear_movimiento_inventario(
     db.add(nuevo)
     try:
         db.flush()
+        _validar_no_stock_negativo_historico(db, producto.id)
+    except HTTPException:
+        if not flush_only:
+            db.rollback()
+        raise
     except IntegrityError as e:
         if not flush_only:
             db.rollback()
