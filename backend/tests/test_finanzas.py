@@ -190,4 +190,5 @@ def test_reporte_gastos_expone_y_filtra_estanque():
     assert "estanque_id: Optional[int] = None" in router
     assert "g.estanque_id = :estanque_id" in service
     assert "e.codigo AS estanque_codigo" in service
+    assert "def compras(" in service and "if estanque_id is not None" not in service.split("def gastos(", 1)[0]
     assert "estanque_codigo: Optional[str] = None" in schema
