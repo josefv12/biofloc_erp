@@ -569,6 +569,7 @@ DECLARE
     v_efecto INTEGER;
     v_row RECORD;
 BEGIN
+    PERFORM pg_advisory_xact_lock(2147482000, NEW.producto_id);
     FOR v_row IN
         SELECT
             mi.cantidad,
