@@ -18,7 +18,7 @@ from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.medicion_biofloc import MedicionBioflocCreate
 from app.services.poblacion_lote import exigir_lote_en_produccion
-from app.services.validaciones_fecha import validar_no_futuro
+from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -53,6 +53,7 @@ def crear_medicion_biofloc(db: Session, data: MedicionBioflocCreate, usuario_id:
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
     validar_no_futuro(data.fecha_hora, "La fecha de la medición de Biofloc")
+    validar_no_despues_cierre(data.fecha_hora, lote.fecha_cierre, "La fecha de la medición de Biofloc")
 
     # 2. Validar fecha_hora contra fecha_siembra
     if data.fecha_hora.date() < lote.fecha_siembra:
