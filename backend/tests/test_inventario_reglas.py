@@ -251,7 +251,7 @@ def test_trazabilidad_detalle_compra_se_mantiene_compatible():
     migracion = (Path(__file__).parents[2] / "database" / "migrations" / "014_integridad_trazabilidad_movimientos.sql").read_text(encoding="utf-8")
     assert 'referencia_tipo == "DETALLE_COMPRA"' in servicio
     assert "referencia_tipo = 'DETALLE_COMPRA'" in migracion
-    assert "tipo_nombre != 'ENTRADA'" in servicio
+    assert 'tipo_nombre != "ENTRADA"' in servicio
     assert "v_tipo <> 'ENTRADA'" in migracion
 
 
