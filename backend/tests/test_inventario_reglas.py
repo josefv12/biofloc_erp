@@ -451,3 +451,19 @@ def test_nombres_catalogos_equipo_no_reinterpretan_historicos():
     assert "trg_validar_tipo_equipo_historico" in schema
     assert "trg_validar_estado_equipo_historico" in schema
     assert "'OPERATIVO', 'BAJA', 'FUERA_DE_SERVICIO'" in migration
+
+    
+def test_catalogos_agua_biofloc_exigen_activos_y_protegen_historicos():
+    from pathlib import Path
+    aplicacion = (Path(__file__).parents[1] / "app/services/aplicacion_biofloc_service.py").read_text(encoding="utf-8")
+    referencia = (Path(__file__).parents[1] / "app/services/referencia_agua_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "tipo de aplicación Biofloc está inactivo" in aplicacion
+    assert "parámetro de agua está inactivo" in referencia
+    assert "trg_validar_nombre_parametro_agua_historico" in migration
+    assert "trg_validar_parametro_agua_referencia_activo" in migration
+    assert "trg_validar_tipo_aplicacion_biofloc_activo" in migration
+    assert "trg_validar_nombre_parametro_agua_historico" in schema
+    assert "trg_validar_parametro_agua_referencia_activo" in schema
+    assert "trg_validar_tipo_aplicacion_biofloc_activo" in schema
