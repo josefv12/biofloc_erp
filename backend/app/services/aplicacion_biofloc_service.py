@@ -70,6 +70,8 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
     tipo = db.query(TipoAplicacionBiofloc).filter(TipoAplicacionBiofloc.id == data.tipo_aplicacion_id).first()
     if not tipo:
         raise HTTPException(status_code=404, detail=f"Tipo de aplicación Biofloc id={data.tipo_aplicacion_id} no existe")
+    if not tipo.activo:
+        raise HTTPException(status_code=422, detail="El tipo de aplicación Biofloc está inactivo y no admite nuevas aplicaciones")
 
     # 3. Validar fecha_hora contra fecha_siembra
     if data.fecha_hora.date() < lote.fecha_siembra:
