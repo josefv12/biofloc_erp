@@ -73,9 +73,30 @@ def obtener_lote(db: Session, lote_id: int) -> Lote:
     return lote
 
 
+def _validar_estanque_operativo_para_lote(db: Session, estanque_id: int, estado_id: int) -> None:
+    estado_lote = db.query(EstadoLote).filter(EstadoLote.id == estado_id).first()
+    if not estado_lote:
+        raise HTTPException(status_code=404, detail=f"EstadoLote id={estado_id} no existe")
+
+    if estado_lote.nombre != "ACTIVO":
+        return
+
+    est = db.query(Estanque).filter(Estanque.id == estanque_id, Estanque.activo == True).first()
+    if not est:
+        raise HTTPException(status_code=404, detail=f"Estanque id={estanque_id} no existe o está inactivo")
+
+    estado_estanque = est.estado
+    if estado_estanque and estado_estanque.nombre in {"MANTENIMIENTO", "FUERA_DE_SERVICIO"}:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No se puede crear o mover un lote ACTIVO a un estanque en estado {estado_estanque.nombre}",
+        )
+
+
 def crear_lote(db: Session, data: LoteCreate, usuario_id: int) -> Lote:
     validar_fecha_no_futura(data.fecha_siembra, "La fecha de siembra")
     _verificar_referencias(db, data)
+    _validar_estanque_operativo_para_lote(db, data.estanque_id, data.estado_id)
 
     # Verificar código único
     if db.query(Lote).filter(Lote.codigo == data.codigo).first():
@@ -132,6 +153,7 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
     cambios = data.model_dump(exclude_none=True)
 
     estado_id_nuevo = cambios.get("estado_id", lote.estado_id)
+    estanque_id_nuevo = cambios.get("estanque_id", lote.estanque_id)
     estado_nuevo = db.query(EstadoLote).filter(EstadoLote.id == estado_id_nuevo).first()
     if not estado_nuevo:
         raise HTTPException(status_code=404, detail=f"EstadoLote id={estado_id_nuevo} no existe")
@@ -146,6 +168,7 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
         )
     if estado_nuevo.nombre == "ACTIVO" and (cambios.get("fecha_cierre", lote.fecha_cierre) is not None):
         raise HTTPException(status_code=422, detail="Un lote ACTIVO no puede tener fecha_cierre")
+    _validar_estanque_operativo_para_lote(db, estanque_id_nuevo, estado_nuevo.id)
     if lote.estado and lote.estado.nombre in estados_terminales and estado_nuevo.nombre != lote.estado.nombre:
         raise HTTPException(status_code=422, detail="Un lote FINALIZADO o CANCELADO no puede reabrirse ni cambiar de estado")
 
