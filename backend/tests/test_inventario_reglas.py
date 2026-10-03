@@ -295,3 +295,28 @@ def test_schema_final_no_tiene_cierres_dollar_quote_corruptos():
     schema = Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql"
     text = schema.read_text(encoding="utf-8")
     assert not __import__("re").search(r"\$[A-Za-z_][A-Za-z0-9_]*\$\d+", text)
+
+
+def test_movimientos_automaticos_son_idempotentes_por_referencia():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/movimiento_inventario_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/017_idempotencia_movimientos_automaticos.sql").read_text(encoding="utf-8")
+    assert "Ya existe un movimiento de inventario para" in source
+    assert "uq_mov_inv_referencia_automatica" in migration
+    assert "DETALLE_COMPRA" in migration
+    assert "ALIMENTACION" in migration
+    assert "APLICACION_BIOFLOC" in migration
+
+
+def test_alimentacion_rechaza_fecha_futura_en_servicio():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/alimentacion_service.py").read_text(encoding="utf-8")
+    assert 'validar_no_futuro(data.fecha_hora, "La fecha de la alimentación")' in source
+
+
+def test_eventos_operativos_auxiliares_tienen_guardia_temporal_en_bd():
+    from pathlib import Path
+    migration = (Path(__file__).parents[2] / "database/migrations/016_integridad_eventos_operativos.sql").read_text(encoding="utf-8")
+    assert "trg_validar_fecha_falla_futura" in migration
+    assert "trg_validar_fecha_mantenimiento_futura" in migration
+    assert "trg_validar_fecha_evento_energia_futura" in migration
