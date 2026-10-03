@@ -87,24 +87,8 @@ def _tipo_y_efecto(tipo: TipoMovimientoInventario, efecto_stock: int | None) -> 
     raise HTTPException(status_code=422, detail="Tipo de movimiento no permitido. Use ENTRADA, SALIDA o AJUSTE")
 
 
-def _costo_promedio_stock_as_of(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
-    """Calcula el promedio ponderado del stock que existía en la fecha del evento."""
-    rows = db.execute(text("""
-        SELECT
-            mi.cantidad,
-            mi.costo_unitario,
-            mi.costo_total,
-            CASE
-                WHEN tm.nombre = 'AJUSTE' THEN mi.efecto_stock
-                ELSE tm.afecta_stock
-            END AS efecto
-        FROM biofloc.movimientos_inventario mi
-        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
-        WHERE mi.producto_id = :pid
-          AND mi.fecha_hora <= :fecha_hora
-        ORDER BY mi.fecha_hora ASC, mi.id ASC
-    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().all()
-
+def _calcular_costo_promedio_desde_movimientos(rows) -> Decimal:
+    """Aplica promedio ponderado móvil sobre movimientos ya ordenados cronológicamente."""
     cantidad_stock = Decimal("0")
     valor_stock = Decimal("0")
 
@@ -123,9 +107,10 @@ def _costo_promedio_stock_as_of(db: Session, producto_id: int, fecha_hora: datet
         else:
             if cantidad_stock <= 0:
                 continue
+            cantidad_salida = min(cantidad, cantidad_stock)
             promedio = valor_stock / cantidad_stock
-            valor_stock -= promedio * min(cantidad, cantidad_stock)
-            cantidad_stock -= min(cantidad, cantidad_stock)
+            valor_stock -= promedio * cantidad_salida
+            cantidad_stock -= cantidad_salida
             if valor_stock < 0:
                 valor_stock = Decimal("0")
 
@@ -133,6 +118,26 @@ def _costo_promedio_stock_as_of(db: Session, producto_id: int, fecha_hora: datet
         return Decimal("0")
     return (valor_stock / cantidad_stock).quantize(D2, rounding=ROUND_HALF_UP)
 
+
+def _costo_promedio_stock_as_of(db: Session, producto_id: int, fecha_hora: datetime) -> Decimal:
+    """Calcula el promedio ponderado del stock que existía en la fecha del evento."""
+    rows = db.execute(text("""
+        SELECT
+            mi.cantidad,
+            mi.costo_unitario,
+            mi.costo_total,
+            CASE
+                WHEN tm.nombre = 'AJUSTE' THEN mi.efecto_stock
+                ELSE tm.afecta_stock
+            END AS efecto
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.tipos_movimiento_inventario tm ON tm.id = mi.tipo_movimiento_id
+        WHERE mi.producto_id = :pid
+          AND mi.fecha_hora <= :fecha_hora
+        ORDER BY mi.fecha_hora ASC, mi.id ASC
+    """), {"pid": producto_id, "fecha_hora": fecha_hora}).mappings().all()
+
+    return _calcular_costo_promedio_desde_movimientos(rows)
 
 def obtener_stock_producto(db: Session, producto_id: int) -> Decimal:
     row = db.execute(text("""
