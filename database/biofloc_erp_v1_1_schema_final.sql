@@ -1703,7 +1703,7 @@ DECLARE
     v_fecha_cierre DATE;
 BEGIN
     SELECT fecha_cierre INTO v_fecha_cierre FROM biofloc.lotes WHERE id = NEW.lote_id FOR SHARE;
-    IF v_fecha_cierre IS NOT NULL AND NEW.fecha_hora::date > v_fecha_cierre THEN
+    IF v_fecha_cierre IS NOT NULL AND (NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date > v_fecha_cierre THEN
         RAISE EXCEPTION 'El evento del lote % no puede ser posterior a su fecha de cierre', NEW.lote_id USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
@@ -1727,7 +1727,7 @@ BEGIN
         UNION ALL SELECT fecha_hora FROM biofloc.mediciones_agua WHERE lote_id = NEW.id
         UNION ALL SELECT fecha_hora FROM biofloc.aplicaciones_biofloc WHERE lote_id = NEW.id
     ) eventos;
-    IF v_ultimo IS NOT NULL AND v_ultimo::date > NEW.fecha_cierre THEN
+    IF v_ultimo IS NOT NULL AND (v_ultimo AT TIME ZONE 'America/Bogota')::date > NEW.fecha_cierre THEN
         RAISE EXCEPTION 'La fecha de cierre no puede ser anterior al último evento histórico del lote %', NEW.id USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
