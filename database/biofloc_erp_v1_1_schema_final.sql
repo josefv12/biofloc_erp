@@ -79,7 +79,7 @@ CREATE TABLE referencias_produccion (
     id                  BIGSERIAL PRIMARY KEY,
     especie_id          BIGINT NOT NULL REFERENCES especies(id),
     etapa_productiva_id BIGINT NOT NULL REFERENCES etapas_productivas(id),
-    semana_desde        INTEGER NOT NULL CHECK (semana_desde >= 0),
+    semana_desde        INTEGER NOT NULL CHECK (semana_desde >= 1),
     semana_hasta        INTEGER NOT NULL CHECK (semana_hasta >= semana_desde),
     peso_esperado_g     NUMERIC(10,2) CHECK (peso_esperado_g >= 0),
     tasa_alimentacion_pct NUMERIC(6,3) CHECK (tasa_alimentacion_pct >= 0),
