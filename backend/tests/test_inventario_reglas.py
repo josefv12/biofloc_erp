@@ -578,3 +578,15 @@ def test_movimientos_protegen_stock_historico_negativo():
     for content in (migracion, esquema):
         assert "trg_validar_stock_historico_no_negativo" in content
         assert "pg_advisory_xact_lock(2147482000, NEW.producto_id)" in content
+
+
+def test_datos_fundacionales_lote_son_inmutables_con_historial():
+    from pathlib import Path
+    servicio = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migracion = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    esquema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "La etapa productiva es inmutable una vez iniciado o cerrado el historial del lote" in servicio
+    for content in (migracion, esquema):
+        assert "trg_proteger_datos_fundacionales_lote" in content
+        for campo in ("estanque_id", "especie_id", "etapa_productiva_id", "cantidad_sembrada", "peso_inicial_promedio_g"):
+            assert campo in content
