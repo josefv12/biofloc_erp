@@ -489,3 +489,18 @@ def test_especies_etapas_protegen_historicos_y_exigen_catalogos_activos():
     assert "trg_validar_nombre_especie_historico" in schema
     assert "trg_validar_nombre_etapa_historico" in schema
     assert "trg_validar_referencia_produccion_catalogos_activos" in schema
+
+    
+def test_estados_lote_y_estanque_protegen_reapertura_y_inconsistencias():
+    from pathlib import Path
+    lote = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    estanque = (Path(__file__).parents[1] / "app/services/estanque_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "requiere fecha_cierre" in lote
+    assert "no puede reabrirse" in lote
+    assert "No se puede desactivar un estanque con un lote ACTIVO" in estanque
+    assert "trg_validar_estado_lote_operativo" in migration
+    assert "trg_validar_estado_estanque_operativo" in migration
+    assert "trg_validar_estado_lote_operativo" in schema
+    assert "trg_validar_estado_estanque_operativo" in schema
