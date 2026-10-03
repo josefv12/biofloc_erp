@@ -20,11 +20,11 @@ class ReferenciaProduccion(Base):
             name="referencias_produccion_tasa_check",
         ),
         CheckConstraint(
-            "raciones_min IS NULL OR raciones_min >= 0",
+            "raciones_min IS NULL OR raciones_min > 0",
             name="referencias_produccion_raciones_check",
         ),
         CheckConstraint(
-            "raciones_min IS NULL OR raciones_max IS NULL OR raciones_max >= raciones_min",
+            "raciones_max IS NULL OR raciones_max > 0",
             name="referencias_produccion_raciones_rango_check",
         ),
         CheckConstraint(
