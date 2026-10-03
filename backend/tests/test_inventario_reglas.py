@@ -267,3 +267,17 @@ def test_medicion_agua_tiene_guardia_no_futura_en_bd():
     migration = Path(__file__).parents[2] / "database/migrations/010_integridad_produccion.sql"
     text = migration.read_text(encoding="utf-8")
     assert "trg_validar_fecha_medicion_agua_futura" in text
+
+
+def test_fecha_hora_sin_zona_se_interpreta_en_colombia_sin_typeerror():
+    from app.services.validaciones_fecha import validar_no_futuro
+    from zoneinfo import ZoneInfo
+    from datetime import datetime, timedelta, timezone
+
+    # Una fecha ingenua representa hora local de operación en Colombia.
+    pasado_local = datetime.now(ZoneInfo("America/Bogota")).replace(tzinfo=None) - timedelta(minutes=5)
+    validar_no_futuro(pasado_local)
+
+    futuro_local = datetime.now(ZoneInfo("America/Bogota")).replace(tzinfo=None) + timedelta(minutes=5)
+    with pytest.raises(Exception):
+        validar_no_futuro(futuro_local)
