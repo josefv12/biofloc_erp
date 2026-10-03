@@ -181,7 +181,7 @@ GROUP BY
 CREATE OR REPLACE FUNCTION biofloc.validar_integridad_movimiento_inventario()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $biofloc$
+AS $fn_integridad$
 DECLARE
     v_nombre VARCHAR(30);
 BEGIN
@@ -208,7 +208,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$;
+$fn_integridad$;
 
 DROP TRIGGER IF EXISTS trg_validar_integridad_movimiento_inventario
 ON biofloc.movimientos_inventario;
