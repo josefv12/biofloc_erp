@@ -87,6 +87,13 @@ def actualizar_equipo(db: Session, equipo_id: int, data: EquipoUpdate, usuario_i
     e = obtener_equipo(db, equipo_id); cambios = data.model_dump(exclude_unset=True)
     if not cambios: return e
     _validar_fks(db, cambios.get("tipo_equipo_id"), cambios.get("estado_id"))
+    if "estado_id" in cambios and cambios["estado_id"] != e.estado_id:
+        estado_actual = e.estado.nombre if e.estado else None
+        estado_nuevo = db.query(EstadoEquipo).filter(EstadoEquipo.id == cambios["estado_id"]).first()
+        if estado_actual == "BAJA":
+            raise HTTPException(status_code=422, detail="Un equipo en estado BAJA no puede volver a otro estado")
+        if estado_nuevo and estado_nuevo.nombre == "BAJA":
+            cambios["activo"] = False
     if "codigo" in cambios:
         codigo = cambios["codigo"].strip()
         if db.query(Equipo).filter(Equipo.codigo == codigo, Equipo.id != e.id).first(): raise HTTPException(status_code=409, detail=f"Ya existe otro equipo con el código '{codigo}'")
