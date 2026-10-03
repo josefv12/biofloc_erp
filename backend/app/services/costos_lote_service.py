@@ -83,7 +83,11 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
     directo = alimento + alevinos + otros
     kg_cosechados = _d(row["kg_cosechados"], D3)
     kg_vendidos = _d(row["kg_vendidos"], D3)
-    if kg_cosechados < 0 or kg_vendidos < 0:\n        raise HTTPException(status_code=422, detail="Los kg cosechados y vendidos no pueden ser negativos")\n    if kg_vendidos > kg_cosechados:\n        raise HTTPException(status_code=422, detail="Los kg vendidos no pueden superar los kg cosechados")\n    costo_por_kg = (directo / kg_cosechados).quantize(D2, rounding=ROUND_HALF_UP) if kg_cosechados > 0 else None
+    if kg_cosechados < 0 or kg_vendidos < 0:
+        raise HTTPException(status_code=422, detail="Los kg cosechados y vendidos no pueden ser negativos")
+    if kg_vendidos > kg_cosechados:
+        raise HTTPException(status_code=422, detail="Los kg vendidos no pueden superar los kg cosechados")
+    costo_por_kg = (directo / kg_cosechados).quantize(D2, rounding=ROUND_HALF_UP) if kg_cosechados > 0 else None
     costo_ventas = (kg_vendidos * costo_por_kg).quantize(D2, rounding=ROUND_HALF_UP) if costo_por_kg is not None else Decimal("0.00")
     ventas = _d(row["ventas"], D2)
     utilidad = (ventas - costo_ventas).quantize(D2, rounding=ROUND_HALF_UP) if costo_por_kg is not None else None
