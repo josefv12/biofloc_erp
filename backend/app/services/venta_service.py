@@ -140,6 +140,53 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list, fecha_venta: date
             )
 
 
+def _validar_ventas_historicas_no_superan_cosechas(db: Session, lote_ids: list[int]) -> None:
+    """Reconstruye la disponibilidad comercial por fecha para detectar ventas retroactivas."""
+    from sqlalchemy import text
+
+    for lote_id in sorted(set(lote_ids)):
+        filas = db.execute(text("""
+            WITH cosechas AS (
+                SELECT
+                    (c.fecha_hora AT TIME ZONE 'America/Bogota')::date AS fecha,
+                    SUM(c.peso_total_kg) AS kg
+                FROM biofloc.cosechas c
+                WHERE c.lote_id = :lote_id
+                GROUP BY 1
+            ),
+            ventas AS (
+                SELECT
+                    v.fecha,
+                    SUM(d.cantidad) AS kg
+                FROM biofloc.ventas v
+                JOIN biofloc.detalles_venta d ON d.venta_id = v.id
+                WHERE d.lote_id = :lote_id
+                GROUP BY v.fecha
+            ),
+            fechas AS (
+                SELECT fecha FROM cosechas
+                UNION
+                SELECT fecha FROM ventas
+            )
+            SELECT
+                f.fecha,
+                COALESCE((SELECT SUM(c.kg) FROM cosechas c WHERE c.fecha <= f.fecha), 0) AS cosechado,
+                COALESCE((SELECT SUM(v.kg) FROM ventas v WHERE v.fecha <= f.fecha), 0) AS vendido
+            FROM fechas f
+            ORDER BY f.fecha
+        """), {"lote_id": lote_id}).mappings().all()
+
+        for fila in filas:
+            if Decimal(str(fila["vendido"])) > Decimal(str(fila["cosechado"])):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"La secuencia histórica de ventas del lote {lote_id} "
+                        f"supera la biomasa cosechada al {fila['fecha']}"
+                    ),
+                )
+
+
 def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
     validar_fecha_no_futura(data.fecha, "La fecha de la venta")
     if not data.detalles:
@@ -181,6 +228,10 @@ def crear_venta(db: Session, data: VentaCreate, usuario_id: int) -> Venta:
         )
         db.add(venta)
         db.flush()
+
+        _validar_ventas_historicas_no_superan_cosechas(
+            db, [d.lote_id for d in data.detalles]
+        )
 
         _audit(db, usuario_id, "INSERT", "ventas", venta.id, {
             "fecha": venta.fecha,
