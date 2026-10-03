@@ -712,7 +712,8 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$fn_actualizar_updated_at$
+$fn_actualizar_updated_at$;
+
 
 CREATE TRIGGER trg_referencias_produccion_updated_at
 BEFORE UPDATE ON referencias_produccion
@@ -783,7 +784,8 @@ BEGIN
 
     RETURN NEW;
 END;
-$fn_validar_lote_activo$
+$fn_validar_lote_activo$;
+
 
 CREATE TRIGGER trg_validar_lote_activo
 BEFORE INSERT OR UPDATE OF estanque_id, estado_id ON lotes
@@ -1193,7 +1195,8 @@ BEGIN
 
     RETURN NEW;
 END;
-$fn_biofloc_validar_integridad_movimiento_inventario$
+$fn_biofloc_validar_integridad_movimiento_inventario$;
+
 
 CREATE TRIGGER trg_validar_integridad_movimiento_inventario
 BEFORE INSERT OR UPDATE ON movimientos_inventario
@@ -1277,7 +1280,8 @@ BEGIN
 
     RETURN NEW;
 END;
-$fn_biofloc_validar_trazabilidad_movimiento_automatico$
+$fn_biofloc_validar_trazabilidad_movimiento_automatico$;
+
 
 CREATE TRIGGER trg_validar_trazabilidad_movimiento_automatico
 BEFORE INSERT OR UPDATE ON movimientos_inventario
@@ -1317,7 +1321,8 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$fn_biofloc_validar_secuencia_poblacion_historica$
+$fn_biofloc_validar_secuencia_poblacion_historica$;
+
 
 CREATE CONSTRAINT TRIGGER trg_validar_secuencia_poblacion_mortalidad
 AFTER INSERT OR UPDATE ON mortalidades
