@@ -531,9 +531,15 @@ export function AplicacionesBioflocPanel({
             </select>
           </Field>
           <Field label="Producto">
-            <select className="bf-input" {...form.register("producto_id")}>
-              <option value="">Ninguno</option>
-              {(productosQuery.data ?? []).map((row) => (
+            <select
+              className="bf-input"
+              disabled={productosBiofloc.length === 0}
+              {...form.register("producto_id")}
+            >
+              <option value="">
+                {productosBiofloc.length ? "Seleccione un insumo" : "No requiere producto"}
+              </option>
+              {productosBiofloc.map((row) => (
                 <option key={row.id} value={row.id}>
                   {etiquetaProducto(row.nombre, row.codigo)}
                 </option>
