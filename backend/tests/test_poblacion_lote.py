@@ -193,3 +193,13 @@ def test_cosecha_y_mortalidad_validan_fecha_de_siembra_en_hora_colombia():
     for content in (cosecha, mortalidad):
         assert "astimezone(TZ_COLOMBIA).date()" in content
         assert "fecha_local < lote.fecha_siembra" in content
+
+
+def test_historial_poblacion_es_inmutable_en_bd():
+    from pathlib import Path
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    for content in (migration, schema):
+        assert "trg_inmutabilidad_mortalidades" in content
+        assert "trg_inmutabilidad_cosechas" in content
+        assert "impedir_modificacion_poblacion_historica" in content
