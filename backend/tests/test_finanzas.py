@@ -98,5 +98,7 @@ def test_calculo_financiero_rechaza_costos_negativos():
             calcular_costos_financieros_lote(
                 kg_vendidos=Decimal("0"),
                 ventas=caso.get("ventas", Decimal("0")),
-                **caso,
+                costo_alimento=caso["costo_alimento"],
+                gastos_lote=caso["gastos_lote"],
+                kg_cosechados=caso["kg_cosechados"],
             )
