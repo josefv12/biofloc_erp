@@ -108,6 +108,7 @@ Migraciones numeradas de integridad actualmente auditadas:
 - `031_mediciones_parametro_agua_activo.sql` — impide registrar mediciones nuevas contra parámetros de agua inactivos.
 - `032_transiciones_estado_alarma.sql` — impide reabrir alarmas y limita las transiciones semilla a PENDIENTE → ATENDIDA → CERRADA.
 - `033_integridad_equipos_respaldo.sql` — impide asignar catálogos de equipo inactivos y usar como respaldo equipos inactivos o no OPERATIVOS.
+- `034_integridad_fecha_adquisicion_equipo.sql` — impide eventos de equipo anteriores a su adquisición y evita mover la adquisición después de históricos existentes.
 
 También existen migraciones con nombre de fecha para cambios de unidades, catálogos y referencias productivas; deben ejecutarse después de las numeradas según su orden cronológico y solo sobre una base compatible.
 
