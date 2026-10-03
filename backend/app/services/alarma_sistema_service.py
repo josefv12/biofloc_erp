@@ -216,9 +216,23 @@ def actualizar_alarma(db: Session, alarma_id: int, data: AlarmaUpdate, usuario_i
     try:
         if "estado_alarma_id" in cambios and cambios["estado_alarma_id"] is not None:
             _validar_fks(db, None, None, cambios["estado_alarma_id"], None, None, None)
+            estado_anterior = _nombre_estado(db, a.estado_alarma_id)
+            estado_nuevo = _nombre_estado(db, cambios["estado_alarma_id"])
+            transiciones_validas = {
+                "PENDIENTE": {"PENDIENTE", "ATENDIDA", "CERRADA"},
+                "ATENDIDA": {"ATENDIDA", "CERRADA"},
+                "CERRADA": {"CERRADA"},
+            }
+            if (
+                estado_anterior in transiciones_validas
+                and estado_nuevo not in transiciones_validas[estado_anterior]
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transición de alarma no permitida: {estado_anterior} -> {estado_nuevo}",
+                )
             a.estado_alarma_id = cambios["estado_alarma_id"]
-            estado_nombre = _nombre_estado(db, a.estado_alarma_id)
-            _aplicar_atencion(a, estado_nombre, usuario_id)
+            _aplicar_atencion(a, estado_nuevo, usuario_id)
         if "observaciones" in cambios:
             a.observaciones = cambios["observaciones"]
         db.flush()
