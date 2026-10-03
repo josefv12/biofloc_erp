@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
+from app.services.validaciones_temporales import validar_evento_no_futuro
 
 from app.models.evento_energia import EventoEnergia
 from app.models.equipo import Equipo
@@ -58,6 +59,7 @@ def obtener_evento_energia(db: Session, evento_id: int) -> EventoEnergia:
 
 def crear_evento_energia(db: Session, data: EventoEnergiaCreate, usuario_id: int) -> EventoEnergia:
     respaldo = bool(data.respaldo_activado); _validar_respaldo(respaldo, data.equipo_respaldo_id, db)
+    validar_evento_no_futuro(data.fecha_hora_inicio, "el inicio del evento de energía")
     if data.fecha_hora_fin is not None and _aware(data.fecha_hora_fin) < _aware(data.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
     duracion = data.duracion_minutos
     if data.fecha_hora_fin is not None: duracion = _duracion_minutos(data.fecha_hora_inicio, data.fecha_hora_fin)
@@ -80,7 +82,10 @@ def actualizar_evento_energia(db: Session, evento_id: int, data: EventoEnergiaUp
     if not cambios: return e
     respaldo = cambios.get("respaldo_activado", e.respaldo_activado); equipo_id = cambios.get("equipo_respaldo_id", e.equipo_respaldo_id); _validar_respaldo(bool(respaldo), equipo_id, db)
     fin = cambios.get("fecha_hora_fin", e.fecha_hora_fin)
-    if fin is not None and _aware(fin) < _aware(e.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
+    if fin is not None:
+        validar_evento_no_futuro(fin, "el fin del evento de energía")
+        if _aware(fin) < _aware(e.fecha_hora_inicio):
+            raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
     if "fecha_hora_fin" in cambios: cambios["duracion_minutos"] = _duracion_minutos(e.fecha_hora_inicio, cambios["fecha_hora_fin"])
     elif "duracion_minutos" in cambios and cambios["duracion_minutos"] is not None and cambios["duracion_minutos"] < 0: raise HTTPException(status_code=422, detail="duracion_minutos debe ser >= 0")
     if "tipo" in cambios and cambios["tipo"] is not None: cambios["tipo"] = cambios["tipo"].strip() or e.tipo
