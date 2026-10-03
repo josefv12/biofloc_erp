@@ -179,3 +179,15 @@ def test_costos_lote_no_mezcla_costos_de_estanque_con_costo_directo():
     assert "costos_estanque_no_asignados" in source
     assert "directo = alimento + alevinos + otros" in source
     assert 'g.estanque_id = :estanque_id' in source
+
+
+def test_reporte_gastos_expone_y_filtra_estanque():
+    from pathlib import Path
+    router = (Path(__file__).parents[1] / "app/routers/reportes.py").read_text(encoding="utf-8")
+    service = (Path(__file__).parents[1] / "app/services/reportes_service.py").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[1] / "app/schemas/reportes.py").read_text(encoding="utf-8")
+
+    assert "estanque_id: Optional[int] = None" in router
+    assert "g.estanque_id = :estanque_id" in service
+    assert "e.codigo AS estanque_codigo" in service
+    assert "estanque_codigo: Optional[str] = None" in schema
