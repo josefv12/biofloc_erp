@@ -146,3 +146,10 @@ def test_reporte_movimientos_ajuste_usa_efecto_real():
     source = Path(__file__).parents[1] / "app/services/reportes_service.py"
     text = source.read_text(encoding="utf-8")
     assert "CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END AS afecta_stock" in text
+
+
+def test_schema_final_protege_ventas_historicas():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_inmutabilidad_ventas" in source
+    assert "trg_inmutabilidad_detalles_venta" in source
