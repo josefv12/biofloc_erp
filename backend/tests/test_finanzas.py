@@ -59,3 +59,27 @@ def test_finanzas_historical_uses_colombia_local_date_expression():
     assert "AT TIME ZONE 'America/Bogota'" in text
     assert "CAST(cos.fecha_hora AS date)" not in text
     assert "CAST(a.fecha_hora AS date)" not in text
+
+
+def test_calculo_financiero_rechaza_kg_vendidos_superiores_a_cosechados():
+    import pytest
+    with pytest.raises(Exception):
+        calcular_costos_financieros_lote(
+            costo_alimento=Decimal("100000"),
+            gastos_lote=Decimal("50000"),
+            kg_cosechados=Decimal("100"),
+            kg_vendidos=Decimal("101"),
+            ventas=Decimal("500000"),
+        )
+
+
+def test_calculo_financiero_rechaza_cantidades_negativas():
+    import pytest
+    with pytest.raises(Exception):
+        calcular_costos_financieros_lote(
+            costo_alimento=Decimal("100000"),
+            gastos_lote=Decimal("50000"),
+            kg_cosechados=Decimal("100"),
+            kg_vendidos=Decimal("-1"),
+            ventas=Decimal("500000"),
+        )
