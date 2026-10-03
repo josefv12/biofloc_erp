@@ -106,6 +106,16 @@ def _validar_disponibilidad_lotes(db: Session, detalles: list, fecha_venta: date
         )
         if not lote:
             raise HTTPException(status_code=404, detail=f"Lote {lote_id} no existe")
+        if fecha_venta < lote.fecha_siembra:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La fecha de la venta no puede ser anterior a la siembra del lote {lote.codigo}",
+            )
+        if lote.fecha_cierre is not None and fecha_venta > lote.fecha_cierre:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La fecha de la venta no puede ser posterior al cierre del lote {lote.codigo}",
+            )
 
         limite_cosecha = _fin_dia_colombia_utc(fecha_venta)
         cosechado = db.query(func.coalesce(func.sum(Cosecha.peso_total_kg), 0)).filter(
