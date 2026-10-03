@@ -253,3 +253,17 @@ def test_trazabilidad_detalle_compra_se_mantiene_compatible():
     assert "referencia_tipo = 'DETALLE_COMPRA'" in migracion
     assert "tipo_nombre != 'ENTRADA'" in servicio
     assert "v_tipo <> 'ENTRADA'" in migracion
+
+
+def test_medicion_agua_rechaza_fecha_futura_en_servicio():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/medicion_agua_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "validar_no_futuro(data.fecha_hora" in text
+
+
+def test_medicion_agua_tiene_guardia_no_futura_en_bd():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database/migrations/010_integridad_produccion.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "trg_validar_fecha_medicion_agua_futura" in text
