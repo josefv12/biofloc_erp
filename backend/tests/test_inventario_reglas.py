@@ -184,3 +184,11 @@ def test_ajuste_positivo_se_incorpora_al_promedio():
         {"cantidad": "20", "costo_unitario": "2000", "costo_total": "40000", "efecto": 1},
     ]
     assert _calcular_costo_promedio_desde_movimientos(rows) == Decimal("1166.67")
+
+
+def test_catalogo_gastos_incluye_alevinos_para_costeo_de_lote():
+    from pathlib import Path
+    schema = Path(__file__).parents[2] / "database" / "biofloc_erp_v1_1_schema_final.sql"
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "013_catalogo_gasto_alevinos.sql"
+    assert "('ALEVINOS', 'Compra de alevinos y material vivo de siembra')" in schema.read_text(encoding="utf-8")
+    assert "INSERT INTO biofloc.categorias_gasto" in migration.read_text(encoding="utf-8")
