@@ -71,20 +71,34 @@ Ejemplo:
 Para una instalación nueva:
 
 1. Ejecutar `database/biofloc_erp_v1_1_schema_final.sql`.
-2. Ejecutar las migraciones de `database/migrations` en orden cronológico/numerado.
-3. Verificar que las columnas y triggers esperados existan antes de iniciar el backend.
+2. Ejecutar las migraciones de `database/migrations` en orden numérico/cronológico.
+3. Verificar que las columnas, restricciones e índices esperados existan antes de iniciar el backend.
 
-Migraciones críticas actuales:
+Migraciones numeradas de integridad actualmente auditadas:
 
 - `002_unidades_comerciales_productos.sql` — unidades internas/comerciales y conversión.
-- `003_integridad_concurrencia.sql` — integridad de población y stock bajo concurrencia.
+- `003_integridad_concurrencia.sql` — controles de concurrencia de población y stock.
 - `004_control_ventas_y_unidades.sql` — controles de ventas y unidades.
-- `005_fix_advisory_lock_hash.sql` — corrección del mecanismo de bloqueo transaccional.
-- `006_indices_finanzas.sql` — índices para consultas financieras y de costos.
-- `007_costos_lote_estanque.sql` — costos por lote/estanque y categoría de alevinos.
+- `005_fix_advisory_lock_lote_activo.sql` — bloqueo para impedir dos lotes activos simultáneos en un estanque.
+- `006_indices_costeo_financiero.sql` — índices de costos y finanzas.
+- `007_costos_lote_estanque_y_consumo_alimento.sql` — costos por lote/estanque y consumo de alimento.
+- `008_integridad_historica_asof.sql` — integridad histórica de eventos.
+- `009_inventario_ajuste_costeo.sql` — ajustes y costeo histórico de inventario.
+- `010_integridad_produccion.sql` — integridad temporal y productiva.
+- `011_trazabilidad_movimientos_automaticos.sql` — trazabilidad evento ↔ inventario.
+- `012_integridad_inventario_valorado.sql` — integridad del inventario valorizado.
+- `013_catalogo_gasto_alevinos.sql` — categoría de gasto de alevinos.
+- `014_integridad_trazabilidad_movimientos.sql` — validaciones adicionales de trazabilidad.
+- `015_integridad_secuencia_poblacion.sql` — secuencia histórica de población.
+- `016_integridad_eventos_operativos.sql` — fechas no futuras en fallas, mantenimientos y energía.
+- `017_idempotencia_movimientos_automaticos.sql` — una salida/entrada automática por referencia.
+- `018_referencias_semana_minima.sql` — referencias productivas desde semana 1.
+- `019_integridad_temporal_cierre_lote.sql` — coherencia entre fecha de cierre y eventos del lote.
+- `020_integridad_fecha_siembra.sql` — impide siembras futuras.
 
-Las migraciones son manuales en la V1 y deben ejecutarse en orden. La migración 007 es de aplicación única; no volver a ejecutarla sobre una base que ya la tenga aplicada.
+También existen migraciones con nombre de fecha para cambios de unidades, catálogos y referencias productivas; deben ejecutarse después de las numeradas según su orden cronológico y solo sobre una base compatible.
 
+Las migraciones son manuales en la V1. Antes de aplicarlas a una base existente, revisar qué migraciones ya fueron ejecutadas para evitar repetir cambios no idempotentes.
 ## Backend local
 
 ```bash
