@@ -357,3 +357,11 @@ def test_schema_final_protege_unidades_de_producto_con_historico():
     source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
     assert "trg_validar_unidad_producto_historica" in source
     assert "movimientos_inventario WHERE producto_id = OLD.id" in source
+
+
+def test_schema_final_refuerza_inmutabilidad_de_historicos_inventario():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_inmutabilidad_movimientos_inventario" in source
+    assert "trg_inmutabilidad_alimentaciones" in source
+    assert "trg_inmutabilidad_aplicaciones_biofloc" in source
