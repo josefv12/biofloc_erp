@@ -184,3 +184,12 @@ def test_validacion_cierre_servicio_usa_fecha_local_colombia():
     assert "ultimo.astimezone(TZ_COLOMBIA).date()" in source
     assert "(NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date" in migration
     assert "(v_ultimo AT TIME ZONE 'America/Bogota')::date" in migration
+
+
+def test_cosecha_y_mortalidad_validan_fecha_de_siembra_en_hora_colombia():
+    from pathlib import Path
+    cosecha = (Path(__file__).parents[1] / "app/services/cosecha_service.py").read_text(encoding="utf-8")
+    mortalidad = (Path(__file__).parents[1] / "app/services/mortalidad_service.py").read_text(encoding="utf-8")
+    for content in (cosecha, mortalidad):
+        assert "astimezone(TZ_COLOMBIA).date()" in content
+        assert "fecha_local < lote.fecha_siembra" in content
