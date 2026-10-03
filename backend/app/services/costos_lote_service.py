@@ -54,6 +54,16 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
                   AND cg.nombre = 'ALEVINOS'
             ), 0) AS alevinos,
             COALESCE((
+                SELECT SUM(mi.costo_total)
+                FROM biofloc.movimientos_inventario mi
+                JOIN biofloc.aplicaciones_biofloc ab
+                  ON ab.id = mi.referencia_id
+                WHERE mi.referencia_tipo = 'APLICACION_BIOFLOC'
+                  AND mi.referencia_id IS NOT NULL
+                  AND ab.lote_id = :lote_id
+                  AND mi.costo_total IS NOT NULL
+            ), 0) AS biofloc_insumos,
+            COALESCE((
                 SELECT SUM(g.valor)
                 FROM biofloc.gastos g
                 JOIN biofloc.categorias_gasto cg ON cg.id = g.categoria_id
@@ -84,7 +94,12 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
 
     alimento = _d(row["alimento"], D2)
     alevinos = _d(row["alevinos"], D2)
+    biofloc_insumos = _d(row["biofloc_insumos"], D2)
     otros = _d(row["otros_costos"], D2)
+    # Los insumos Biofloc salen de inventario como costo directo del lote.
+    # Se agregan a otros_costos_directos para no dejar ese consumo fuera
+    # del costo por kg sin romper el contrato actual de la API.
+    otros = otros + biofloc_insumos
     directo = alimento + alevinos + otros
     kg_cosechados = _d(row["kg_cosechados"], D3)
     kg_vendidos = _d(row["kg_vendidos"], D3)
