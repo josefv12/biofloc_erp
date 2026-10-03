@@ -18,7 +18,7 @@ from app.models.lote import Lote, Especie, EtapaProductiva, EstadoLote
 from app.models.estanque import Estanque
 from app.models.auditoria import Auditoria
 from app.schemas.lote import LoteCreate, LoteUpdate
-from app.services.validaciones_fecha import validar_fecha_no_futura
+from app.services.validaciones_fecha import validar_fecha_no_futura, TZ_COLOMBIA
 
 
 def _verificar_referencias(db: Session, data: LoteCreate | LoteUpdate) -> None:
@@ -182,7 +182,7 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
             """),
             {"lote_id": lote.id},
         ).scalar()
-        if ultimo is not None and ultimo.date() > data.fecha_cierre:
+        if ultimo is not None and ultimo.astimezone(TZ_COLOMBIA).date() > data.fecha_cierre:
             raise HTTPException(
                 status_code=422,
                 detail="fecha_cierre no puede ser anterior a un evento histórico del lote",
