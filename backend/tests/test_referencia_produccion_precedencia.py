@@ -38,3 +38,23 @@ def test_cobertura_semana_desde_hasta_inclusivo():
     assert _resolver(candidatas, 8) is None
     assert _resolver(candidatas, 17) is None
 
+
+
+def test_referencia_no_admite_semana_cero_en_servicio():
+    from fastapi import HTTPException
+    from app.services.referencia_produccion_service import _validar_rango
+    try:
+        _validar_rango(0, 1)
+    except HTTPException as exc:
+        assert exc.status_code == 422
+        assert ">= 1" in str(exc.detail)
+        return
+    raise AssertionError("La semana 0 no debe ser una referencia productiva válida")
+
+
+def test_update_de_referencia_valida_rango_de_raciones_con_valor_existente():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/referencia_produccion_service.py").read_text(encoding="utf-8")
+    assert 'cambios.get("raciones_min", row.raciones_min)' in source
+    assert 'cambios.get("raciones_max", row.raciones_max)' in source
+    assert "raciones_max no puede ser menor que raciones_min" in source
