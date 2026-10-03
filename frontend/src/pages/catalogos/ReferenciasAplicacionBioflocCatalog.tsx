@@ -207,7 +207,7 @@ export function ReferenciasAplicacionBioflocCatalog({ canWrite }: { canWrite: bo
                 <button type="button" className="bf-btn-secondary !px-2 !py-1 text-xs" onClick={() => openEdit(row)}>Editar</button>
               ),
             }] : []),
-          ] satisfies DataTableColumn<ReferenciaAplicacionBiofloc>[]
+          ] satisfies DataTableColumn<ReferenciaAplicacionBiofloc>[]}
         />
       ) : !loading ? (
         <p className="rounded-lg border border-dashed border-[var(--bf-border)] px-4 py-6 text-center text-sm text-[var(--bf-muted)]">
