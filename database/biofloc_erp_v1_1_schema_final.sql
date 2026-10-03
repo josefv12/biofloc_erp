@@ -2174,6 +2174,7 @@ LANGUAGE plpgsql
 AS $fn_validar_estado_estanque_operativo$
 DECLARE nombre_nuevo TEXT; activo_catalogo BOOLEAN;
 BEGIN
+    PERFORM pg_advisory_xact_lock(2147483000, NEW.id);
     SELECT nombre, activo INTO nombre_nuevo, activo_catalogo FROM biofloc.estados_estanque WHERE id = NEW.estado_id;
     IF NOT FOUND OR NOT activo_catalogo THEN RAISE EXCEPTION 'El estado de estanque debe existir y estar activo' USING ERRCODE='check_violation'; END IF;
     IF NEW.activo = FALSE AND EXISTS (SELECT 1 FROM biofloc.lotes l JOIN biofloc.estados_lote el ON el.id=l.estado_id WHERE l.estanque_id=NEW.id AND el.nombre='ACTIVO') THEN RAISE EXCEPTION 'No se puede desactivar un estanque con un lote ACTIVO' USING ERRCODE='check_violation'; END IF;
@@ -2213,3 +2214,56 @@ DROP TRIGGER IF EXISTS trg_proteger_catalogos_estados_lote ON biofloc.estados_lo
 CREATE TRIGGER trg_proteger_catalogos_estados_lote BEFORE UPDATE OF nombre, activo ON biofloc.estados_lote FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_catalogos_estados_operativos();
 DROP TRIGGER IF EXISTS trg_proteger_catalogos_estados_estanque ON biofloc.estados_estanque;
 CREATE TRIGGER trg_proteger_catalogos_estados_estanque BEFORE UPDATE OF nombre, activo ON biofloc.estados_estanque FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_catalogos_estados_operativos();
+
+
+-- Un lote ACTIVO solo puede ocupar un estanque operativo.
+-- Comparte el mismo bloqueo transaccional por estanque con la validación de
+-- estado del estanque para evitar carreras entre ambas operaciones.
+CREATE OR REPLACE FUNCTION biofloc.validar_lote_estanque_operativo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_lote_estanque_operativo$
+DECLARE
+    v_estado_lote TEXT;
+    v_estado_estanque TEXT;
+    v_estanque_activo BOOLEAN;
+BEGIN
+    SELECT nombre INTO v_estado_lote
+    FROM biofloc.estados_lote
+    WHERE id = NEW.estado_id;
+
+    IF v_estado_lote <> 'ACTIVO' THEN
+        RETURN NEW;
+    END IF;
+
+    PERFORM pg_advisory_xact_lock(2147483000, NEW.estanque_id);
+
+    SELECT e.activo, ee.nombre
+      INTO v_estanque_activo, v_estado_estanque
+    FROM biofloc.estanques e
+    JOIN biofloc.estados_estanque ee ON ee.id = e.estado_id
+    WHERE e.id = NEW.estanque_id;
+
+    IF v_estanque_activo IS DISTINCT FROM TRUE THEN
+        RAISE EXCEPTION
+            'Un lote ACTIVO no puede ocupar un estanque inactivo'
+            USING ERRCODE='check_violation';
+    END IF;
+
+    IF v_estado_estanque IN ('MANTENIMIENTO', 'FUERA_DE_SERVICIO') THEN
+        RAISE EXCEPTION
+            'Un lote ACTIVO no puede ocupar un estanque en estado %',
+            v_estado_estanque
+            USING ERRCODE='check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$fn_validar_lote_estanque_operativo$;
+
+DROP TRIGGER IF EXISTS trg_validar_lote_estanque_operativo ON biofloc.lotes;
+CREATE TRIGGER trg_validar_lote_estanque_operativo
+BEFORE INSERT OR UPDATE OF estanque_id, estado_id
+ON biofloc.lotes
+FOR EACH ROW
+EXECUTE FUNCTION biofloc.validar_lote_estanque_operativo();
