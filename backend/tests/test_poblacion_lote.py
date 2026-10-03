@@ -105,3 +105,21 @@ def test_cosecha_cierre_usa_poblacion_historica():
     source = Path(__file__).parents[1] / "app" / "services" / "cosecha_service.py"
     text = source.read_text(encoding="utf-8")
     assert "obtener_poblacion_disponible(db, data.lote_id, lote.cantidad_sembrada, data.fecha_hora)" in text
+
+def test_poblacion_historica_revalida_eventos_posteriores():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "015_integridad_secuencia_poblacion.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "validar_secuencia_poblacion_historica" in text
+    assert "MAX(salidas_acumuladas)" in text
+    assert "UNION ALL" in text
+    assert "mortalidades" in text and "cosechas" in text
+    assert "DEFERRABLE INITIALLY IMMEDIATE" in text
+
+
+def test_poblacion_historica_secuencia_usa_bloqueo_del_lote():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "015_integridad_secuencia_poblacion.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "FROM biofloc.lotes" in text
+    assert "FOR UPDATE" in text
