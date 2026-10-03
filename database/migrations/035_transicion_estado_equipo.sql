@@ -13,7 +13,9 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    SELECT nombre INTO v_actual FROM biofloc.estados_equipo WHERE id=OLD.estado_id;
+    IF TG_OP = 'UPDATE' THEN
+        SELECT nombre INTO v_actual FROM biofloc.estados_equipo WHERE id=OLD.estado_id;
+    END IF;
     SELECT nombre INTO v_nuevo FROM biofloc.estados_equipo WHERE id=NEW.estado_id;
 
     IF TG_OP = 'UPDATE' AND v_actual = 'BAJA' THEN
