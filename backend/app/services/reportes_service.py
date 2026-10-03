@@ -338,7 +338,7 @@ def movimientos(db: Session, fecha_desde=None, fecha_hasta=None,
     rows = _rows(db, f"""
         SELECT mi.id AS movimiento_id, mi.fecha_hora, mi.producto_id, p.codigo AS producto_codigo,
                p.nombre AS producto_nombre, un.simbolo AS unidad, tmi.nombre AS tipo,
-               tmi.afecta_stock, mi.cantidad, mi.costo_unitario, mi.costo_total,
+               CASE WHEN tmi.nombre = 'AJUSTE' THEN mi.efecto_stock ELSE tmi.afecta_stock END AS afecta_stock, mi.cantidad, mi.costo_unitario, mi.costo_total,
                mi.referencia_tipo, mi.referencia_id, mi.registrado_por, u.nombre AS registrado_por_nombre
         FROM movimientos_inventario mi
         JOIN productos p ON p.id = mi.producto_id
