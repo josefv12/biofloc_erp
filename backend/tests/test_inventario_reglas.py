@@ -543,3 +543,15 @@ def test_lote_activo_exige_estanque_ocupado_y_no_se_puede_liberar():
         assert "Un estanque con lote ACTIVO debe permanecer en estado OCUPADO" in content
         assert "Un lote ACTIVO solo puede ocupar un estanque en estado OCUPADO" in content
         assert "trg_validar_lote_estanque_operativo" in content
+
+
+def test_fecha_siembra_se_protege_despues_de_iniciar_historial():
+    from pathlib import Path
+    servicio = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migracion = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    esquema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "La fecha de siembra es inmutable una vez iniciado o cerrado el historial del lote" in servicio
+    for content in (migracion, esquema):
+        assert "trg_proteger_fecha_siembra_historica" in content
+        assert "proteger_fecha_siembra_historica" in content
+        assert "biofloc.detalles_venta" in content
