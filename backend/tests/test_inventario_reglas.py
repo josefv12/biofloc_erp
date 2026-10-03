@@ -515,3 +515,17 @@ def test_catalogos_estados_no_reinterpretan_reglas_operativas():
         assert "trg_proteger_catalogos_estados_estanque" in content
         assert "PLANIFICADO" in content and "FINALIZADO" in content and "CANCELADO" in content
         assert "MANTENIMIENTO" in content and "FUERA_DE_SERVICIO" in content
+
+
+def test_lote_activo_exige_estanque_operativo_y_bloquea_carrera_de_estado():
+    from pathlib import Path
+    lote = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "No se puede crear o mover un lote ACTIVO a un estanque en estado" in lote
+    for content in (migration, schema):
+        assert "trg_validar_lote_estanque_operativo" in content
+        assert "MANTENIMIENTO" in content and "FUERA_DE_SERVICIO" in content
+        assert "pg_advisory_xact_lock(2147483000, NEW.estanque_id)" in content
+    assert "pg_advisory_xact_lock(2147483000, NEW.id)" in migration
+    assert "pg_advisory_xact_lock(2147483000, NEW.id)" in schema
