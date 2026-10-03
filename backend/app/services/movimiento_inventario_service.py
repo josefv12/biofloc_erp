@@ -79,6 +79,19 @@ def _validar_referencia(
             raise HTTPException(status_code=422, detail="La fecha del movimiento no coincide con la alimentación")
         return
 
+    if referencia_tipo == "DETALLE_COMPRA":
+        from app.models.detalle_compra import DetalleCompra
+        origen = db.query(DetalleCompra).filter(DetalleCompra.id == referencia_id).first()
+        if not origen:
+            raise HTTPException(status_code=404, detail=f"Detalle de compra id={referencia_id} no existe para la trazabilidad")
+        if tipo_nombre != "ENTRADA":
+            raise HTTPException(status_code=422, detail="Un detalle de compra solo puede generar un movimiento ENTRADA")
+        if origen.producto_id != producto_id:
+            raise HTTPException(status_code=422, detail="El producto del movimiento no coincide con el detalle de compra")
+        if Decimal(str(origen.cantidad)) != Decimal(str(cantidad)):
+            raise HTTPException(status_code=422, detail="La cantidad del movimiento no coincide con el detalle de compra")
+        return
+
     if referencia_tipo == "APLICACION_BIOFLOC":
         from app.models.aplicacion_biofloc import AplicacionBiofloc
         origen = db.query(AplicacionBiofloc).filter(AplicacionBiofloc.id == referencia_id).first()
@@ -276,7 +289,13 @@ def crear_movimiento_inventario(
                 ),
             )
 
-    _validar_referencia(\n        db, data.referencia_tipo, data.referencia_id,\n        producto_id=producto.id, cantidad=Decimal(str(data.cantidad)),\n        fecha_hora=fecha_hora, tipo_nombre=tipo.nombre,\n    )
+    _validar_referencia(
+        db, data.referencia_tipo, data.referencia_id,
+        producto_id=producto.id,
+        cantidad=Decimal(str(data.cantidad)),
+        fecha_hora=fecha_hora,
+        tipo_nombre=tipo.nombre,
+    )
 
     datos = data.model_dump()
     datos["fecha_hora"] = fecha_hora
