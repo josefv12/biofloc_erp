@@ -192,3 +192,33 @@ def test_catalogo_gastos_incluye_alevinos_para_costeo_de_lote():
     migration = Path(__file__).parents[2] / "database" / "migrations" / "013_catalogo_gasto_alevinos.sql"
     assert "('ALEVINOS', 'Compra de alevinos y material vivo de siembra')" in schema.read_text(encoding="utf-8")
     assert "INSERT INTO biofloc.categorias_gasto" in migration.read_text(encoding="utf-8")
+
+def test_trazabilidad_automatica_valida_producto_cantidad_fecha_y_salida():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "movimiento_inventario_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'Una alimentación solo puede generar un movimiento SALIDA' in text
+    assert 'El producto del movimiento no coincide con la alimentación' in text
+    assert 'La cantidad del movimiento no coincide con la alimentación' in text
+    assert 'La fecha del movimiento no coincide con la alimentación' in text
+    assert 'Una aplicación Biofloc solo puede generar un movimiento SALIDA' in text
+
+
+def test_trazabilidad_automatica_tiene_guardia_en_base_de_datos():
+    from pathlib import Path
+    migration = Path(__file__).parents[2] / "database" / "migrations" / "014_integridad_trazabilidad_movimientos.sql"
+    text = migration.read_text(encoding="utf-8")
+    assert "validar_trazabilidad_movimiento_automatico" in text
+    assert "NEW.producto_id <> v_producto" in text
+    assert "NEW.cantidad <> v_cantidad" in text
+    assert "NEW.fecha_hora <> v_fecha" in text
+    assert "Una referencia de inventario no permitida" not in text
+
+
+def test_costeo_lote_suma_movimientos_de_alimentacion_por_referencia():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app" / "services" / "costos_lote_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "mi.referencia_tipo = 'ALIMENTACION'" in text
+    assert "mi.referencia_id IS NOT NULL" in text
+    assert "mi.costo_total IS NOT NULL" in text
