@@ -12,7 +12,7 @@ class ReferenciaProduccion(Base):
 
     __tablename__ = "referencias_produccion"
     __table_args__ = (
-        CheckConstraint("semana_desde >= 0", name="referencias_produccion_semana_desde_check"),
+        CheckConstraint("semana_desde >= 1", name="referencias_produccion_semana_desde_check"),
         CheckConstraint("semana_hasta >= semana_desde", name="referencias_produccion_semana_hasta_check"),
         CheckConstraint("peso_esperado_g IS NULL OR peso_esperado_g >= 0", name="referencias_produccion_peso_check"),
         CheckConstraint(
