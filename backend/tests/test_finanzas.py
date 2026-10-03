@@ -102,3 +102,11 @@ def test_calculo_financiero_rechaza_costos_negativos():
                 gastos_lote=caso["gastos_lote"],
                 kg_cosechados=caso["kg_cosechados"],
             )
+
+
+def test_dashboard_timestamps_use_colombia_local_date():
+    from pathlib import Path
+    source = Path(__file__).parents[1] / "app/services/dashboard_service.py"
+    text = source.read_text(encoding="utf-8")
+    assert "(AT TIME ZONE 'America/Bogota')::date" in text
+    assert "CAST({col} AS date)" not in text
