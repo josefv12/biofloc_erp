@@ -2023,3 +2023,60 @@ DROP TRIGGER IF EXISTS trg_validar_estado_equipo_historico ON biofloc.estados_eq
 CREATE TRIGGER trg_validar_estado_equipo_historico
 BEFORE UPDATE OF nombre ON biofloc.estados_equipo
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogo_equipo_historico();
+
+    
+-- Integridad histórica y de catálogo para agua/Biofloc.
+CREATE OR REPLACE FUNCTION biofloc.validar_catalogos_agua_biofloc()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_catalogos_agua_biofloc$
+BEGIN
+    IF TG_TABLE_NAME = 'parametros_agua'
+       AND NEW.nombre IS DISTINCT FROM OLD.nombre
+       AND (
+           EXISTS (SELECT 1 FROM biofloc.mediciones_agua WHERE parametro_id = OLD.id)
+           OR EXISTS (SELECT 1 FROM biofloc.referencias_agua WHERE parametro_id = OLD.id)
+       )
+    THEN
+        RAISE EXCEPTION 'El parámetro de agua % ya tiene historial/referencias y no puede renombrarse',
+            OLD.id USING ERRCODE='check_violation';
+    END IF;
+
+    IF TG_TABLE_NAME = 'referencias_agua'
+       AND (TG_OP = 'INSERT' OR NEW.parametro_id IS DISTINCT FROM OLD.parametro_id)
+       AND NOT EXISTS (
+           SELECT 1 FROM biofloc.parametros_agua WHERE id = NEW.parametro_id AND activo = TRUE
+       )
+    THEN
+        RAISE EXCEPTION 'El parámetro de agua % debe existir y estar activo',
+            NEW.parametro_id USING ERRCODE='check_violation';
+    END IF;
+
+    IF TG_TABLE_NAME = 'aplicaciones_biofloc'
+       AND (TG_OP = 'INSERT' OR NEW.tipo_aplicacion_id IS DISTINCT FROM OLD.tipo_aplicacion_id)
+       AND NOT EXISTS (
+           SELECT 1 FROM biofloc.tipos_aplicacion_biofloc
+           WHERE id = NEW.tipo_aplicacion_id AND activo = TRUE
+       )
+    THEN
+        RAISE EXCEPTION 'El tipo de aplicación Biofloc % debe existir y estar activo',
+            NEW.tipo_aplicacion_id USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_validar_catalogos_agua_biofloc$;
+
+DROP TRIGGER IF EXISTS trg_validar_nombre_parametro_agua_historico ON biofloc.parametros_agua;
+CREATE TRIGGER trg_validar_nombre_parametro_agua_historico
+BEFORE UPDATE OF nombre ON biofloc.parametros_agua
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_agua_biofloc();
+
+DROP TRIGGER IF EXISTS trg_validar_parametro_agua_referencia_activo ON biofloc.referencias_agua;
+CREATE TRIGGER trg_validar_parametro_agua_referencia_activo
+BEFORE INSERT OR UPDATE OF parametro_id ON biofloc.referencias_agua
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_agua_biofloc();
+
+DROP TRIGGER IF EXISTS trg_validar_tipo_aplicacion_biofloc_activo ON biofloc.aplicaciones_biofloc;
+CREATE TRIGGER trg_validar_tipo_aplicacion_biofloc_activo
+BEFORE INSERT OR UPDATE OF tipo_aplicacion_id ON biofloc.aplicaciones_biofloc
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_agua_biofloc();
