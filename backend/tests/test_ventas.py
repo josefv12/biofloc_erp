@@ -429,3 +429,15 @@ if __name__ == "__main__":
     import os
     os.chdir(os.path.dirname(os.path.abspath(__file__)) + os.sep + "..")
     sys.exit(main())
+
+
+def test_ventas_respetan_intervalo_del_lote():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/venta_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "fecha_venta < lote.fecha_siembra" in service
+    assert "fecha_venta > lote.fecha_cierre" in service
+    for content in (migration, schema):
+        assert "trg_validar_venta_dentro_ciclo_lote" in content
+        assert "trg_validar_detalle_venta_dentro_ciclo_lote" in content
