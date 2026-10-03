@@ -75,10 +75,14 @@ def actualizar_estanque(db: Session, estanque_id: int, data: EstanqueUpdate, usu
     cambios = data.model_dump(exclude_none=True)
     estado_id_nuevo = cambios.get("estado_id", estanque.estado_id)
     estado_nuevo = _get_estado_or_404(db, estado_id_nuevo)
-    if estado_nuevo.nombre in {"MANTENIMIENTO", "FUERA_DE_SERVICIO"} and db.query(Lote).join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(
+    lote_activo = db.query(Lote).join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(
         Lote.estanque_id == estanque.id, EstadoLote.nombre == "ACTIVO"
-    ).first():
-        raise HTTPException(status_code=422, detail=f"El estanque no puede pasar a {estado_nuevo.nombre} mientras tenga un lote ACTIVO")
+    ).first()
+    if lote_activo and estado_nuevo.nombre != "OCUPADO":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Un estanque con lote ACTIVO debe permanecer en estado OCUPADO; no puede pasar a {estado_nuevo.nombre}",
+        )
     if cambios.get("activo") is False:
         if db.query(Lote).join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(
             Lote.estanque_id == estanque.id, EstadoLote.nombre == "ACTIVO"
