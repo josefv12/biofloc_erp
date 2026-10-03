@@ -38,6 +38,7 @@ import { EspeciesCatalog } from "./EspeciesCatalog";
 import { EtapasProductivasCatalog } from "./EtapasProductivasCatalog";
 import { ReferenciasAguaCatalog } from "./ReferenciasAguaCatalog";
 import { ReferenciasBioflocCatalog } from "./ReferenciasBioflocCatalog";
+import { ReferenciasAplicacionBioflocCatalog } from "./ReferenciasAplicacionBioflocCatalog";
 import { ReferenciasProduccionCatalog } from "./ReferenciasProduccionCatalog";
 
 const SECTIONS = [
@@ -248,7 +249,12 @@ export function CatalogosPage() {
         <NamedCatalogPanel key={spec.title} spec={spec} />
       ))}
       {seccion === "agua" ? <ReferenciasAguaCatalog canWrite={puedeEscribirMaestro} /> : null}
-      {seccion === "biofloc" ? <ReferenciasBioflocCatalog canWrite={puedeEscribirMaestro} /> : null}
+      {seccion === "biofloc" ? (
+        <>
+          <ReferenciasBioflocCatalog canWrite={puedeEscribirMaestro} />
+          <ReferenciasAplicacionBioflocCatalog canWrite={puedeEscribirMaestro} />
+        </>
+      ) : null}
     </div>
   );
 }
