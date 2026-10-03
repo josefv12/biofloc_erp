@@ -76,7 +76,7 @@ export function MovimientosPage() {
           if (!Number.isFinite(cantidad) || cantidad <= 0) { setFormError("Ingrese una cantidad mayor que 0."); return; }
           if (!observaciones) { setFormError("El AJUSTE requiere una observación con el motivo."); return; }
           const ajuste = (tiposQuery.data ?? []).find((row) => row.nombre === "AJUSTE");
-          if (!ajuste) { setFormError("No existe el tipo AJUSTE. Ejecute la migración 009."); return; }
+          if (!ajuste) { setFormError("No existe el tipo AJUSTE. Verifique las migraciones de inventario."); return; }
           mutation.mutate({ producto_id: Number(values.producto_id), tipo_movimiento_id: ajuste.id, efecto_stock: Number(values.efecto_stock) as 1 | -1, cantidad, fecha_hora: values.fecha_hora ? datetimeLocalToIso(values.fecha_hora) : null, referencia_tipo: values.referencia_tipo.trim() || null, referencia_id: refId === "" ? null : Number(refId), observaciones, costo_unitario: costoUnitario, costo_total: costoTotal });
         })}>
           {formError ? <ErrorAlert message={formError} /> : null}
@@ -87,8 +87,8 @@ export function MovimientosPage() {
           <Field label="Fecha y hora"><input type="datetime-local" className="bf-input" {...form.register("fecha_hora")} /></Field>
           <Field label="Referencia tipo (opcional)"><input className="bf-input" {...form.register("referencia_tipo")} /></Field>
           <Field label="Referencia id (opcional)"><input type="number" className="bf-input" {...form.register("referencia_id")} /></Field>
-          <Field label={`Costo unitario (opcional)${unidadFormulario?.unidad ? ` (COP / ${unidadFormulario.unidad})` : ""}`}><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_unitario")} /></Field>
-          <Field label="Costo total (opcional)"><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_total")} /></Field>
+          <Field label={`Costo unitario${values.efecto_stock === "1" ? " (obligatorio para aumento)" : " (se calcula por promedio histórico)"}${unidadFormulario?.unidad ? ` (COP / ${unidadFormulario.unidad})` : ""}`}><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_unitario")} disabled={values.efecto_stock === "-1"} /></Field>
+          <Field label="Costo total (opcional; se calcula automáticamente si se omite)"><input type="number" step="any" min="0" className="bf-input" {...form.register("costo_total")} /></Field>
           <Field label="Observaciones"><textarea className="bf-input min-h-20" {...form.register("observaciones")} /></Field>
           <p className="text-xs text-[var(--bf-muted)]">Los ajustes son manuales, quedan en la unidad interna del producto y exigen observación. Los ajustes positivos requieren costo unitario.</p>
           <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || (productosQuery.data ?? []).length === 0}>{mutation.isPending ? "Guardando…" : "Registrar"}</button>
