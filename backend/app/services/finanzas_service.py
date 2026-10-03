@@ -228,6 +228,7 @@ def calcular_finanzas(
         costo_ventas_estimado=_d2(total_cogs),
         utilidad_bruta=_d2(utilidad_bruta),
         gastos_operativos=_d2(gastos_operativos),
+        costos_estanque_no_asignados=_d2(costos_estanque_no_asignados),
         utilidad_neta=_d2(utilidad_neta),
         margen_bruto_pct=(Decimal(str(margen_bruto)).quantize(D2, rounding=ROUND_HALF_UP) if margen_bruto is not None else None),
         margen_neto_pct=(Decimal(str(margen_neto)).quantize(D2, rounding=ROUND_HALF_UP) if margen_neto is not None else None),
@@ -239,7 +240,7 @@ def calcular_finanzas(
         metodologia=(
             "Costo por lote: el alimento se toma del costo registrado en cada salida de inventario generada por una alimentación del lote; "
             "por tanto, solo se imputa al lote el alimento realmente suministrado. Los demás costos directos se toman de gastos asociados al lote. "
-            "Los costos registrados a nivel de estanque se conservan separados para su posterior asignación entre lotes, evitando repartirlos arbitrariamente. "
+            "Los costos registrados a nivel de estanque se conservan separados del costo directo de los lotes para evitar duplicarlos cuando varios lotes comparten un estanque; se incluyen una sola vez en la rentabilidad global del periodo. "
             "El costo por kg se obtiene sobre kg cosechados acumulados hasta cada venta; el costo de ventas es kg vendidos × costo promedio/kg. "
             "Costo producción de lotes corresponde al costo acumulado de producción de los lotes con ventas en el periodo; no es COGS."
         ),
