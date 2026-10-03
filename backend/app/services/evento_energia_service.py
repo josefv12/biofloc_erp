@@ -38,7 +38,7 @@ def _duracion_minutos(inicio: datetime, fin: Optional[datetime]) -> Optional[int
     return mins
 
 
-def _validar_respaldo(respaldo_activado: bool, equipo_respaldo_id: Optional[int], db: Session):
+def _validar_respaldo(respaldo_activado: bool, equipo_respaldo_id: Optional[int], db: Session, fecha_evento: Optional[datetime] = None):
     if respaldo_activado and equipo_respaldo_id is None:
         raise HTTPException(status_code=422, detail="equipo_respaldo_id es obligatorio cuando respaldo_activado=true")
     if equipo_respaldo_id is None:
@@ -47,6 +47,8 @@ def _validar_respaldo(respaldo_activado: bool, equipo_respaldo_id: Optional[int]
     if not equipo:
         raise HTTPException(status_code=404, detail=f"Equipo de respaldo {equipo_respaldo_id} no existe")
     if respaldo_activado:
+        if fecha_evento is not None and equipo.fecha_adquisicion and _aware(fecha_evento).date() < equipo.fecha_adquisicion:
+            raise HTTPException(status_code=422, detail="El evento de energía no puede preceder la adquisición del equipo de respaldo")
         if not equipo.activo:
             raise HTTPException(status_code=422, detail="El equipo de respaldo está inactivo")
         if not equipo.estado or not equipo.estado.activo or equipo.estado.nombre != "OPERATIVO":
@@ -74,7 +76,7 @@ def crear_evento_energia(db: Session, data: EventoEnergiaCreate, usuario_id: int
     validar_no_futuro(data.fecha_hora_inicio, "La fecha/hora de inicio del evento de energía")
     if data.fecha_hora_fin is not None:
         validar_no_futuro(data.fecha_hora_fin, "La fecha/hora de fin del evento de energía")
-    respaldo = bool(data.respaldo_activado); _validar_respaldo(respaldo, data.equipo_respaldo_id, db)
+    respaldo = bool(data.respaldo_activado); _validar_respaldo(respaldo, data.equipo_respaldo_id, db, data.fecha_hora_inicio)
     if data.fecha_hora_fin is not None and _aware(data.fecha_hora_fin) < _aware(data.fecha_hora_inicio): raise HTTPException(status_code=422, detail="fecha_hora_fin debe ser >= fecha_hora_inicio")
     duracion = data.duracion_minutos
     if data.fecha_hora_fin is not None: duracion = _duracion_minutos(data.fecha_hora_inicio, data.fecha_hora_fin)
@@ -95,7 +97,7 @@ def crear_evento_energia(db: Session, data: EventoEnergiaCreate, usuario_id: int
 def actualizar_evento_energia(db: Session, evento_id: int, data: EventoEnergiaUpdate, usuario_id: int) -> EventoEnergia:
     e = obtener_evento_energia(db, evento_id); cambios = data.model_dump(exclude_unset=True)
     if not cambios: return e
-    respaldo = cambios.get("respaldo_activado", e.respaldo_activado); equipo_id = cambios.get("equipo_respaldo_id", e.equipo_respaldo_id); _validar_respaldo(bool(respaldo), equipo_id, db)
+    respaldo = cambios.get("respaldo_activado", e.respaldo_activado); equipo_id = cambios.get("equipo_respaldo_id", e.equipo_respaldo_id); _validar_respaldo(bool(respaldo), equipo_id, db, e.fecha_hora_inicio)
     fin = cambios.get("fecha_hora_fin", e.fecha_hora_fin)
     validar_no_futuro(e.fecha_hora_inicio, "La fecha/hora de inicio del evento de energía")
     if fin is not None:
