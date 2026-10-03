@@ -35,10 +35,49 @@ def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id:
     db.add(entrada)
 
 
+TOLERANCIA_PESO_COSECHA = Decimal("0.20")  # 20 % por muestreo/redondeo.
+
 def _peso_promedio_g(peso_total_kg: Decimal, cantidad_peces: int) -> Decimal | None:
     if cantidad_peces <= 0:
         return None
     return (peso_total_kg * Decimal("1000") / Decimal(cantidad_peces)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+
+
+def _validar_coherencia_peso(
+    peso_total_kg: Decimal,
+    cantidad_peces: int,
+    peso_promedio_g: Decimal | None,
+) -> None:
+    """Evita que peso promedio y peso total describan cosechas incompatibles."""
+    if peso_promedio_g is None:
+        return
+
+    if peso_promedio_g <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="peso_promedio_g debe ser mayor que 0 cuando se proporciona.",
+        )
+
+    peso_estimado_kg = (
+        Decimal(cantidad_peces) * peso_promedio_g / Decimal("1000")
+    )
+    if peso_estimado_kg <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="No se pudo calcular un peso estimado válido para la cosecha.",
+        )
+
+    diferencia_relativa = abs(peso_total_kg - peso_estimado_kg) / peso_estimado_kg
+    if diferencia_relativa > TOLERANCIA_PESO_COSECHA:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "La cosecha es inconsistente: cantidad_peces × peso_promedio_g "
+                f"implica aproximadamente {peso_estimado_kg.quantize(Decimal('0.001'))} kg, "
+                f"pero peso_total_kg es {peso_total_kg}. La diferencia supera "
+                f"la tolerancia del {TOLERANCIA_PESO_COSECHA * 100:.0f}%."
+            ),
+        )
 
 
 def _cerrar_lote_si_sin_peces(db: Session, lote: Lote, usuario_id: int, fecha_hora: datetime) -> None:
@@ -77,6 +116,11 @@ def crear_cosecha(db: Session, data: CosechaCreate, usuario_id: int) -> Cosecha:
     exigir_dentro_de_disponible(data.cantidad_peces, disponible, mensaje_cosecha_excede(data.cantidad_peces, disponible))
 
     payload = data.model_dump()
+    _validar_coherencia_peso(
+        data.peso_total_kg,
+        data.cantidad_peces,
+        data.peso_promedio_g,
+    )
     if payload.get("peso_promedio_g") is None:
         payload["peso_promedio_g"] = _peso_promedio_g(data.peso_total_kg, data.cantidad_peces)
 
