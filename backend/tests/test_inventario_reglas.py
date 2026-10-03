@@ -504,3 +504,14 @@ def test_estados_lote_y_estanque_protegen_reapertura_y_inconsistencias():
     assert "trg_validar_estado_estanque_operativo" in migration
     assert "trg_validar_estado_lote_operativo" in schema
     assert "trg_validar_estado_estanque_operativo" in schema
+
+    
+def test_catalogos_estados_no_reinterpretan_reglas_operativas():
+    from pathlib import Path
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    for content in (migration, schema):
+        assert "trg_proteger_catalogos_estados_lote" in content
+        assert "trg_proteger_catalogos_estados_estanque" in content
+        assert "PLANIFICADO" in content and "FINALIZADO" in content and "CANCELADO" in content
+        assert "MANTENIMIENTO" in content and "FUERA_DE_SERVICIO" in content
