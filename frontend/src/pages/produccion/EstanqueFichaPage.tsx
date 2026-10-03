@@ -911,6 +911,18 @@ function BioflocModal({
   });
 
   const productos = productosQuery.data ?? [];
+  const tipoAplicacionId = form.watch("tipo_aplicacion_id");
+  const tipoAplicacion = tipos.find((row) => row.id === Number(tipoAplicacionId));
+  const productosBiofloc = useMemo(() => {
+    const tipo = (tipoAplicacion?.nombre ?? "").toUpperCase();
+    let patrones: RegExp[] = [];
+    if (tipo.includes("PROBIOTICO")) patrones = [/probi[oó]tico/i];
+    else if (tipo.includes("FUENTE_CARBONO")) patrones = [/melaza/i];
+    else if (tipo.includes("CORRECTIVO")) patrones = [/sal\s*marina/i, /bicarbonato/i];
+    return productos.filter((row) =>
+      patrones.some((patron) => patron.test(row.nombre) || patron.test(row.codigo)),
+    );
+  }, [productos, tipoAplicacion?.nombre]);
   const historialMediciones = (medicionesQuery.data ?? []).slice(0, 5);
   const historialAplicaciones = (aplicacionesQuery.data ?? []).slice(0, 5);
 
@@ -942,6 +954,10 @@ function BioflocModal({
               if (!fechaHora) return;
               const producto = values.producto_id.trim();
               const cantidad = values.cantidad.trim();
+              if (cantidad !== "" && Number(cantidad) > 0 && producto === "") {
+                setFormErrorAplicacion("Seleccione un insumo Biofloc cuando registre una cantidad mayor que 0.");
+                return;
+              }
               mutationAplicacion.mutate({
                 lote_id: loteId,
                 tipo_aplicacion_id: Number(values.tipo_aplicacion_id),
@@ -959,7 +975,14 @@ function BioflocModal({
             <input type="hidden" {...form.register("lote_id", { valueAsNumber: true })} />
 
             <Field label="Tipo de aplicación">
-              <select className="bf-input" {...form.register("tipo_aplicacion_id", { valueAsNumber: true, required: true })}>
+              <select
+                className="bf-input"
+                {...form.register("tipo_aplicacion_id", {
+                  valueAsNumber: true,
+                  required: true,
+                  onChange: () => form.setValue("producto_id", ""),
+                })}
+              >
                 {tipos.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.nombre}
@@ -968,10 +991,16 @@ function BioflocModal({
               </select>
             </Field>
 
-            <Field label="Producto (opcional)">
-              <select className="bf-input" {...form.register("producto_id")}>
-                <option value="">Ninguno</option>
-                {productos.map((row) => (
+            <Field label="Producto">
+              <select
+                className="bf-input"
+                disabled={productosBiofloc.length === 0}
+                {...form.register("producto_id")}
+              >
+                <option value="">
+                  {productosBiofloc.length ? "Seleccione un insumo" : "No requiere producto"}
+                </option>
+                {productosBiofloc.map((row) => (
                   <option key={row.id} value={row.id}>
                     {etiquetaProducto(row.nombre, row.codigo)}
                   </option>
@@ -985,6 +1014,9 @@ function BioflocModal({
 
             <Field label="Cantidad (opcional)">
               <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
+              <p className="mt-1 text-xs text-[var(--bf-muted)]">
+                Si registra una cantidad mayor que 0, debe seleccionar un insumo.
+              </p>
             </Field>
 
             <Field label="Unidad (opcional, texto del API)">
@@ -996,7 +1028,7 @@ function BioflocModal({
             </Field>
 
             <p className="text-xs text-[var(--bf-muted)]">
-              Si se indica producto y cantidad, se aplica la lógica actual de inventario en backend.
+              Los consumos con cantidad mayor que 0 generan automáticamente una salida de inventario y afectan el costo de producción.
             </p>
 
             <button
