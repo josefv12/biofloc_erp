@@ -1488,3 +1488,27 @@ $fn_unidad_producto_historica$;
 CREATE TRIGGER trg_validar_unidad_producto_historica
 BEFORE UPDATE OF unidad_id, unidad_comercial_id, factor_conversion ON biofloc.productos
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_unidad_producto_historica();
+
+
+-- Integridad: registros históricos ligados a inventario son inmutables.
+CREATE OR REPLACE FUNCTION biofloc.impedir_modificacion_historico()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_impedir_modificacion_historico$
+BEGIN
+    RAISE EXCEPTION 'El registro histórico % de la tabla % es inmutable', OLD.id, TG_TABLE_NAME USING ERRCODE='check_violation';
+END;
+$fn_impedir_modificacion_historico$;
+
+CREATE TRIGGER trg_inmutabilidad_movimientos_inventario
+BEFORE UPDATE OR DELETE ON biofloc.movimientos_inventario
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_historico();
+CREATE TRIGGER trg_inmutabilidad_alimentaciones
+BEFORE UPDATE OR DELETE ON biofloc.alimentaciones
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_historico();
+CREATE TRIGGER trg_inmutabilidad_aplicaciones_biofloc
+BEFORE UPDATE OR DELETE ON biofloc.aplicaciones_biofloc
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_historico();
+CREATE TRIGGER trg_inmutabilidad_detalles_compra
+BEFORE UPDATE OR DELETE ON biofloc.detalles_compra
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_historico();
