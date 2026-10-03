@@ -172,7 +172,7 @@ def calcular_finanzas(
         ZERO,
     )
 
-    gasto_periodo = db.execute(text("""
+    gastos_periodo = db.execute(text("""
         SELECT COALESCE(SUM(g.valor), 0)
         FROM biofloc.gastos g
         WHERE g.lote_id IS NULL
@@ -180,10 +180,24 @@ def calcular_finanzas(
           AND (:fecha_desde IS NULL OR g.fecha >= :fecha_desde)
           AND (:fecha_hasta IS NULL OR g.fecha <= :fecha_hasta)
     """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
-    gastos_operativos = Decimal(str(gasto_periodo or 0))
+    gastos_operativos = Decimal(str(gastos_periodo or 0))
+
+    # Los gastos de estanque son overhead de infraestructura/productivo. Se
+    # mantienen fuera del costo directo de cada lote para no duplicarlos cuando
+    # varios lotes comparten el mismo estanque, pero sí deben entrar una sola
+    # vez en la rentabilidad global del periodo.
+    costos_estanque_periodo = db.execute(text("""
+        SELECT COALESCE(SUM(g.valor), 0)
+        FROM biofloc.gastos g
+        WHERE g.lote_id IS NULL
+          AND g.estanque_id IS NOT NULL
+          AND (:fecha_desde IS NULL OR g.fecha >= :fecha_desde)
+          AND (:fecha_hasta IS NULL OR g.fecha <= :fecha_hasta)
+    """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
+    costos_estanque_no_asignados = Decimal(str(costos_estanque_periodo or 0))
 
     utilidad_bruta = total_ventas - total_cogs
-    utilidad_neta = utilidad_bruta - gastos_operativos
+    utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados
     margen_bruto = (utilidad_bruta / total_ventas * 100) if total_ventas else None
     margen_neto = (utilidad_neta / total_ventas * 100) if total_ventas else None
     costo_promedio = total_cogs / total_kg if total_kg else ZERO
