@@ -170,9 +170,13 @@ def _detalle_auditoria(cambios: dict) -> dict:
 
 
 def _validar_fks(db: Session, especie_id: int, etapa_productiva_id: int) -> None:
-    if not db.query(Especie).filter(Especie.id == especie_id).first():
+    especie = db.query(Especie).filter(Especie.id == especie_id).first()
+    if not especie:
         raise HTTPException(status_code=404, detail=f"Especie id={especie_id} no existe")
-    if not db.query(EtapaProductiva).filter(EtapaProductiva.id == etapa_productiva_id).first():
+    if not especie.activo:
+        raise HTTPException(status_code=422, detail=f"Especie id={especie_id} está inactiva")
+    etapa = db.query(EtapaProductiva).filter(EtapaProductiva.id == etapa_productiva_id).first()
+    if not etapa or not etapa.activo:
         raise HTTPException(
             status_code=404,
             detail=f"Etapa productiva id={etapa_productiva_id} no existe",
