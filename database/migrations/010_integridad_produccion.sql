@@ -63,7 +63,6 @@ BEGIN
     END IF;
     RETURN NEW;
 END; $;
-
 DROP TRIGGER IF EXISTS trg_validar_promedio_cosecha ON biofloc.cosechas;
 CREATE TRIGGER trg_validar_promedio_cosecha
 BEFORE INSERT OR UPDATE ON biofloc.cosechas
@@ -79,7 +78,6 @@ BEGIN
     END IF;
     RETURN NEW;
 END; $;
-
 DROP TRIGGER IF EXISTS trg_validar_fecha_biometria_futura ON biofloc.biometrias;
 CREATE TRIGGER trg_validar_fecha_biometria_futura BEFORE INSERT OR UPDATE ON biofloc.biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
