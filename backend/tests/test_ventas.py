@@ -453,3 +453,14 @@ def test_ventas_retroactivas_no_rompen_biomasa_historica():
         assert "trg_validar_secuencia_historica_ventas" in content
         assert "v_vendido > v_cosechado" in content
         assert "America/Bogota" in content
+
+
+def test_cierre_de_lote_no_puede_preceder_ventas_historicas():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/019_integridad_temporal_cierre_lote.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    for content in (service, migration, schema):
+        assert "detalles_venta" in content
+        assert "JOIN biofloc.ventas" in content or "JOIN biofloc.ventas v" in content
+        assert "America/Bogota" in content
