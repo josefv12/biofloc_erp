@@ -503,7 +503,13 @@ export function AplicacionesBioflocPanel({
             </Field>
           )}
           <Field label="Tipo de aplicación">
-            <select className="bf-input" {...form.register("tipo_aplicacion_id", { valueAsNumber: true })}>
+            <select
+              className="bf-input"
+              {...form.register("tipo_aplicacion_id", {
+                valueAsNumber: true,
+                onChange: () => form.setValue("producto_id", ""),
+              })}
+            >
               {(tiposQuery.data ?? []).map((row) => (
                 <option key={row.id} value={row.id}>
                   {row.nombre}
