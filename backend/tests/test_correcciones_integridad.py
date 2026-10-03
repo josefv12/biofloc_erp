@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from app.services.movimiento_inventario_service import _calcular_promedio_ponderado_movil
 from app.services.validaciones_temporales import validar_evento_no_futuro, validar_evento_lote
-from app.services.cosecha_service import _validar_coherencia_peso
+from app.services.cosecha_service import _validar_coherencia_peso\nfrom app.services.aplicacion_biofloc_service import _validar_producto_para_cantidad
 
 
 def movimiento(cantidad, costo_unitario, afecta):
@@ -68,3 +68,17 @@ def test_cosecha_inconsistente_se_rechaza():
 
 def test_cosecha_con_diferencia_dentro_de_tolerancia_se_acepta():
     _validar_coherencia_peso(Decimal("550"), 1000, Decimal("500"))
+
+
+def test_aplicacion_biofloc_con_cantidad_positiva_exige_producto():
+    with pytest.raises(HTTPException) as exc:
+        _validar_producto_para_cantidad(Decimal("5"), None)
+    assert exc.value.status_code == 422
+
+
+def test_aplicacion_biofloc_sin_producto_permite_cantidad_nula():
+    _validar_producto_para_cantidad(None, None)
+
+
+def test_aplicacion_biofloc_con_producto_y_cantidad_positiva_se_acepta():
+    _validar_producto_para_cantidad(Decimal("5"), 10)
