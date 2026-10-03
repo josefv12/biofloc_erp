@@ -888,3 +888,28 @@ CREATE CONSTRAINT TRIGGER trg_validar_secuencia_historica_ventas
 AFTER INSERT ON biofloc.ventas
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_secuencia_historica_ventas();
+
+
+-- Historial de población: cosechas y mortalidades no se reescriben.
+CREATE OR REPLACE FUNCTION biofloc.impedir_modificacion_poblacion_historica()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_impedir_modificacion_poblacion_historica$
+BEGIN
+    RAISE EXCEPTION
+        'El registro histórico de población % % es inmutable; registre una corrección mediante un nuevo evento',
+        TG_TABLE_NAME, OLD.id
+        USING ERRCODE='check_violation';
+END;
+$fn_impedir_modificacion_poblacion_historica$;
+
+DROP TRIGGER IF EXISTS trg_inmutabilidad_mortalidades ON biofloc.mortalidades;
+CREATE TRIGGER trg_inmutabilidad_mortalidades
+BEFORE UPDATE OR DELETE ON biofloc.mortalidades
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_poblacion_historica();
+
+DROP TRIGGER IF EXISTS trg_inmutabilidad_cosechas ON biofloc.cosechas;
+CREATE TRIGGER trg_inmutabilidad_cosechas
+BEFORE UPDATE OR DELETE ON biofloc.cosechas
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_poblacion_historica();
+
