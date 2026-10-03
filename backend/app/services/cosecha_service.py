@@ -27,7 +27,7 @@ from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.cosecha import CosechaCreate
 from app.services.poblacion_lote import ESTADO_LOTE_FINALIZADO, exigir_dentro_de_disponible, exigir_lote_en_produccion, mensaje_cosecha_excede, obtener_estado_lote_por_nombre, obtener_poblacion_disponible
-from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre
+from app.services.validaciones_fecha import validar_no_futuro, validar_no_despues_cierre, TZ_COLOMBIA
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -47,7 +47,7 @@ def _cerrar_lote_si_sin_peces(db: Session, lote: Lote, usuario_id: int, fecha_ho
         return
     lote.estado_id = estado_fin.id
     if lote.fecha_cierre is None:
-        lote.fecha_cierre = fecha_hora.date()
+        lote.fecha_cierre = fecha_hora.astimezone(TZ_COLOMBIA).date() if fecha_hora.tzinfo else fecha_hora.date()
     db.add(Auditoria(usuario_id=usuario_id, tabla="lotes", registro_id=lote.id, accion="UPDATE", detalle={"estado": ESTADO_LOTE_FINALIZADO, "fecha_cierre": lote.fecha_cierre.isoformat() if lote.fecha_cierre else None, "origen": "cosecha_poblacion_cero"}))
 
 
