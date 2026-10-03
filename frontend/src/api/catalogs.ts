@@ -9,6 +9,9 @@ import type {
   ReferenciaBiofloc,
   ReferenciaBioflocCreate,
   ReferenciaBioflocUpdate,
+  ReferenciaAplicacionBiofloc,
+  ReferenciaAplicacionBioflocCreate,
+  ReferenciaAplicacionBioflocUpdate,
   TipoAplicacionBiofloc,
   Unidad,
 } from "../types/operations";
@@ -114,6 +117,22 @@ export function createReferenciaAgua(data: ReferenciaAguaCreate): Promise<Refere
 
 export function updateReferenciaAgua(id: number, data: ReferenciaAguaUpdate): Promise<ReferenciaAgua> {
   return apiFetch<ReferenciaAgua>(`/api/v1/referencias-agua/${id}`, { method: "PUT", body: data });
+}
+
+export function listReferenciasAplicacionBiofloc(params: { especie_id?: number; semana?: number; solo_activos?: boolean } = {}): Promise<ReferenciaAplicacionBiofloc[]> {
+  const query = new URLSearchParams();
+  if (params.especie_id) query.set("especie_id", String(params.especie_id));
+  if (params.semana) query.set("semana", String(params.semana));
+  query.set("solo_activos", params.solo_activos === false ? "false" : "true");
+  return apiFetch<ReferenciaAplicacionBiofloc[]>(`/api/v1/referencias-aplicacion-biofloc/?${query.toString()}`);
+}
+
+export function createReferenciaAplicacionBiofloc(data: ReferenciaAplicacionBioflocCreate): Promise<ReferenciaAplicacionBiofloc> {
+  return apiFetch<ReferenciaAplicacionBiofloc>("/api/v1/referencias-aplicacion-biofloc/", { method: "POST", body: data });
+}
+
+export function updateReferenciaAplicacionBiofloc(id: number, data: ReferenciaAplicacionBioflocUpdate): Promise<ReferenciaAplicacionBiofloc> {
+  return apiFetch<ReferenciaAplicacionBiofloc>(`/api/v1/referencias-aplicacion-biofloc/${id}`, { method: "PUT", body: data });
 }
 
 export function createReferenciaBiofloc(data: ReferenciaBioflocCreate): Promise<ReferenciaBiofloc> {
