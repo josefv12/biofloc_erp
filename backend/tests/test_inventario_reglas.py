@@ -381,3 +381,18 @@ def test_equipos_exigen_catalogos_activos_y_respaldo_operativo():
     assert "trg_validar_equipo_respaldo_operativo" in migration
     assert "trg_validar_catalogos_equipo_activos" in schema
     assert "trg_validar_equipo_respaldo_operativo" in schema
+
+
+def test_equipos_respetan_fecha_de_adquisicion_en_historicos():
+    from pathlib import Path
+    for rel in ("app/services/falla_service.py", "app/services/mantenimiento_service.py", "app/services/evento_energia_service.py"):
+        source = (Path(__file__).parents[1] / rel).read_text(encoding="utf-8")
+        assert "fecha_adquisicion" in source
+    migration = (Path(__file__).parents[2] / "database/migrations/034_integridad_fecha_adquisicion_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_fecha_adquisicion_equipo" in migration
+    assert "trg_validar_falla_no_antes_adquisicion" in migration
+    assert "trg_validar_mantenimiento_no_antes_adquisicion" in migration
+    assert "trg_validar_respaldo_no_antes_adquisicion" in migration
+    assert "trg_validar_fecha_adquisicion_equipo" in schema
+    assert "trg_validar_respaldo_no_antes_adquisicion" in schema
