@@ -1548,6 +1548,19 @@ ON biofloc.eventos_energia
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_duracion_evento_energia();
 
 
+CREATE OR REPLACE FUNCTION biofloc.impedir_modificacion_falla_historica()
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn_impedir_modificacion_falla_historica$
+BEGIN
+    RAISE EXCEPTION 'La falla histórica % es inmutable', OLD.id USING ERRCODE='check_violation';
+END;
+$fn_impedir_modificacion_falla_historica$;
+
+DROP TRIGGER IF EXISTS trg_inmutabilidad_fallas ON biofloc.fallas;
+CREATE TRIGGER trg_inmutabilidad_fallas
+BEFORE UPDATE OR DELETE ON biofloc.fallas
+FOR EACH ROW EXECUTE FUNCTION biofloc.impedir_modificacion_falla_historica();
+
+
 COMMIT;
 
 
