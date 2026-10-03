@@ -17,7 +17,7 @@ ALTER TABLE referencias_produccion
     ADD CONSTRAINT referencias_produccion_raciones_check
     CHECK (
         raciones_min IS NULL
-        OR raciones_min >= 0
+        OR raciones_min > 0
     );
 
 ALTER TABLE referencias_produccion
@@ -27,7 +27,7 @@ ALTER TABLE referencias_produccion
     CHECK (
         raciones_min IS NULL
         OR raciones_max IS NULL
-        OR raciones_max >= raciones_min
+        OR raciones_max > 0 AND raciones_max >= raciones_min
     );
 
 ALTER TABLE referencias_produccion
