@@ -14,6 +14,7 @@ from app.models.lote import Lote
 from app.models.auditoria import Auditoria
 from app.schemas.biometria import BiometriaCreate
 from app.services.poblacion_lote import exigir_lote_en_produccion
+from app.services.validaciones_temporales import validar_evento_lote
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -48,10 +49,7 @@ def crear_biometria(db: Session, data: BiometriaCreate, usuario_id: int) -> Biom
         raise HTTPException(status_code=404, detail=f"Lote id={data.lote_id} no existe")
     exigir_lote_en_produccion(db, lote)
     
-    # Validar fecha_hora contra fecha_siembra
-    # Although not explicitly in check constraints, logically biometria cannot happen before siembra.
-    if data.fecha_hora.date() < lote.fecha_siembra:
-        raise HTTPException(status_code=422, detail="La fecha de la biometría no puede ser anterior a la siembra del lote")
+    validar_evento_lote(data.fecha_hora, lote.fecha_siembra, "la biometría")
 
     nuevo = Biometria(**data.model_dump(), registrado_por=usuario_id)
     db.add(nuevo)
