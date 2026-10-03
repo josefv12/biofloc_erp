@@ -18,6 +18,7 @@ from app.models.lote import Lote, Especie, EtapaProductiva, EstadoLote
 from app.models.estanque import Estanque
 from app.models.auditoria import Auditoria
 from app.schemas.lote import LoteCreate, LoteUpdate
+from app.services.validaciones_fecha import validar_fecha_no_futura
 
 
 def _verificar_referencias(db: Session, data: LoteCreate | LoteUpdate) -> None:
@@ -65,6 +66,7 @@ def obtener_lote(db: Session, lote_id: int) -> Lote:
 
 
 def crear_lote(db: Session, data: LoteCreate, usuario_id: int) -> Lote:
+    validar_fecha_no_futura(data.fecha_siembra, "La fecha de siembra")
     _verificar_referencias(db, data)
 
     # Verificar código único
