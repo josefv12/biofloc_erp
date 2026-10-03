@@ -6,7 +6,8 @@ from fastapi import HTTPException
 
 from app.services.movimiento_inventario_service import _calcular_promedio_ponderado_movil
 from app.services.validaciones_temporales import validar_evento_no_futuro, validar_evento_lote
-from app.services.cosecha_service import _validar_coherencia_peso\nfrom app.services.aplicacion_biofloc_service import _validar_producto_para_cantidad
+from app.services.cosecha_service import _validar_coherencia_peso
+from app.services.aplicacion_biofloc_service import _validar_producto_para_cantidad
 
 
 def movimiento(cantidad, costo_unitario, afecta):
