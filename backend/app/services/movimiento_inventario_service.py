@@ -297,6 +297,22 @@ def crear_movimiento_inventario(
         tipo_nombre=tipo.nombre,
     )
 
+    # Una referencia automática representa exactamente un movimiento.
+    # Impide duplicar manualmente la salida/entrada ya generada por el evento origen.
+    if data.referencia_tipo is not None and data.referencia_id is not None:
+        existente = db.query(MovimientoInventario.id).filter(
+            MovimientoInventario.referencia_tipo == data.referencia_tipo,
+            MovimientoInventario.referencia_id == data.referencia_id,
+        ).first()
+        if existente:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ya existe un movimiento de inventario para "
+                    f"{data.referencia_tipo} id={data.referencia_id}."
+                ),
+            )
+
     datos = data.model_dump()
     datos["fecha_hora"] = fecha_hora
     datos["registrado_por"] = usuario_id
