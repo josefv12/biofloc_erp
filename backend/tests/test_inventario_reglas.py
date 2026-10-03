@@ -1,9 +1,10 @@
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
+from decimal import Decimal
 
 import pytest
 
-from app.services.movimiento_inventario_service import _tipo_y_efecto
+from app.services.movimiento_inventario_service import _tipo_y_efecto, _calcular_costo_promedio_desde_movimientos
 from app.services.validaciones_fecha import validar_fecha_no_futura, validar_no_futuro
 
 
@@ -150,3 +151,35 @@ def test_migracion_inventario_refuerza_valoracion_y_fecha():
     assert "v_efecto = 1 AND NEW.costo_unitario IS NULL" in text
     assert "NEW.fecha_hora > NOW()" in text
     assert "No se acepta una valoración manual" not in text
+
+
+def test_costo_promedio_ponderado_con_entradas_a_distinto_costo():
+    rows = [
+        {"cantidad": "100", "costo_unitario": "1000", "costo_total": "100000", "efecto": 1},
+        {"cantidad": "100", "costo_unitario": "2000", "costo_total": "200000", "efecto": 1},
+    ]
+    assert _calcular_costo_promedio_desde_movimientos(rows) == 1500
+
+
+def test_costo_salida_historica_ignora_entrada_posterior():
+    rows = [
+        {"cantidad": "100", "costo_unitario": "1000", "costo_total": "100000", "efecto": 1},
+    ]
+    assert _calcular_costo_promedio_desde_movimientos(rows) == 1000
+
+
+def test_costo_promedio_se_recalcula_despues_de_una_salida():
+    rows = [
+        {"cantidad": "100", "costo_unitario": "1000", "costo_total": "100000", "efecto": 1},
+        {"cantidad": "100", "costo_unitario": "2000", "costo_total": "200000", "efecto": 1},
+        {"cantidad": "50", "costo_unitario": None, "costo_total": "75000", "efecto": -1},
+    ]
+    assert _calcular_costo_promedio_desde_movimientos(rows) == 1500
+
+
+def test_ajuste_positivo_se_incorpora_al_promedio():
+    rows = [
+        {"cantidad": "100", "costo_unitario": "1000", "costo_total": "100000", "efecto": 1},
+        {"cantidad": "20", "costo_unitario": "2000", "costo_total": "40000", "efecto": 1},
+    ]
+    assert _calcular_costo_promedio_desde_movimientos(rows) == Decimal("1166.67")
