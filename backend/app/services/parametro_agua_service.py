@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.parametro_agua import ParametroAgua
+from app.models.medicion_agua import MedicionAgua
 from app.models.auditoria import Auditoria
 from app.schemas.parametro_agua import ParametroAguaCreate, ParametroAguaUpdate
 
@@ -73,6 +74,16 @@ def actualizar_parametro_agua(db: Session, parametro_id: int, data: ParametroAgu
         existente = db.query(ParametroAgua).filter(ParametroAgua.nombre == cambios["nombre"]).first()
         if existente:
             raise HTTPException(status_code=400, detail=f"Ya existe otro parámetro de agua con el nombre '{cambios['nombre']}'")
+
+    if "unidad" in cambios and cambios["unidad"] != p.unidad:
+        tiene_historial = db.query(MedicionAgua.id).filter(
+            MedicionAgua.parametro_id == p.id
+        ).first()
+        if tiene_historial:
+            raise HTTPException(
+                status_code=409,
+                detail="No se puede cambiar la unidad de un parámetro de agua que ya tiene mediciones históricas",
+            )
 
     for key, value in cambios.items():
         setattr(p, key, value)
