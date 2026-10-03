@@ -184,6 +184,30 @@ def actualizar_lote(db: Session, lote_id: int, data: LoteUpdate, usuario_id: int
                     detail="La fecha de siembra es inmutable una vez iniciado o cerrado el historial del lote",
                 )
 
+    if "etapa_productiva_id" in cambios and cambios["etapa_productiva_id"] != lote.etapa_productiva_id:
+        from sqlalchemy import text
+        historial = db.execute(
+            text("""
+                SELECT EXISTS (
+                    SELECT 1 FROM (
+                        SELECT 1 FROM biofloc.biometrias WHERE lote_id = :lote_id
+                        UNION ALL SELECT 1 FROM biofloc.mortalidades WHERE lote_id = :lote_id
+                        UNION ALL SELECT 1 FROM biofloc.cosechas WHERE lote_id = :lote_id
+                        UNION ALL SELECT 1 FROM biofloc.alimentaciones WHERE lote_id = :lote_id
+                        UNION ALL SELECT 1 FROM biofloc.mediciones_biofloc WHERE lote_id = :lote_id
+                        UNION ALL SELECT 1 FROM biofloc.mediciones_agua WHERE lote_id = :lote_id
+                        UNION ALL SELECT 1 FROM biofloc.aplicaciones_biofloc WHERE lote_id = :lote_id
+                    ) eventos
+                )
+            """),
+            {"lote_id": lote.id},
+        ).scalar()
+        if historial or lote.fecha_cierre is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="La etapa productiva es inmutable una vez iniciado o cerrado el historial del lote",
+            )
+
     estado_id_nuevo = cambios.get("estado_id", lote.estado_id)
     estanque_id_nuevo = cambios.get("estanque_id", lote.estanque_id)
     estado_nuevo = db.query(EstadoLote).filter(EstadoLote.id == estado_id_nuevo).first()
