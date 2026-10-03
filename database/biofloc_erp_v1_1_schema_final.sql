@@ -707,7 +707,7 @@ CREATE INDEX idx_auditoria_usuario_fecha
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION actualizar_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $biofloc$$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
@@ -751,7 +751,7 @@ EXECUTE FUNCTION actualizar_updated_at();
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION validar_lote_activo()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $biofloc$$
 DECLARE
     es_activo BOOLEAN;
 BEGIN
@@ -1023,7 +1023,7 @@ VALUES
     
 -- Integridad productiva a nivel de base de datos.
 CREATE OR REPLACE FUNCTION biofloc.validar_fecha_evento_lote()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
 DECLARE v_siembra DATE;
 BEGIN
     SELECT fecha_siembra INTO v_siembra FROM lotes WHERE id=NEW.lote_id;
@@ -1035,7 +1035,7 @@ BEGIN
             USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $;
+END; $biofloc$;
 CREATE TRIGGER trg_validar_fecha_biometria
 BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
@@ -1047,7 +1047,7 @@ BEFORE INSERT OR UPDATE ON cosechas
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_lote();
 
 CREATE OR REPLACE FUNCTION biofloc.validar_muestra_biometria()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
 DECLARE v_sembrados INTEGER; v_salidas INTEGER;
 BEGIN
     SELECT cantidad_sembrada INTO v_sembrados FROM lotes WHERE id=NEW.lote_id;
@@ -1060,13 +1060,13 @@ BEGIN
             GREATEST(v_sembrados-v_salidas,0), NEW.cantidad_muestra USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $;
+END; $biofloc$;
 CREATE TRIGGER trg_validar_muestra_biometria
 BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_muestra_biometria();
 
 CREATE OR REPLACE FUNCTION biofloc.validar_promedio_cosecha()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
 DECLARE v_esperado NUMERIC;
 BEGIN
     v_esperado := (NEW.peso_total_kg * 1000) / NULLIF(NEW.cantidad_peces, 0);
@@ -1075,20 +1075,20 @@ BEGIN
             ROUND(v_esperado,3), NEW.peso_promedio_g USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $;
+END; $biofloc$;
 CREATE TRIGGER trg_validar_promedio_cosecha
 BEFORE INSERT OR UPDATE ON cosechas
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_promedio_cosecha();
 
 CREATE OR REPLACE FUNCTION biofloc.validar_fecha_evento_no_futura()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$
 BEGIN
     IF NEW.fecha_hora > NOW() THEN
         RAISE EXCEPTION 'La fecha/hora del evento no puede estar en el futuro'
             USING ERRCODE='check_violation';
     END IF;
     RETURN NEW;
-END; $;
+END; $biofloc$;
 CREATE TRIGGER trg_validar_fecha_biometria_futura BEFORE INSERT OR UPDATE ON biometrias
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 CREATE TRIGGER trg_validar_fecha_mortalidad_futura BEFORE INSERT OR UPDATE ON mortalidades
@@ -1108,7 +1108,7 @@ FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 -- Integridad de inventario: tipos cerrados, ajustes direccionales,
 -- entradas valoradas y prohibición de movimientos futuros.
 CREATE OR REPLACE FUNCTION biofloc.validar_integridad_movimiento_inventario()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+RETURNS TRIGGER LANGUAGE plpgsql AS $biofloc$$
 DECLARE
     v_nombre VARCHAR(30);
     v_efecto SMALLINT;
@@ -1207,7 +1207,7 @@ COMMIT;
 CREATE OR REPLACE FUNCTION biofloc.validar_trazabilidad_movimiento_automatico()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $$
+AS $biofloc$$
 DECLARE
     v_tipo VARCHAR(30);
     v_producto BIGINT;
@@ -1289,7 +1289,7 @@ EXECUTE FUNCTION biofloc.validar_trazabilidad_movimiento_automatico();
 CREATE OR REPLACE FUNCTION biofloc.validar_secuencia_poblacion_historica()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $$
+AS $biofloc$$
 DECLARE
     v_sembrados INTEGER;
     v_max_salidas BIGINT;
