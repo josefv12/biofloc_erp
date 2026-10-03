@@ -102,13 +102,8 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
 
-    IF v_efecto = 1 AND NEW.costo_unitario IS NULL THEN
-        RAISE EXCEPTION '% positivo requiere costo_unitario', v_nombre
-            USING ERRCODE = 'check_violation';
-    END IF;
-
-    IF NEW.fecha_hora > NOW() THEN
-        RAISE EXCEPTION 'La fecha/hora del movimiento de inventario no puede estar en el futuro'
+    IF v_nombre = 'AJUSTE' AND v_efecto = 1 AND NEW.costo_unitario IS NULL THEN
+        RAISE EXCEPTION 'AJUSTE positivo requiere costo_unitario'
             USING ERRCODE = 'check_violation';
     END IF;
 
