@@ -55,6 +55,7 @@ from app.routers import (
     estados_lote,
     estados_estanque,
     referencias_biofloc,
+    referencias_aplicacion_biofloc,
     usuarios,
     alimentacion_referencia,
 )
@@ -126,6 +127,7 @@ app.include_router(etapas_productivas.router, prefix="/api/v1/etapas-productivas
 app.include_router(estados_lote.router, prefix="/api/v1/estados-lote", tags=["Estados Lote"])
 app.include_router(estados_estanque.router, prefix="/api/v1/estados-estanque", tags=["Estados Estanque"])
 app.include_router(referencias_biofloc.router, prefix="/api/v1/referencias-biofloc", tags=["Referencias Biofloc"])
+app.include_router(referencias_aplicacion_biofloc.router, prefix="/api/v1/referencias-aplicacion-biofloc", tags=["Referencias Aplicación Biofloc"])
 app.include_router(usuarios.router, prefix="/api/v1/usuarios", tags=["Usuarios"])
 app.include_router(usuarios.roles_router, prefix="/api/v1/roles", tags=["Roles"])
 app.include_router(
