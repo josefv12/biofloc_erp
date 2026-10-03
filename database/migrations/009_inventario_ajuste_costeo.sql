@@ -35,7 +35,7 @@ CREATE OR REPLACE FUNCTION biofloc.efecto_movimiento_inventario(
 )
 RETURNS SMALLINT
 LANGUAGE plpgsql
-AS $
+AS $fn_efecto$
 DECLARE
     v_nombre VARCHAR(30);
     v_efecto SMALLINT;
@@ -72,12 +72,12 @@ BEGIN
     RAISE EXCEPTION 'Tipo de movimiento no permitido: %. Use ENTRADA, SALIDA o AJUSTE', v_nombre
         USING ERRCODE = 'check_violation';
 END;
-$$;
+$fn_efecto$;
 
 CREATE OR REPLACE FUNCTION biofloc.validar_stock_movimiento()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $
+AS $fn_stock$
 DECLARE
     v_efecto SMALLINT;
     v_stock NUMERIC(18,3);
@@ -136,7 +136,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$;
+$fn_stock$;
 
 DROP TRIGGER IF EXISTS trg_validar_stock_movimiento
 ON biofloc.movimientos_inventario;
