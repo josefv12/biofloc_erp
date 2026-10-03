@@ -2413,3 +2413,39 @@ CREATE TRIGGER trg_validar_solapamiento_historico_estanque
 BEFORE INSERT OR UPDATE OF estanque_id, fecha_siembra, fecha_cierre
 ON biofloc.lotes
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_solapamiento_historico_estanque();
+
+
+-- Si una mortalidad lleva la población AS-OF a cero, finaliza el lote.
+CREATE OR REPLACE FUNCTION biofloc.finalizar_lote_por_mortalidad_total()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_finalizar_lote_por_mortalidad_total$
+DECLARE
+    v_sembrados INTEGER;
+    v_mortalidad INTEGER;
+    v_cosecha INTEGER;
+    v_estado_final BIGINT;
+BEGIN
+    SELECT cantidad_sembrada INTO v_sembrados FROM biofloc.lotes WHERE id = NEW.lote_id FOR UPDATE;
+    SELECT COALESCE(SUM(cantidad), 0) INTO v_mortalidad
+    FROM biofloc.mortalidades WHERE lote_id = NEW.lote_id AND fecha_hora <= NEW.fecha_hora;
+    SELECT COALESCE(SUM(cantidad_peces), 0) INTO v_cosecha
+    FROM biofloc.cosechas WHERE lote_id = NEW.lote_id AND fecha_hora <= NEW.fecha_hora;
+
+    IF v_sembrados - v_mortalidad - v_cosecha = 0 THEN
+        SELECT id INTO v_estado_final FROM biofloc.estados_lote WHERE nombre = 'FINALIZADO';
+        IF v_estado_final IS NOT NULL THEN
+            UPDATE biofloc.lotes
+            SET estado_id = v_estado_final,
+                fecha_cierre = COALESCE(fecha_cierre, (NEW.fecha_hora AT TIME ZONE 'America/Bogota')::date)
+            WHERE id = NEW.lote_id;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$fn_finalizar_lote_por_mortalidad_total$;
+
+DROP TRIGGER IF EXISTS trg_finalizar_lote_por_mortalidad_total ON biofloc.mortalidades;
+CREATE TRIGGER trg_finalizar_lote_por_mortalidad_total
+AFTER INSERT ON biofloc.mortalidades
+FOR EACH ROW EXECUTE FUNCTION biofloc.finalizar_lote_por_mortalidad_total();
