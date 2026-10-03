@@ -24,6 +24,7 @@ from app.schemas.aplicacion_biofloc import AplicacionBioflocCreate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
 from app.services.movimiento_inventario_service import crear_movimiento_inventario, _obtener_tipo_salida_id
 from app.services.poblacion_lote import exigir_lote_en_produccion
+from app.services.validaciones_temporales import validar_evento_lote
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -66,9 +67,7 @@ def crear_aplicacion_biofloc(db: Session, data: AplicacionBioflocCreate, usuario
     if not tipo:
         raise HTTPException(status_code=404, detail=f"Tipo de aplicación Biofloc id={data.tipo_aplicacion_id} no existe")
 
-    # 3. Validar fecha_hora contra fecha_siembra
-    if data.fecha_hora.date() < lote.fecha_siembra:
-        raise HTTPException(status_code=422, detail="La fecha de la aplicación no puede ser anterior a la siembra del lote")
+    validar_evento_lote(data.fecha_hora, lote.fecha_siembra, "la aplicación Biofloc")
 
     # 4. Validar cantidad >= 0 si se proporciona
     if data.cantidad is not None and data.cantidad < 0:
