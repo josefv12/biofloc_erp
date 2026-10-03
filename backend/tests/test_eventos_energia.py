@@ -59,6 +59,7 @@ def main():
     tipo_eq = next(t["id"] for t in r.json() if t["nombre"] == "PLANTA_ELECTRICA")
     r = requests.get(f"{BASE}/api/v1/estados-equipo/", headers=h(tok_a))
     est = next(e["id"] for e in r.json() if e["nombre"] == "OPERATIVO")
+    est_no_op = next(e["id"] for e in r.json() if e["nombre"] == "FUERA_DE_SERVICIO")
     r = requests.post(f"{BASE}/api/v1/equipos/", headers=h(tok_a), json={
         "codigo": f"{PREF}-GEN-01", "nombre": f"{PREF} Planta", "tipo_equipo_id": tipo_eq, "estado_id": est,
     })
