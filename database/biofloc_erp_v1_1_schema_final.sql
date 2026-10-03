@@ -1202,6 +1202,39 @@ CREATE TRIGGER trg_validar_integridad_movimiento_inventario
 BEFORE INSERT OR UPDATE ON movimientos_inventario
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_integridad_movimiento_inventario();
 
+
+-- Integridad: la unidad de un parámetro de agua queda inmutable tras la
+-- primera medición, porque las mediciones históricas solo almacenan parametro_id.
+CREATE OR REPLACE FUNCTION biofloc.validar_unidad_parametro_agua_historica()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_unidad_parametro_agua_historica$
+BEGIN
+    IF NEW.unidad IS DISTINCT FROM OLD.unidad
+       AND EXISTS (
+           SELECT 1
+           FROM biofloc.mediciones_agua
+           WHERE parametro_id = OLD.id
+       )
+    THEN
+        RAISE EXCEPTION
+            'No se puede cambiar la unidad del parámetro de agua % porque tiene mediciones históricas',
+            OLD.id
+            USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_unidad_parametro_agua_historica$;
+
+DROP TRIGGER IF EXISTS trg_validar_unidad_parametro_agua_historica
+    ON biofloc.parametros_agua;
+
+CREATE TRIGGER trg_validar_unidad_parametro_agua_historica
+BEFORE UPDATE OF unidad ON biofloc.parametros_agua
+FOR EACH ROW
+EXECUTE FUNCTION biofloc.validar_unidad_parametro_agua_historica();
+
+
 COMMIT;
 
 
