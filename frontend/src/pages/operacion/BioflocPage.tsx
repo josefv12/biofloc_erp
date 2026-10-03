@@ -61,7 +61,7 @@ export function BioflocPage() {
     <div>
       <PageHeader
         title="Biofloc"
-        description="Mediciones de volumen sedimentable y aplicaciones. No se genera movimiento de inventario."
+        description="Mediciones de volumen sedimentable y aplicaciones de insumos Biofloc. Las aplicaciones con cantidad descuentan inventario."
       />
       <label className="mb-4 block max-w-xs text-sm">
         <span className="mb-1 block text-[var(--bf-muted)]">Lote</span>
@@ -534,7 +534,7 @@ export function AplicacionesBioflocPanel({
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
           </Field>
           <p className="text-xs text-[var(--bf-muted)]">
-            Esta aplicación no descuenta inventario. No se llama a movimientos.
+            Los consumos con cantidad mayor que 0 generan automáticamente una salida de inventario y afectan el costo de producción.
           </p>
           <button
             type="submit"
