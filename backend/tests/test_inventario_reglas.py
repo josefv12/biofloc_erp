@@ -408,3 +408,13 @@ def test_estado_baja_es_terminal_y_desactiva_equipo():
     assert "trg_validar_transicion_estado_equipo" in migration
     assert "NEW.activo := FALSE" in migration
     assert "trg_validar_transicion_estado_equipo" in schema
+
+
+def test_duracion_evento_energia_es_derivada_y_protegida():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/evento_energia_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "duracion_minutos es un campo calculado" in service
+    assert "trg_validar_duracion_evento_energia" in migration
+    assert "trg_validar_duracion_evento_energia" in schema
