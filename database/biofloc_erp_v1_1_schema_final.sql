@@ -2183,3 +2183,33 @@ END;
 $fn_validar_estado_estanque_operativo$;
 DROP TRIGGER IF EXISTS trg_validar_estado_estanque_operativo ON biofloc.estanques;
 CREATE TRIGGER trg_validar_estado_estanque_operativo BEFORE INSERT OR UPDATE OF estado_id, activo ON biofloc.estanques FOR EACH ROW EXECUTE FUNCTION biofloc.validar_estado_estanque_operativo();
+
+    
+CREATE OR REPLACE FUNCTION biofloc.proteger_catalogos_estados_operativos()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_proteger_catalogos_estados_operativos$
+BEGIN
+    IF TG_TABLE_NAME = 'estados_lote' AND NEW.nombre IS DISTINCT FROM OLD.nombre THEN
+        IF OLD.nombre IN ('PLANIFICADO', 'ACTIVO', 'FINALIZADO', 'CANCELADO')
+           OR EXISTS (SELECT 1 FROM biofloc.lotes WHERE estado_id = OLD.id)
+        THEN RAISE EXCEPTION 'El estado de lote % es semántico o tiene historial y no puede renombrarse', OLD.nombre USING ERRCODE='check_violation'; END IF;
+    END IF;
+    IF TG_TABLE_NAME = 'estados_estanque' AND NEW.nombre IS DISTINCT FROM OLD.nombre THEN
+        IF OLD.nombre IN ('DISPONIBLE', 'OCUPADO', 'MANTENIMIENTO', 'FUERA_DE_SERVICIO')
+           OR EXISTS (SELECT 1 FROM biofloc.estanques WHERE estado_id = OLD.id)
+        THEN RAISE EXCEPTION 'El estado de estanque % es semántico o tiene historial y no puede renombrarse', OLD.nombre USING ERRCODE='check_violation'; END IF;
+    END IF;
+    IF TG_TABLE_NAME = 'estados_lote' AND NEW.activo IS DISTINCT FROM OLD.activo AND NEW.activo = FALSE
+       AND EXISTS (SELECT 1 FROM biofloc.lotes l WHERE l.estado_id = OLD.id AND l.fecha_cierre IS NULL)
+    THEN RAISE EXCEPTION 'No se puede desactivar un estado de lote utilizado por lotes sin cierre' USING ERRCODE='check_violation'; END IF;
+    IF TG_TABLE_NAME = 'estados_estanque' AND NEW.activo IS DISTINCT FROM OLD.activo AND NEW.activo = FALSE
+       AND EXISTS (SELECT 1 FROM biofloc.estanques e WHERE e.estado_id = OLD.id AND e.activo = TRUE)
+    THEN RAISE EXCEPTION 'No se puede desactivar un estado de estanque utilizado por estanques activos' USING ERRCODE='check_violation'; END IF;
+    RETURN NEW;
+END;
+$fn_proteger_catalogos_estados_operativos$;
+DROP TRIGGER IF EXISTS trg_proteger_catalogos_estados_lote ON biofloc.estados_lote;
+CREATE TRIGGER trg_proteger_catalogos_estados_lote BEFORE UPDATE OF nombre, activo ON biofloc.estados_lote FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_catalogos_estados_operativos();
+DROP TRIGGER IF EXISTS trg_proteger_catalogos_estados_estanque ON biofloc.estados_estanque;
+CREATE TRIGGER trg_proteger_catalogos_estados_estanque BEFORE UPDATE OF nombre, activo ON biofloc.estados_estanque FOR EACH ROW EXECUTE FUNCTION biofloc.proteger_catalogos_estados_operativos();
