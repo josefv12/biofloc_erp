@@ -33,6 +33,7 @@ jobs:
           tests/test_poblacion_lote.py
           tests/test_indicadores_productivos_etapa3.py
           tests/test_referencia_produccion_precedencia.py
+          tests/test_correcciones_integridad.py
 
   frontend:
     runs-on: ubuntu-latest
