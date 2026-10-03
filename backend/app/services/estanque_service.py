@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.models.estanque import Estanque, EstadoEstanque
+from app.models.lote import Lote, EstadoLote
 from app.models.auditoria import Auditoria
 from app.schemas.estanque import EstanqueCreate, EstanqueUpdate
 
@@ -74,16 +75,11 @@ def actualizar_estanque(db: Session, estanque_id: int, data: EstanqueUpdate, usu
     cambios = data.model_dump(exclude_none=True)
     estado_id_nuevo = cambios.get("estado_id", estanque.estado_id)
     estado_nuevo = _get_estado_or_404(db, estado_id_nuevo)
-    if estado_nuevo.nombre in {"MANTENIMIENTO", "FUERA_DE_SERVICIO"} and db.query(Estanque).filter(
-        Estanque.id == estanque.id, Estanque.activo == True
-    ).first() and db.query(__import__("app.models.lote", fromlist=["Lote"]).Lote).filter(
-        __import__("app.models.lote", fromlist=["Lote"]).Lote.estanque_id == estanque.id
-    ).join(__import__("app.models.lote", fromlist=["EstadoLote"]).EstadoLote).filter(
-        __import__("app.models.lote", fromlist=["EstadoLote"]).EstadoLote.nombre == "ACTIVO"
+    if estado_nuevo.nombre in {"MANTENIMIENTO", "FUERA_DE_SERVICIO"} and db.query(Lote).join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(
+        Lote.estanque_id == estanque.id, EstadoLote.nombre == "ACTIVO"
     ).first():
         raise HTTPException(status_code=422, detail=f"El estanque no puede pasar a {estado_nuevo.nombre} mientras tenga un lote ACTIVO")
     if cambios.get("activo") is False:
-        from app.models.lote import Lote, EstadoLote
         if db.query(Lote).join(EstadoLote, Lote.estado_id == EstadoLote.id).filter(
             Lote.estanque_id == estanque.id, EstadoLote.nombre == "ACTIVO"
         ).first():
