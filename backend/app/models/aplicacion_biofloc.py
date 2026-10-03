@@ -15,8 +15,8 @@ class AplicacionBiofloc(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     lote_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("lotes.id"), nullable=False)
     tipo_aplicacion_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tipos_aplicacion_biofloc.id"), nullable=False)
-    # producto_id no tiene FK en el DDL; es BIGINT NULL libre (Inventario no implementado)
-    producto_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    # Producto opcional; cuando existe, el servicio valida su categoría según el tipo de aplicación.
+    producto_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("productos.id"), nullable=True)
     fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     cantidad: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     unidad: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
