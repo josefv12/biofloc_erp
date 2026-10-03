@@ -39,6 +39,12 @@ def calcular_costos_financieros_lote(
     vendidos = Decimal(str(kg_vendidos or 0))
     ingresos = Decimal(str(ventas or 0))
 
+    if alimento < ZERO:
+        raise HTTPException(status_code=422, detail="El costo del alimento no puede ser negativo")
+    if gastos < ZERO:
+        raise HTTPException(status_code=422, detail="Los gastos del lote no pueden ser negativos")
+    if ingresos < ZERO:
+        raise HTTPException(status_code=422, detail="Las ventas no pueden ser negativas")
     if cosechados < ZERO:
         raise HTTPException(status_code=422, detail="Los kg cosechados no pueden ser negativos")
     if vendidos < ZERO:
