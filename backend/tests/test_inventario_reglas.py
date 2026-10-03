@@ -428,3 +428,15 @@ def test_fallas_historicas_son_inmutables():
     assert 'status_code=405' in router
     assert "trg_inmutabilidad_fallas" in migration
     assert "trg_inmutabilidad_fallas" in schema
+
+    
+def test_tipos_mantenimiento_protegen_historico_y_exigen_catalogo_activo():
+    from pathlib import Path
+    service = (Path(__file__).parents[1] / "app/services/mantenimiento_service.py").read_text(encoding="utf-8")
+    migration = (Path(__file__).parents[2] / "database/migrations/035_transicion_estado_equipo.sql").read_text(encoding="utf-8")
+    schema = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "está inactivo" in service
+    assert "trg_validar_tipo_mantenimiento_historico" in migration
+    assert "trg_validar_tipo_mantenimiento_activo" in migration
+    assert "trg_validar_tipo_mantenimiento_historico" in schema
+    assert "trg_validar_tipo_mantenimiento_activo" in schema
