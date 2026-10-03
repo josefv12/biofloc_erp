@@ -70,6 +70,8 @@ def crear_gasto(db: Session, data: GastoCreate, usuario_id: int) -> Gasto:
         lo = db.query(Lote).filter(Lote.id == data.lote_id).first()
         if not lo:
             raise HTTPException(status_code=404, detail=f"Lote {data.lote_id} no existe")
+        if data.fecha < lo.fecha_siembra:
+            raise HTTPException(status_code=422, detail="La fecha del gasto no puede ser anterior a la fecha de siembra del lote")
     if data.estanque_id is not None:
         es = db.query(Estanque).filter(Estanque.id == data.estanque_id).first()
         if not es:
