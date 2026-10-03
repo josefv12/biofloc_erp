@@ -44,6 +44,42 @@ export type ReferenciaBioflocCreate = {
   activo?: boolean;
 };
 
+export type ReferenciaAplicacionBiofloc = {
+  id: number;
+  especie_id: number;
+  semana: number;
+  fase: "Inicio" | "Levante" | "Engorde";
+  producto_id: number;
+  cantidad_referencia: string | number;
+  unidad: string;
+  base_peces: number;
+  biomasa_objetivo_kg: string | number | null;
+  observaciones: string | null;
+  activo: boolean;
+};
+
+export type ReferenciaAplicacionBioflocCreate = {
+  especie_id: number;
+  semana: number;
+  fase: "Inicio" | "Levante" | "Engorde";
+  producto_id: number;
+  cantidad_referencia: number;
+  unidad?: string;
+  base_peces?: number;
+  biomasa_objetivo_kg?: number | null;
+  observaciones?: string | null;
+  activo?: boolean;
+};
+
+export type ReferenciaAplicacionBioflocUpdate = {
+  cantidad_referencia?: number | null;
+  unidad?: string | null;
+  base_peces?: number | null;
+  biomasa_objetivo_kg?: number | null;
+  observaciones?: string | null;
+  activo?: boolean;
+};
+
 export type ReferenciaBioflocUpdate = {
   valor_minimo?: number | null;
   valor_objetivo?: number | null;
