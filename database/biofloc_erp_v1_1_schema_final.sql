@@ -2145,3 +2145,41 @@ CREATE TRIGGER trg_validar_referencia_produccion_catalogos_activos
 BEFORE INSERT OR UPDATE OF especie_id, etapa_productiva_id
 ON biofloc.referencias_produccion
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_catalogos_produccion_historicos();
+
+    
+CREATE OR REPLACE FUNCTION biofloc.validar_estado_lote_operativo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_estado_lote_operativo$
+DECLARE
+    nombre_nuevo TEXT;
+    nombre_anterior TEXT;
+    activo_catalogo BOOLEAN;
+BEGIN
+    SELECT nombre, activo INTO nombre_nuevo, activo_catalogo FROM biofloc.estados_lote WHERE id = NEW.estado_id;
+    IF NOT FOUND OR NOT activo_catalogo THEN RAISE EXCEPTION 'El estado de lote debe existir y estar activo' USING ERRCODE='check_violation'; END IF;
+    SELECT nombre INTO nombre_anterior FROM biofloc.estados_lote WHERE id = OLD.estado_id;
+    IF nombre_anterior IN ('FINALIZADO', 'CANCELADO') AND nombre_nuevo <> nombre_anterior THEN RAISE EXCEPTION 'Un lote % no puede reabrirse ni cambiar de estado', nombre_anterior USING ERRCODE='check_violation'; END IF;
+    IF nombre_nuevo IN ('FINALIZADO', 'CANCELADO') AND NEW.fecha_cierre IS NULL THEN RAISE EXCEPTION 'El estado % requiere fecha_cierre', nombre_nuevo USING ERRCODE='check_violation'; END IF;
+    IF nombre_nuevo = 'ACTIVO' AND NEW.fecha_cierre IS NOT NULL THEN RAISE EXCEPTION 'Un lote ACTIVO no puede tener fecha_cierre' USING ERRCODE='check_violation'; END IF;
+    RETURN NEW;
+END;
+$fn_validar_estado_lote_operativo$;
+DROP TRIGGER IF EXISTS trg_validar_estado_lote_operativo ON biofloc.lotes;
+CREATE TRIGGER trg_validar_estado_lote_operativo BEFORE INSERT OR UPDATE OF estado_id, fecha_cierre ON biofloc.lotes FOR EACH ROW EXECUTE FUNCTION biofloc.validar_estado_lote_operativo();
+
+CREATE OR REPLACE FUNCTION biofloc.validar_estado_estanque_operativo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_estado_estanque_operativo$
+DECLARE nombre_nuevo TEXT; activo_catalogo BOOLEAN;
+BEGIN
+    SELECT nombre, activo INTO nombre_nuevo, activo_catalogo FROM biofloc.estados_estanque WHERE id = NEW.estado_id;
+    IF NOT FOUND OR NOT activo_catalogo THEN RAISE EXCEPTION 'El estado de estanque debe existir y estar activo' USING ERRCODE='check_violation'; END IF;
+    IF NEW.activo = FALSE AND EXISTS (SELECT 1 FROM biofloc.lotes l JOIN biofloc.estados_lote el ON el.id=l.estado_id WHERE l.estanque_id=NEW.id AND el.nombre='ACTIVO') THEN RAISE EXCEPTION 'No se puede desactivar un estanque con un lote ACTIVO' USING ERRCODE='check_violation'; END IF;
+    IF nombre_nuevo IN ('MANTENIMIENTO','FUERA_DE_SERVICIO') AND EXISTS (SELECT 1 FROM biofloc.lotes l JOIN biofloc.estados_lote el ON el.id=l.estado_id WHERE l.estanque_id=NEW.id AND el.nombre='ACTIVO') THEN RAISE EXCEPTION 'El estanque no puede pasar a % mientras tenga un lote ACTIVO', nombre_nuevo USING ERRCODE='check_violation'; END IF;
+    RETURN NEW;
+END;
+$fn_validar_estado_estanque_operativo$;
+DROP TRIGGER IF EXISTS trg_validar_estado_estanque_operativo ON biofloc.estanques;
+CREATE TRIGGER trg_validar_estado_estanque_operativo BEFORE INSERT OR UPDATE OF estado_id, activo ON biofloc.estanques FOR EACH ROW EXECUTE FUNCTION biofloc.validar_estado_estanque_operativo();
