@@ -93,7 +93,7 @@ def _params(fecha_desde, fecha_hasta, extra=None) -> dict:
 
 
 def _filtro(col: str, fecha_desde, fecha_hasta, *, ts: bool = False) -> str:
-    expr = f"CAST({col} AS date)" if ts else col
+    expr = f"({col} AT TIME ZONE 'America/Bogota')::date" if ts else col
     s = ""
     if fecha_desde is not None:
         s += f" AND {expr} >= :fecha_desde"
