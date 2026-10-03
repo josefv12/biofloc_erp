@@ -196,8 +196,24 @@ def calcular_finanzas(
     """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
     costos_estanque_no_asignados = Decimal(str(costos_estanque_periodo or 0))
 
+    costos_mantenimiento_fallas_periodo = db.execute(text("""
+        SELECT COALESCE(SUM(x.costo), 0)
+        FROM (
+            SELECT m.costo
+            FROM biofloc.mantenimientos m
+            WHERE (:fecha_desde IS NULL OR m.fecha >= :fecha_desde)
+              AND (:fecha_hasta IS NULL OR m.fecha <= :fecha_hasta)
+            UNION ALL
+            SELECT f.costo
+            FROM biofloc.fallas f
+            WHERE (:fecha_desde IS NULL OR (f.fecha_hora AT TIME ZONE 'America/Bogota')::date >= :fecha_desde)
+              AND (:fecha_hasta IS NULL OR (f.fecha_hora AT TIME ZONE 'America/Bogota')::date <= :fecha_hasta)
+        ) x
+    """), {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).scalar()
+    costos_mantenimiento_fallas = Decimal(str(costos_mantenimiento_fallas_periodo or 0))
+
     utilidad_bruta = total_ventas - total_cogs
-    utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados
+    utilidad_neta = utilidad_bruta - gastos_operativos - costos_estanque_no_asignados - costos_mantenimiento_fallas
     margen_bruto = (utilidad_bruta / total_ventas * 100) if total_ventas else None
     margen_neto = (utilidad_neta / total_ventas * 100) if total_ventas else None
     costo_promedio = total_cogs / total_kg if total_kg else ZERO
@@ -229,6 +245,7 @@ def calcular_finanzas(
         utilidad_bruta=_d2(utilidad_bruta),
         gastos_operativos=_d2(gastos_operativos),
         costos_estanque_no_asignados=_d2(costos_estanque_no_asignados),
+        costos_mantenimiento_fallas=_d2(costos_mantenimiento_fallas),
         utilidad_neta=_d2(utilidad_neta),
         margen_bruto_pct=(Decimal(str(margen_bruto)).quantize(D2, rounding=ROUND_HALF_UP) if margen_bruto is not None else None),
         margen_neto_pct=(Decimal(str(margen_neto)).quantize(D2, rounding=ROUND_HALF_UP) if margen_neto is not None else None),
@@ -240,7 +257,7 @@ def calcular_finanzas(
         metodologia=(
             "Costo por lote: el alimento se toma del costo registrado en cada salida de inventario generada por una alimentación del lote; "
             "por tanto, solo se imputa al lote el alimento realmente suministrado. Los demás costos directos se toman de gastos asociados al lote. "
-            "Los costos registrados a nivel de estanque se conservan separados del costo directo de los lotes para evitar duplicarlos cuando varios lotes comparten un estanque; se incluyen una sola vez en la rentabilidad global del periodo. "
+            "Los costos registrados a nivel de estanque se conservan separados del costo directo de los lotes para evitar duplicarlos cuando varios lotes comparten un estanque; se incluyen una sola vez en la rentabilidad global del periodo. Los costos monetarios de mantenimientos y fallas también se incluyen una sola vez como costos operativos. "
             "El costo por kg se obtiene sobre kg cosechados acumulados hasta cada venta; el costo de ventas es kg vendidos × costo promedio/kg. "
             "Costo producción de lotes corresponde al costo acumulado de producción de los lotes con ventas en el periodo; no es COGS."
         ),
