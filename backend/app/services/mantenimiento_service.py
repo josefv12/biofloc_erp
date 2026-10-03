@@ -78,7 +78,11 @@ def crear_mantenimiento(db: Session, data: MantenimientoCreate, usuario_id: int)
     if not equipo: raise HTTPException(status_code=404, detail=f"Equipo {data.equipo_id} no existe")
     if equipo.fecha_adquisicion and data.fecha < equipo.fecha_adquisicion:
         raise HTTPException(status_code=422, detail="La fecha del mantenimiento no puede ser anterior a la adquisición del equipo")
-    if not db.query(TipoMantenimiento).filter(TipoMantenimiento.id == data.tipo_mantenimiento_id).first(): raise HTTPException(status_code=404, detail=f"Tipo de mantenimiento {data.tipo_mantenimiento_id} no existe")
+    tipo_mantenimiento = db.query(TipoMantenimiento).filter(TipoMantenimiento.id == data.tipo_mantenimiento_id).first()
+    if not tipo_mantenimiento:
+        raise HTTPException(status_code=404, detail=f"Tipo de mantenimiento {data.tipo_mantenimiento_id} no existe")
+    if not tipo_mantenimiento.activo:
+        raise HTTPException(status_code=422, detail=f"Tipo de mantenimiento {data.tipo_mantenimiento_id} está inactivo")
     if not data.descripcion or not data.descripcion.strip(): raise HTTPException(status_code=422, detail="descripción requerida")
     costo = Decimal(data.costo if data.costo is not None else 0).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if costo < 0: raise HTTPException(status_code=422, detail="costo debe ser >= 0")
