@@ -72,6 +72,8 @@ class GastoFilaOut(BaseModel):
     valor: Decimal = Field(..., max_digits=14, decimal_places=2)
     lote_id: Optional[int] = None
     lote_codigo: Optional[str] = None
+    estanque_id: Optional[int] = None
+    estanque_codigo: Optional[str] = None
     registrado_por: int
     registrado_por_nombre: Optional[str] = None
 
