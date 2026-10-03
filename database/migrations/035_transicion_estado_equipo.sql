@@ -763,3 +763,65 @@ CREATE TRIGGER trg_validar_lote_finalizado_sin_peces
 BEFORE INSERT OR UPDATE OF estado_id, cantidad_sembrada
 ON biofloc.lotes
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_lote_finalizado_sin_peces();
+
+
+-- Una venta asociada a un lote debe pertenecer al intervalo comercial del ciclo.
+CREATE OR REPLACE FUNCTION biofloc.validar_venta_dentro_ciclo_lote()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_venta_dentro_ciclo_lote$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM biofloc.detalles_venta d
+        JOIN biofloc.lotes l ON l.id = d.lote_id
+        WHERE d.venta_id = NEW.id
+          AND (
+              NEW.fecha < l.fecha_siembra
+              OR (l.fecha_cierre IS NOT NULL AND NEW.fecha > l.fecha_cierre)
+          )
+    ) THEN
+        RAISE EXCEPTION
+            'La venta % está fuera del intervalo del lote asociado',
+            NEW.id USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_validar_venta_dentro_ciclo_lote$;
+
+DROP TRIGGER IF EXISTS trg_validar_venta_dentro_ciclo_lote ON biofloc.ventas;
+CREATE CONSTRAINT TRIGGER trg_validar_venta_dentro_ciclo_lote
+AFTER INSERT OR UPDATE OF fecha
+ON biofloc.ventas
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_venta_dentro_ciclo_lote();
+
+CREATE OR REPLACE FUNCTION biofloc.validar_detalle_venta_dentro_ciclo_lote()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_validar_detalle_venta_dentro_ciclo_lote$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM biofloc.ventas v
+        JOIN biofloc.lotes l ON l.id = NEW.lote_id
+        WHERE v.id = NEW.venta_id
+          AND (
+              v.fecha < l.fecha_siembra
+              OR (l.fecha_cierre IS NOT NULL AND v.fecha > l.fecha_cierre)
+          )
+    ) THEN
+        RAISE EXCEPTION
+            'El detalle de venta % está fuera del intervalo del lote asociado',
+            NEW.id USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_validar_detalle_venta_dentro_ciclo_lote$;
+
+DROP TRIGGER IF EXISTS trg_validar_detalle_venta_dentro_ciclo_lote ON biofloc.detalles_venta;
+CREATE CONSTRAINT TRIGGER trg_validar_detalle_venta_dentro_ciclo_lote
+AFTER INSERT OR UPDATE OF venta_id, lote_id
+ON biofloc.detalles_venta
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_detalle_venta_dentro_ciclo_lote();
