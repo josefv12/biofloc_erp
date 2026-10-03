@@ -232,3 +232,13 @@ def test_coste_alimento_exige_salida_y_coincidencia_con_alimentacion():
         assert "a.cantidad = mi.cantidad" in text
         assert "a.fecha_hora = mi.fecha_hora" in text
         assert "tm.nombre = 'SALIDA'" in text
+
+
+def test_trazabilidad_detalle_compra_se_mantiene_compatible():
+    from pathlib import Path
+    servicio = (Path(__file__).parents[1] / "app" / "services" / "movimiento_inventario_service.py").read_text(encoding="utf-8")
+    migracion = (Path(__file__).parents[2] / "database" / "migrations" / "014_integridad_trazabilidad_movimientos.sql").read_text(encoding="utf-8")
+    assert 'referencia_tipo == "DETALLE_COMPRA"' in servicio
+    assert "referencia_tipo = 'DETALLE_COMPRA'" in migracion
+    assert "tipo_nombre != 'ENTRADA'" in servicio
+    assert "v_tipo <> 'ENTRADA'" in migracion
