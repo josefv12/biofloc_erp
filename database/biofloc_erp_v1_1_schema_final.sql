@@ -2178,7 +2178,11 @@ BEGIN
     SELECT nombre, activo INTO nombre_nuevo, activo_catalogo FROM biofloc.estados_estanque WHERE id = NEW.estado_id;
     IF NOT FOUND OR NOT activo_catalogo THEN RAISE EXCEPTION 'El estado de estanque debe existir y estar activo' USING ERRCODE='check_violation'; END IF;
     IF NEW.activo = FALSE AND EXISTS (SELECT 1 FROM biofloc.lotes l JOIN biofloc.estados_lote el ON el.id=l.estado_id WHERE l.estanque_id=NEW.id AND el.nombre='ACTIVO') THEN RAISE EXCEPTION 'No se puede desactivar un estanque con un lote ACTIVO' USING ERRCODE='check_violation'; END IF;
-    IF nombre_nuevo IN ('MANTENIMIENTO','FUERA_DE_SERVICIO') AND EXISTS (SELECT 1 FROM biofloc.lotes l JOIN biofloc.estados_lote el ON el.id=l.estado_id WHERE l.estanque_id=NEW.id AND el.nombre='ACTIVO') THEN RAISE EXCEPTION 'El estanque no puede pasar a % mientras tenga un lote ACTIVO', nombre_nuevo USING ERRCODE='check_violation'; END IF;
+    IF EXISTS (SELECT 1 FROM biofloc.lotes l JOIN biofloc.estados_lote el ON el.id=l.estado_id WHERE l.estanque_id=NEW.id AND el.nombre='ACTIVO')
+       AND nombre_nuevo <> 'OCUPADO'
+    THEN
+        RAISE EXCEPTION 'Un estanque con lote ACTIVO debe permanecer en estado OCUPADO' USING ERRCODE='check_violation';
+    END IF;
     RETURN NEW;
 END;
 $fn_validar_estado_estanque_operativo$;
@@ -2250,9 +2254,9 @@ BEGIN
             USING ERRCODE='check_violation';
     END IF;
 
-    IF v_estado_estanque IN ('MANTENIMIENTO', 'FUERA_DE_SERVICIO') THEN
+    IF v_estado_estanque <> 'OCUPADO' THEN
         RAISE EXCEPTION
-            'Un lote ACTIVO no puede ocupar un estanque en estado %',
+            'Un lote ACTIVO solo puede ocupar un estanque en estado OCUPADO; estado actual: %',
             v_estado_estanque
             USING ERRCODE='check_violation';
     END IF;
