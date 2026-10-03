@@ -1411,3 +1411,21 @@ $fn_siembra_no_futura$;
 CREATE TRIGGER trg_validar_fecha_siembra_no_futura
 BEFORE INSERT OR UPDATE OF fecha_siembra ON biofloc.lotes
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_siembra_no_futura();
+
+
+-- Integridad: los gastos no pueden estar en el futuro.
+CREATE OR REPLACE FUNCTION biofloc.validar_fecha_gasto_no_futura()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn_gasto_no_futuro$
+BEGIN
+    IF NEW.fecha > (NOW() AT TIME ZONE 'America/Bogota')::date THEN
+        RAISE EXCEPTION 'La fecha del gasto no puede estar en el futuro' USING ERRCODE='check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn_gasto_no_futuro$;
+
+CREATE TRIGGER trg_validar_fecha_gasto_no_futura
+BEFORE INSERT OR UPDATE ON biofloc.gastos
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_gasto_no_futura();
