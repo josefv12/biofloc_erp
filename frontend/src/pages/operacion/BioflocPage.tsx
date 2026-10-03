@@ -490,6 +490,10 @@ export function AplicacionesBioflocPanel({
             if (!fechaHora) return;
             const producto = values.producto_id.trim();
             const cantidad = values.cantidad.trim();
+            if (cantidad !== "" && Number(cantidad) > 0 && producto === "") {
+              setFormError("Seleccione un insumo Biofloc cuando registre una cantidad mayor que 0.");
+              return;
+            }
             mutation.mutate({
               lote_id: Number(values.lote_id),
               tipo_aplicacion_id: Number(values.tipo_aplicacion_id),
@@ -551,6 +555,9 @@ export function AplicacionesBioflocPanel({
           </Field>
           <Field label="Cantidad (opcional)">
             <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
+            <p className="mt-1 text-xs text-[var(--bf-muted)]">
+              Si registra una cantidad mayor que 0, debe seleccionar un insumo.
+            </p>
           </Field>
           <Field label="Unidad (opcional, texto del API)">
             <input className="bf-input" {...form.register("unidad")} />
