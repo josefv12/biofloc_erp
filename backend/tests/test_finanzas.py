@@ -83,3 +83,20 @@ def test_calculo_financiero_rechaza_cantidades_negativas():
             kg_vendidos=Decimal("-1"),
             ventas=Decimal("500000"),
         )
+
+
+def test_calculo_financiero_rechaza_costos_negativos():
+    import pytest
+
+    casos = [
+        {"costo_alimento": Decimal("-1"), "gastos_lote": Decimal("0"), "kg_cosechados": Decimal("100")},
+        {"costo_alimento": Decimal("0"), "gastos_lote": Decimal("-1"), "kg_cosechados": Decimal("100")},
+        {"costo_alimento": Decimal("0"), "gastos_lote": Decimal("0"), "kg_cosechados": Decimal("100"), "ventas": Decimal("-1")},
+    ]
+    for caso in casos:
+        with pytest.raises(Exception):
+            calcular_costos_financieros_lote(
+                kg_vendidos=Decimal("0"),
+                ventas=caso.get("ventas", Decimal("0")),
+                **caso,
+            )
