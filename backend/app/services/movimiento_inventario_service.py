@@ -21,6 +21,7 @@ from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
 from app.models.unidad import Unidad
 from app.models.auditoria import Auditoria
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
+from app.services.validaciones_fecha import validar_no_futuro
 
 
 D2 = Decimal("0.01")
@@ -208,6 +209,7 @@ def crear_movimiento_inventario(
 
     efecto = _tipo_y_efecto(tipo, data.efecto_stock)
     fecha_hora = data.fecha_hora or datetime.now(timezone.utc)
+    validar_no_futuro(fecha_hora, "La fecha del movimiento de inventario")
 
     # Serializa las salidas/ajustes negativos para que stock y costo promedio
     # se calculen sobre el mismo estado histórico, incluso bajo concurrencia.
@@ -242,13 +244,16 @@ def crear_movimiento_inventario(
     datos["fecha_hora"] = fecha_hora
     datos["registrado_por"] = usuario_id
 
-    # Un AJUSTE positivo incorpora existencias y por ello necesita valoración.
-    if tipo.nombre == "AJUSTE" and efecto == 1 and data.costo_unitario is None:
-        raise HTTPException(status_code=422, detail="AJUSTE positivo requiere costo_unitario")
+    # Toda entrada que incremente existencias debe quedar valorada. Sin costo,
+    # el promedio ponderado posterior quedaría artificialmente subvalorado.
+    if efecto == 1 and data.costo_unitario is None:
+        raise HTTPException(status_code=422, detail=f"{tipo.nombre} positivo requiere costo_unitario")
 
-    # Las salidas y ajustes negativos sin valoración explícita toman el costo
-    # promedio del stock existente en el momento del evento y lo congelan.
-    if efecto == -1 and (datos.get("costo_unitario") is None or datos.get("costo_total") is None):
+    # Las salidas y ajustes negativos SIEMPRE toman el costo promedio histórico
+    # del stock existente en el momento del evento. No se acepta una valoración
+    # manual distinta porque el costo de salida debe quedar congelado por la
+    # política de promedio ponderado.
+    if efecto == -1:
         costo_unitario = _costo_promedio_stock_as_of(db, producto.id, fecha_hora)
         if costo_unitario <= 0 and data.cantidad > 0:
             raise HTTPException(status_code=422, detail="No existe costo histórico disponible para valorar la salida")
@@ -256,7 +261,7 @@ def crear_movimiento_inventario(
         datos["costo_unitario"] = costo_unitario
         datos["costo_total"] = (costo_unitario * cantidad).quantize(D2, rounding=ROUND_HALF_UP)
 
-    if tipo.nombre == "AJUSTE" and efecto == 1 and datos.get("costo_total") is None:
+    if tipo.nombre in ("ENTRADA", "AJUSTE") and efecto == 1 and datos.get("costo_total") is None:
         datos["costo_total"] = (
             Decimal(str(data.cantidad)) * Decimal(str(data.costo_unitario))
         ).quantize(D2, rounding=ROUND_HALF_UP)
