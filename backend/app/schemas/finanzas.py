@@ -31,6 +31,7 @@ class DashboardFinanzasOut(BaseModel):
     costo_ventas_estimado: Decimal = MONEY
     utilidad_bruta: Decimal = MONEY
     gastos_operativos: Decimal = MONEY
+    costos_estanque_no_asignados: Decimal = MONEY
     utilidad_neta: Decimal = MONEY
     margen_bruto_pct: Optional[Decimal] = Field(None, max_digits=8, decimal_places=2)
     margen_neto_pct: Optional[Decimal] = Field(None, max_digits=8, decimal_places=2)
