@@ -44,10 +44,18 @@ def obtener_equipo(db: Session, equipo_id: int) -> Equipo:
 
 
 def _validar_fks(db: Session, tipo_equipo_id: Optional[int], estado_id: Optional[int]):
-    if tipo_equipo_id is not None and not db.query(TipoEquipo).filter(TipoEquipo.id == tipo_equipo_id).first():
-        raise HTTPException(status_code=404, detail=f"Tipo de equipo {tipo_equipo_id} no existe")
-    if estado_id is not None and not db.query(EstadoEquipo).filter(EstadoEquipo.id == estado_id).first():
-        raise HTTPException(status_code=404, detail=f"Estado de equipo {estado_id} no existe")
+    if tipo_equipo_id is not None:
+        tipo = db.query(TipoEquipo).filter(TipoEquipo.id == tipo_equipo_id).first()
+        if not tipo:
+            raise HTTPException(status_code=404, detail=f"Tipo de equipo {tipo_equipo_id} no existe")
+        if not tipo.activo:
+            raise HTTPException(status_code=422, detail=f"Tipo de equipo {tipo_equipo_id} está inactivo")
+    if estado_id is not None:
+        estado = db.query(EstadoEquipo).filter(EstadoEquipo.id == estado_id).first()
+        if not estado:
+            raise HTTPException(status_code=404, detail=f"Estado de equipo {estado_id} no existe")
+        if not estado.activo:
+            raise HTTPException(status_code=422, detail=f"Estado de equipo {estado_id} está inactivo")
 
 
 def crear_equipo(db: Session, data: EquipoCreate, usuario_id: int) -> Equipo:
