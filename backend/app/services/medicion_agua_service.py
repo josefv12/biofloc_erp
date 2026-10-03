@@ -19,6 +19,7 @@ from app.models.parametro_agua import ParametroAgua
 from app.models.auditoria import Auditoria
 from app.schemas.medicion_agua import MedicionAguaCreate
 from app.services.poblacion_lote import exigir_lote_en_produccion
+from app.services.validaciones_temporales import validar_evento_lote
 
 
 def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id: int, detalle: dict):
@@ -64,9 +65,7 @@ def crear_medicion_agua(db: Session, data: MedicionAguaCreate, usuario_id: int) 
     if not parametro:
         raise HTTPException(status_code=404, detail=f"Parámetro de agua id={data.parametro_id} no existe")
 
-    # 3. Validar fecha_hora contra fecha_siembra
-    if data.fecha_hora.date() < lote.fecha_siembra:
-        raise HTTPException(status_code=422, detail="La fecha de la medición de agua no puede ser anterior a la siembra del lote")
+    validar_evento_lote(data.fecha_hora, lote.fecha_siembra, "la medición de agua")
 
     # 4. Validar valor >= 0
     if data.valor < 0:
