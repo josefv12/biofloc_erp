@@ -342,3 +342,11 @@ def test_final_schema_cierra_correctamente_los_dollar_quotes_de_funciones():
     assert not re.search(r"END;\n(\$[A-Za-z_][A-Za-z0-9_]*\$)\n", source)
     assert "validar_evento_no_despues_cierre" in source
     assert "trg_validar_cierre_no_anterior_eventos" in source
+
+
+def test_schema_final_tiene_guardias_temporales_financieras_e_inventario():
+    from pathlib import Path
+    source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
+    assert "trg_validar_fecha_compra_no_futura" in source
+    assert "trg_validar_fecha_venta_no_futura" in source
+    assert "trg_validar_fecha_movimiento_no_futura" in source
