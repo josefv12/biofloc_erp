@@ -1103,6 +1103,8 @@ CREATE TRIGGER trg_validar_fecha_alimentacion_futura BEFORE INSERT OR UPDATE ON 
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 CREATE TRIGGER trg_validar_fecha_medicion_biofloc_futura BEFORE INSERT OR UPDATE ON mediciones_biofloc
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
+CREATE TRIGGER trg_validar_fecha_medicion_agua_futura BEFORE INSERT OR UPDATE ON mediciones_agua
+FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 CREATE TRIGGER trg_validar_fecha_aplicacion_biofloc_futura BEFORE INSERT OR UPDATE ON aplicaciones_biofloc
 FOR EACH ROW EXECUTE FUNCTION biofloc.validar_fecha_evento_no_futura();
 
