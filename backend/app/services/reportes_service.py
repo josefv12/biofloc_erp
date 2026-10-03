@@ -168,6 +168,9 @@ def compras(db: Session, fecha_desde=None, fecha_hasta=None,
             proveedor: Optional[str] = None, producto_id: Optional[int] = None,
             registrado_por: Optional[int] = None) -> ReporteComprasOut:
     extra, extra_sql = {}, ""
+    if estanque_id is not None:
+        extra["estanque_id"] = estanque_id
+        extra_sql += " AND g.estanque_id = :estanque_id"
     if proveedor:
         extra["proveedor"] = f"%{proveedor}%"
         extra_sql += " AND c.proveedor ILIKE :proveedor"
@@ -231,7 +234,7 @@ def compras(db: Session, fecha_desde=None, fecha_hasta=None,
 # ── gastos ───────────────────────────────────────────────────────────────────
 def gastos(db: Session, fecha_desde=None, fecha_hasta=None,
            categoria_id: Optional[int] = None, lote_id: Optional[int] = None,
-           proveedor: Optional[str] = None, registrado_por: Optional[int] = None) -> ReporteGastosOut:
+           estanque_id: Optional[int] = None, proveedor: Optional[str] = None, registrado_por: Optional[int] = None) -> ReporteGastosOut:
     extra, extra_sql = {}, ""
     if categoria_id is not None:
         extra["categoria_id"] = categoria_id
@@ -254,10 +257,12 @@ def gastos(db: Session, fecha_desde=None, fecha_hasta=None,
     rows = _rows(db, f"""
         SELECT g.id AS gasto_id, g.fecha, g.categoria_id, cg.nombre AS categoria,
                g.descripcion, g.proveedor, g.valor, g.lote_id, l.codigo AS lote_codigo,
+               g.estanque_id, e.codigo AS estanque_codigo,
                g.registrado_por, u.nombre AS registrado_por_nombre
         FROM gastos g
         JOIN categorias_gasto cg ON cg.id = g.categoria_id
         LEFT JOIN lotes l ON l.id = g.lote_id
+        LEFT JOIN estanques e ON e.id = g.estanque_id
         LEFT JOIN usuarios u ON u.id = g.registrado_por
         WHERE 1=1 {fg} {extra_sql}
         ORDER BY g.fecha DESC, g.id DESC
@@ -268,6 +273,7 @@ def gastos(db: Session, fecha_desde=None, fecha_hasta=None,
             gasto_id=_i(r["gasto_id"]), fecha=r["fecha"], categoria_id=_i(r["categoria_id"]),
             categoria=str(r["categoria"]), descripcion=str(r["descripcion"]), proveedor=r["proveedor"],
             valor=_d2(r["valor"]), lote_id=r["lote_id"], lote_codigo=r["lote_codigo"],
+            estanque_id=r["estanque_id"], estanque_codigo=r["estanque_codigo"],
             registrado_por=_i(r["registrado_por"]), registrado_por_nombre=r["registrado_por_nombre"],
         ) for r in rows
     ]
