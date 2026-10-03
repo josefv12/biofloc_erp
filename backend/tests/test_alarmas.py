@@ -335,6 +335,15 @@ def main():
     ok = r.status_code == 200 and r.json()["estado"]["nombre"] == "CERRADA" and r.json()["atendida_por"] == T["admin_id"]
     log(33, "PUT ATENDIDA→CERRADA conserva atendida_por original", ok, f"status={r.status_code}")
 
+    r = requests.put(f"{BASE}/api/v1/alarmas/{aid}", headers=h(tok_a), json={
+        "estado_alarma_id": T["estado_seed"]["PENDIENTE"],
+    })
+    log(33.1, "PUT CERRADA→PENDIENTE rechazado -> 422", r.status_code == 422, f"status={r.status_code} body={r.text[:200]}")
+
+    r = requests.get(f"{BASE}/api/v1/alarmas/{aid}", headers=h(tok_a))
+    ok = r.status_code == 200 and r.json()["estado"]["nombre"] == "CERRADA"
+    log(33.2, "Alarma cerrada permanece cerrada tras transición inválida", ok)
+
     futuro = datetime.now(timezone.utc) + timedelta(hours=3)
     r = requests.post(f"{BASE}/api/v1/alarmas/", headers=h(tok_a), json={
         "tipo_alarma_id": T["tipo_seed"]["EQUIPO"],
