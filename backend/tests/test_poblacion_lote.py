@@ -136,3 +136,10 @@ def test_schema_final_tiene_guardia_de_siembra_no_futura():
     source = (Path(__file__).parents[2] / "database/biofloc_erp_v1_1_schema_final.sql").read_text(encoding="utf-8")
     assert "trg_validar_fecha_siembra_no_futura" in source
     assert "NOW() AT TIME ZONE 'America/Bogota'" in source
+
+
+def test_listar_lotes_honra_filtro_activos():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/services/lote_service.py").read_text(encoding="utf-8")
+    assert 'if activos:' in source
+    assert 'EstadoLote.nombre == "ACTIVO"' in source
