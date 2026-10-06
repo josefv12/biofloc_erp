@@ -25,6 +25,7 @@ from app.routers import (
     tipos_aplicacion_biofloc,
     mediciones_biofloc,
     aplicaciones_biofloc,
+    acondicionamientos_biofloc_estanque,
     categorias_inventario,
     unidades,
     productos,
@@ -97,6 +98,7 @@ app.include_router(mediciones_agua.router, prefix="/api/v1/mediciones-agua", tag
 app.include_router(tipos_aplicacion_biofloc.router, prefix="/api/v1/tipos-aplicacion-biofloc", tags=["Tipos Aplicación Biofloc"])
 app.include_router(mediciones_biofloc.router, prefix="/api/v1/mediciones-biofloc", tags=["Mediciones Biofloc"])
 app.include_router(aplicaciones_biofloc.router, prefix="/api/v1/aplicaciones-biofloc", tags=["Aplicaciones Biofloc"])
+app.include_router(acondicionamientos_biofloc_estanque.router, prefix="/api/v1/acondicionamientos-biofloc-estanque", tags=["Acondicionamiento Biofloc Estanque"])
 app.include_router(categorias_inventario.router, prefix="/api/v1/categorias-inventario", tags=["Categorías Inventario"])
 app.include_router(unidades.router, prefix="/api/v1/unidades", tags=["Unidades"])
 app.include_router(productos.router, prefix="/api/v1/productos", tags=["Productos"])
