@@ -1,6 +1,6 @@
-from sqlalchemy import BigInteger, Numeric, String, DateTime, Boolean, ForeignKey, Index, CheckConstraint, text
+from sqlalchemy import BigInteger, Numeric, String, DateTime, Date, Boolean, ForeignKey, Index, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from app.core.database import Base
 
@@ -16,7 +16,7 @@ class AcondicionamientoBioflocEstanque(Base):
     tipo_aplicacion_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tipos_aplicacion_biofloc.id"), nullable=False)
     producto_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("productos.id"), nullable=True)
     fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    fecha_siembra_prevista: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
+    fecha_siembra_prevista: Mapped[date] = mapped_column(Date, nullable=False)
     cantidad: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     unidad: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     aireacion_activa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
