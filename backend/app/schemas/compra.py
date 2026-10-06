@@ -17,6 +17,10 @@ class CompraCreate(BaseModel):
     detalles: list[DetalleCompraIn]
 
 
+class CompraUpdate(CompraCreate):
+    pass
+
+
 class DetalleCompraOut(BaseModel):
     id: int
     compra_id: int
