@@ -9,7 +9,7 @@ import { listProductos, listProductosStock, listTiposMovimientoInventario } from
 import { getCompra, updateCompra } from "../../api/purchases";
 import { apiErrorMessage } from "../../utils/apiError";
 import { etiquetaProducto, formatCop, formatDate, formatDateTime, formatNumber } from "../../utils/format";
-import { cantidadDesdePresentacion, cantidadParaPresentacion, precioConUnidad, precioDesdePresentacion, unidadPresentacion } from "../../utils/unidades";
+import { cantidadDesdePresentacion, cantidadParaPresentacion, precioConUnidad, precioDesdePresentacion, precioParaPresentacion, unidadPresentacion } from "../../utils/unidades";
 import { useAuth } from "../../auth/AuthProvider";
 import { can } from "../../utils/rbac";
 import type { CompraCreate } from "../../types/purchases";
@@ -125,6 +125,7 @@ export function CompraDetallePage() {
           ]}
         />
       </section>
+
       <Modal open={editOpen} title={`Editar compra #${compra.id}`} size="lg" onClose={() => setEditOpen(false)}>
         <form className="space-y-4" onSubmit={(event) => {
           event.preventDefault();
@@ -136,13 +137,13 @@ export function CompraDetallePage() {
           const detalles: CompraCreate["detalles"] = compra.detalles.map((detalle) => {
             const cantidadPresentada = Number((form.elements.namedItem(`cantidad_${detalle.id}`) as HTMLInputElement).value);
             const precioPresentado = Number((form.elements.namedItem(`precio_${detalle.id}`) as HTMLInputElement).value);
-            const producto = productos.get(detalle.producto_id);
-            const unidadInterna = producto ? (unidadesQuery.data ?? []).find((u) => u.id === producto.unidad_id) : undefined;
-            const factor = producto?.factor_conversion;
+            const productoStock = stock.get(detalle.producto_id);
+            const simboloInterno = productoStock?.unidad ?? null;
+            const factor = productoStock?.factor_conversion;
             return {
               producto_id: detalle.producto_id,
-              cantidad: cantidadDesdePresentacion(cantidadPresentada, unidadInterna?.simbolo, factor),
-              precio_unitario: precioDesdePresentacion(precioPresentado, unidadInterna?.simbolo, factor),
+              cantidad: cantidadDesdePresentacion(cantidadPresentada, simboloInterno, factor),
+              precio_unitario: precioDesdePresentacion(precioPresentado, simboloInterno, factor),
             };
           });
           if (!fecha || detalles.some((d) => !Number.isFinite(d.cantidad) || d.cantidad <= 0 || !Number.isFinite(d.precio_unitario) || d.precio_unitario < 0)) {
@@ -164,7 +165,7 @@ export function CompraDetallePage() {
               const comercial = productoStock?.unidad_comercial;
               const unidadMostrar = unidadPresentacion(unidad, comercial);
               const cantidadMostrar = cantidadParaPresentacion(detalle.cantidad, unidad, productoStock?.factor_conversion);
-              const precioMostrar = Number(detalle.precio_unitario);
+              const precioMostrar = precioParaPresentacion(detalle.precio_unitario, unidad, productoStock?.factor_conversion);
               return <div key={detalle.id} className="rounded-lg border border-[var(--bf-border)] p-3">
                 <p className="mb-3 text-sm font-medium">{producto ? etiquetaProducto(producto.nombre, producto.codigo) : `#${detalle.producto_id}`}</p>
                 <div className="grid gap-3 sm:grid-cols-2">
