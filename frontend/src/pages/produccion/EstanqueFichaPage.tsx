@@ -100,6 +100,7 @@ export function EstanqueFichaPage() {
 
   const lotes = [...(lotesQuery.data ?? [])].sort((a, b) => b.fecha_siembra.localeCompare(a.fecha_siembra));
   const loteResumen = elegirLote(lotes, loteParam);
+  const hayLoteActivo = lotes.some((lote) => lote.estado.nombre === "ACTIVO");
   const loteQuery = useQuery({
     queryKey: ["lote", loteResumen?.id],
     queryFn: () => getLote(loteResumen!.id),
@@ -345,7 +346,7 @@ export function EstanqueFichaPage() {
           </div>
         ) : null}
 
-        {!loteResumen ? (
+        {!hayLoteActivo ? (
           <AcondicionamientoBioflocEstanquePanel
             estanqueId={estanque.id}
             puedeRegistrar={can(user?.rol, "registrarBiofloc")}
