@@ -59,7 +59,6 @@ import type {
   Producto,
   MedicionAguaCreate,
   MedicionBioflocCreate,
-  AcondicionamientoBioflocEstanque,
   AcondicionamientoBioflocEstanqueCreate,
 } from "../../types/operations";
 import type { AnalisisIndicadores } from "../../types/analisis";
@@ -1388,10 +1387,6 @@ function AcondicionamientoBioflocEstanquePanel({
   );
   const ultimo = query.data?.[0];
   const fechaSiembraPrevista = ultimo?.fecha_siembra_prevista ?? "";
-  const fechaInicioPermitida = fechaSiembraPrevista
-    ? new Date(`${fechaSiembraPrevista}T00:00:00`)
-    : null;
-  if (fechaInicioPermitida) fechaInicioPermitida.setDate(fechaInicioPermitida.getDate() - 7);
   const puedeCrear = puedeRegistrar && Boolean(tiposQuery.data?.length) && Boolean(productosQuery.data);
 
   const form = useForm({
