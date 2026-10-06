@@ -239,3 +239,184 @@ def obtener_movimientos_asociados(db: Session, compra_id: int) -> list[dict]:
             "costo_total": float(m.costo_total) if m.costo_total is not None else None,
         })
     return out
+
+
+def editar_compra(db: Session, compra_id: int, payload: CompraCreate, usuario_id: int) -> Compra:
+    """Edita una compra y sincroniza sus movimientos de entrada.
+
+    Se permite modificar fecha, proveedor, observaciones, cantidades y precios.
+    Para preservar la trazabilidad histórica, la cantidad de líneas y los
+    productos de cada línea deben mantenerse. Los movimientos posteriores de
+    esos productos se revaloran con promedio ponderado móvil.
+    """
+    compra = (
+        db.query(Compra)
+        .options(joinedload(Compra.detalles))
+        .filter(Compra.id == compra_id)
+        .with_for_update()
+        .first()
+    )
+    if not compra:
+        raise HTTPException(status_code=404, detail="Compra no encontrada")
+    if not payload.detalles:
+        raise HTTPException(status_code=422, detail="La compra requiere al menos 1 detalle")
+
+    actuales = sorted(compra.detalles, key=lambda d: d.id)
+    nuevos = list(payload.detalles)
+    if len(actuales) != len(nuevos):
+        raise HTTPException(
+            status_code=422,
+            detail="Para editar una compra existente debes conservar el mismo número de líneas. "
+                   "Si necesitas agregar o quitar productos, registra una nueva compra y corrige la anterior."
+        )
+
+    # Mantener los productos de cada línea evita romper referencias históricas.
+    for idx, (detalle, din) in enumerate(zip(actuales, nuevos), start=1):
+        if int(detalle.producto_id) != int(din.producto_id):
+            raise HTTPException(
+                status_code=422,
+                detail=f"No se puede cambiar el producto de la línea #{idx} de una compra ya registrada. "
+                       "Puedes modificar cantidad y precio."
+            )
+
+    detalles_procesados = []
+    total_calculado = Decimal("0")
+    for idx, (detalle, din) in enumerate(zip(actuales, nuevos), start=1):
+        prod = db.query(Producto).filter(Producto.id == din.producto_id).first()
+        if not prod:
+            raise HTTPException(status_code=404, detail=f"El producto no existe (detalle #{idx})")
+        cantidad = _quant3(din.cantidad)
+        pu = _quant2(din.precio_unitario)
+        if cantidad <= 0:
+            raise HTTPException(status_code=422, detail=f"La cantidad debe ser > 0 (detalle #{idx})")
+        if pu < 0:
+            raise HTTPException(status_code=422, detail=f"El precio unitario debe ser >= 0 (detalle #{idx})")
+        subtotal = _quant2(cantidad * pu)
+        total_calculado += subtotal
+        detalles_procesados.append((detalle, cantidad, pu, subtotal))
+
+    from app.models.movimiento_inventario import MovimientoInventario
+
+    tipo_entrada = _tipo_movimiento_entrada(db)
+    cambios_productos = set()
+    try:
+        # Actualizar compra y detalles primero.
+        compra.fecha = payload.fecha
+        compra.proveedor = payload.proveedor or None
+        compra.observaciones = payload.observaciones or None
+        compra.total = _quant2(total_calculado)
+
+        for detalle, cantidad, pu, subtotal in detalles_procesados:
+            mov = (
+                db.query(MovimientoInventario)
+                .filter(
+                    MovimientoInventario.referencia_tipo == REFERENCIA_TIPO_DETALLE_COMPRA,
+                    MovimientoInventario.referencia_id == detalle.id,
+                )
+                .with_for_update()
+                .first()
+            )
+            if not mov:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"La línea #{detalle.id} no tiene movimiento de inventario asociado; no se puede editar con seguridad."
+                )
+            if int(mov.tipo_movimiento_id) != int(tipo_entrada.id):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"El movimiento asociado a la línea #{detalle.id} no es una entrada de inventario."
+                )
+
+            detalle.cantidad = cantidad
+            detalle.precio_unitario = pu
+            detalle.subtotal = subtotal
+
+            mov.cantidad = cantidad
+            mov.fecha_hora = datetime.combine(payload.fecha, datetime.max.time(), tzinfo=timezone.utc)
+            mov.costo_unitario = pu
+            mov.costo_total = subtotal
+            mov.observaciones = f"Compra #{compra.id} editada"
+            cambios_productos.add(int(detalle.producto_id))
+
+        db.flush()
+
+        # Revalorar todas las salidas posteriores de los productos afectados.
+        # Esto es necesario porque el promedio ponderado puede cambiar al editar
+        # una compra histórica.
+        for producto_id in sorted(cambios_productos):
+            rows = (
+                db.query(MovimientoInventario)
+                .join(TipoMovimientoInventario, TipoMovimientoInventario.id == MovimientoInventario.tipo_movimiento_id)
+                .filter(MovimientoInventario.producto_id == producto_id)
+                .order_by(MovimientoInventario.fecha_hora.asc(), MovimientoInventario.id.asc())
+                .with_for_update()
+                .all()
+            )
+            stock = Decimal("0")
+            valor = Decimal("0")
+            for mov in rows:
+                afecta = int(mov.tipo_movimiento.afecta_stock)
+                cantidad = Decimal(str(mov.cantidad))
+                if afecta == 1:
+                    if mov.costo_unitario is None:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"El producto #{producto_id} tiene una entrada sin costo y no puede revalorarse."
+                        )
+                    stock += cantidad
+                    valor += cantidad * Decimal(str(mov.costo_unitario))
+                elif afecta == -1:
+                    if cantidad > stock:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"La edición de la compra dejaría stock negativo para el producto #{producto_id}. "
+                                   "Corrige la fecha o cantidad de la compra."
+                        )
+                    if stock <= 0:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"No se puede revalorar el producto #{producto_id}: stock inválido antes de una salida."
+                        )
+                    promedio = (valor / stock).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    mov.costo_unitario = promedio
+                    mov.costo_total = _quant2(promedio * cantidad)
+                    valor -= cantidad * promedio
+                    stock -= cantidad
+
+        _registrar_auditoria(
+            db, usuario_id, tabla="compras", accion="UPDATE", registro_id=compra.id,
+            detalle={
+                "fecha": compra.fecha,
+                "proveedor": compra.proveedor,
+                "total": compra.total,
+                "observaciones": compra.observaciones,
+                "cantidad_detalles": len(actuales),
+                "productos_revalorados": sorted(cambios_productos),
+            },
+        )
+        for detalle, cantidad, pu, subtotal in detalles_procesados:
+            _registrar_auditoria(
+                db, usuario_id, tabla="detalles_compra", accion="UPDATE", registro_id=detalle.id,
+                detalle={
+                    "compra_id": detalle.compra_id,
+                    "producto_id": detalle.producto_id,
+                    "cantidad": cantidad,
+                    "precio_unitario": pu,
+                    "subtotal": subtotal,
+                },
+            )
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="No fue posible editar la compra por una regla de integridad.")
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="No fue posible editar la compra por un error interno.")
+
+    db.refresh(compra)
+    _ = compra.detalles
+    return compra
