@@ -22,7 +22,9 @@ import {
   createAplicacionBiofloc,
   createMedicionBiofloc,
   createMedicionAgua,
+  createAcondicionamientoBioflocEstanque,
   listAplicacionesBiofloc,
+  listAcondicionamientosBioflocEstanque,
   listMedicionesBiofloc,
   listParametrosAgua,
   listProductosActivos,
@@ -57,6 +59,8 @@ import type {
   Producto,
   MedicionAguaCreate,
   MedicionBioflocCreate,
+  AcondicionamientoBioflocEstanque,
+  AcondicionamientoBioflocEstanqueCreate,
 } from "../../types/operations";
 import type { AnalisisIndicadores } from "../../types/analisis";
 
@@ -343,9 +347,10 @@ export function EstanqueFichaPage() {
         ) : null}
 
         {!loteResumen ? (
-          <p className="px-6 pb-8 pt-2 text-center text-sm text-[var(--bf-muted)]">
-            Este estanque no tiene lotes. No hay indicadores ni gráficas que mostrar.
-          </p>
+          <AcondicionamientoBioflocEstanquePanel
+            estanqueId={estanque.id}
+            puedeRegistrar={can(user?.rol, "registrarBiofloc")}
+          />
         ) : loteQuery.isLoading && !lote ? (
           <div className="px-6 pb-6">
             <LoadingState label="Cargando lote del estanque…" />
@@ -1340,5 +1345,231 @@ function CosechaModal({
         </div>
       ) : null}
     </Modal>
+  );
+}
+
+function AcondicionamientoBioflocEstanquePanel({
+  estanqueId,
+  puedeRegistrar,
+}: {
+  estanqueId: number;
+  puedeRegistrar: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [stockMsg, setStockMsg] = useState<string | null>(null);
+  const tiposQuery = useQuery({
+    queryKey: ["tipos-aplicacion-biofloc"],
+    queryFn: () => listTiposAplicacionBiofloc(true),
+  });
+  const productosQuery = useQuery({
+    queryKey: ["productos-activos"],
+    queryFn: listProductosActivos,
+  });
+  const query = useQuery({
+    queryKey: ["acondicionamientos-biofloc-estanque", estanqueId],
+    queryFn: () => listAcondicionamientosBioflocEstanque(estanqueId),
+  });
+  const tipos = useMemo(
+    () => new Map((tiposQuery.data ?? []).map((row) => [row.id, row])),
+    [tiposQuery.data],
+  );
+  const productos = useMemo(
+    () => new Map((productosQuery.data ?? []).map((row) => [row.id, row])),
+    [productosQuery.data],
+  );
+  const productosBiofloc = useMemo(
+    () => (productosQuery.data ?? []).filter((row) =>
+      /^BF-/i.test(row.codigo) ||
+      /melaza|probiótico|bicarbonato|sal marina/i.test(row.nombre),
+    ),
+    [productosQuery.data],
+  );
+  const ultimo = query.data?.[0];
+  const fechaSiembraPrevista = ultimo?.fecha_siembra_prevista ?? "";
+  const fechaInicioPermitida = fechaSiembraPrevista
+    ? new Date(`${fechaSiembraPrevista}T00:00:00`)
+    : null;
+  if (fechaInicioPermitida) fechaInicioPermitida.setDate(fechaInicioPermitida.getDate() - 7);
+  const puedeCrear = puedeRegistrar && Boolean(tiposQuery.data?.length) && Boolean(productosQuery.data);
+
+  const form = useForm({
+    defaultValues: {
+      tipo_aplicacion_id: tiposQuery.data?.[0]?.id ?? 0,
+      producto_id: "",
+      fecha_siembra_prevista: "",
+      fecha_hora: toDatetimeLocalValue(),
+      cantidad: "",
+      unidad: "kg",
+      aireacion_activa: true,
+      observaciones: "",
+    },
+  });
+
+  useEffect(() => {
+    if (tiposQuery.data?.length && form.getValues("tipo_aplicacion_id") === 0) {
+      form.setValue("tipo_aplicacion_id", tiposQuery.data[0].id);
+    }
+  }, [tiposQuery.data]);
+
+  const tipoId = form.watch("tipo_aplicacion_id");
+  const tipo = tipos.get(Number(tipoId));
+  const productosFiltrados = useMemo(() => {
+    const nombre = (tipo?.nombre ?? "").toUpperCase();
+    if (nombre.includes("PROBIOTICO")) return productosBiofloc.filter((p) => /probi[oó]tico/i.test(p.nombre) || /PROBIOTICO/i.test(p.codigo));
+    if (nombre.includes("FUENTE_CARBONO")) return productosBiofloc.filter((p) => /melaza/i.test(p.nombre) || /MELAZA/i.test(p.codigo));
+    if (nombre.includes("CORRECTIVO")) return productosBiofloc.filter((p) => /bicarbonato|sal marina/i.test(p.nombre) || /BICARBONATO|SAL-MARINA/i.test(p.codigo));
+    return productosBiofloc;
+  }, [tipo?.nombre, productosBiofloc]);
+
+  const mutation = useMutation({
+    mutationFn: (data: AcondicionamientoBioflocEstanqueCreate) => createAcondicionamientoBioflocEstanque(data),
+    onSuccess: async (resp) => {
+      setOpen(false);
+      if (resp.stock_restante != null) {
+        setStockMsg(`Inventario actualizado: ${resp.stock_restante.toFixed(2)} disponibles`);
+        setTimeout(() => setStockMsg(null), 6000);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["acondicionamientos-biofloc-estanque", estanqueId] });
+      await queryClient.invalidateQueries({ queryKey: ["stock"] });
+      await queryClient.invalidateQueries({ queryKey: ["productos-stock"] });
+      form.reset({
+        tipo_aplicacion_id: tiposQuery.data?.[0]?.id ?? 0,
+        producto_id: "",
+        fecha_siembra_prevista: "",
+        fecha_hora: toDatetimeLocalValue(),
+        cantidad: "",
+        unidad: "kg",
+        aireacion_activa: true,
+        observaciones: "",
+      });
+    },
+    onError: (err) => setFormError(apiErrorMessage(err)),
+  });
+
+  return (
+    <div className="border-t border-[var(--bf-border)] px-6 pb-8 pt-6">
+      <div className="rounded-2xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <FichaLabel>Preparación de siembra</FichaLabel>
+            <h2 className="mt-1 text-2xl font-bold text-[var(--bf-ink)]">Acondicionamiento Biofloc</h2>
+            <p className="mt-1 max-w-3xl text-sm text-[var(--bf-muted)]">
+              Este estanque no tiene lote activo. Aquí se prepara el sistema antes de sembrar los alevinos.
+              El acondicionamiento se registra hasta 7 días antes de la fecha prevista de siembra.
+            </p>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--bf-accent)]">PRE-SIEMBRA</span>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-xs text-[var(--bf-muted)]">Aireación</p>
+            <p className="mt-1 font-semibold">{ultimo?.aireacion_activa ? "ACTIVA" : "No registrada"}</p>
+          </div>
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-xs text-[var(--bf-muted)]">Siembra prevista</p>
+            <p className="mt-1 font-semibold">{fechaSiembraPrevista ? formatDate(fechaSiembraPrevista) : "Defínela al registrar"}</p>
+          </div>
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-xs text-[var(--bf-muted)]">Aplicaciones registradas</p>
+            <p className="mt-1 font-semibold">{query.data?.length ?? 0}</p>
+          </div>
+        </div>
+        {stockMsg ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{stockMsg}</div> : null}
+        <div className="mt-4 flex justify-end">
+          {puedeCrear ? (
+            <button type="button" className="bf-btn-primary" onClick={() => { setFormError(null); setOpen(true); }}>
+              Acondicionar Biofloc
+            </button>
+          ) : null}
+        </div>
+        {query.data?.length ? (
+          <div className="mt-5 overflow-x-auto rounded-xl bg-white">
+            <DataTable
+              rows={query.data}
+              rowKey={(row) => row.id}
+              columns={[
+                { key: "fecha", header: "Fecha", render: (row) => formatDate(row.fecha_hora) },
+                { key: "tipo", header: "Tipo", render: (row) => tipos.get(row.tipo_aplicacion_id)?.nombre ?? `#${row.tipo_aplicacion_id}` },
+                { key: "producto", header: "Insumo", render: (row) => row.producto_id ? (productos.get(row.producto_id)?.nombre ?? `#${row.producto_id}`) : "—" },
+                { key: "cantidad", header: "Cantidad", render: (row) => row.cantidad == null ? "—" : `${formatNumber(row.cantidad, { maximumFractionDigits: 4 })} ${row.unidad ?? ""}` },
+                { key: "aireacion", header: "Aireación", render: (row) => row.aireacion_activa ? "Activa" : "No" },
+              ]}
+              empty="Aún no hay aplicaciones de acondicionamiento."
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <Modal open={open} title="Acondicionar Biofloc — Estanque" onClose={() => setOpen(false)}>
+        <form className="space-y-3" onSubmit={form.handleSubmit((values) => {
+          const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+          if (!fechaHora) return;
+          if (!values.fecha_siembra_prevista) {
+            setFormError("Indique la fecha prevista de siembra.");
+            return;
+          }
+          const cantidad = values.cantidad.trim();
+          const producto = values.producto_id.trim();
+          if (cantidad !== "" && Number(cantidad) > 0 && !producto) {
+            setFormError("Seleccione el insumo cuando registre una cantidad mayor que 0.");
+            return;
+          }
+          mutation.mutate({
+            estanque_id: estanqueId,
+            tipo_aplicacion_id: Number(values.tipo_aplicacion_id),
+            producto_id: producto ? Number(producto) : null,
+            fecha_hora: fechaHora,
+            fecha_siembra_prevista: values.fecha_siembra_prevista,
+            cantidad: cantidad === "" ? null : Number(cantidad),
+            unidad: values.unidad.trim() || null,
+            aireacion_activa: values.aireacion_activa,
+            observaciones: values.observaciones.trim() || null,
+          });
+        })}>
+          {formError ? <ErrorAlert message={formError} /> : null}
+          <Field label="Fecha prevista de siembra">
+            <input type="date" className="bf-input" {...form.register("fecha_siembra_prevista", { required: true })} />
+            <p className="mt-1 text-xs text-[var(--bf-muted)]">El acondicionamiento se permite desde 7 días antes hasta la fecha prevista.</p>
+          </Field>
+          <Field label="Fecha y hora de aplicación">
+            <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
+          </Field>
+          <Field label="Aireación">
+            <label className="flex items-center gap-2 rounded-lg border border-[var(--bf-border)] px-3 py-2">
+              <input type="checkbox" {...form.register("aireacion_activa")} />
+              <span>Aireación activa durante la preparación</span>
+            </label>
+          </Field>
+          <Field label="Tipo de aplicación">
+            <select className="bf-input" {...form.register("tipo_aplicacion_id", { valueAsNumber: true, onChange: () => form.setValue("producto_id", "") })}>
+              {(tiposQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{row.nombre}</option>)}
+            </select>
+          </Field>
+          <Field label="Insumo">
+            <select className="bf-input" disabled={!productosFiltrados.length} {...form.register("producto_id")}>
+              <option value="">{productosFiltrados.length ? "Seleccione un insumo" : "Sin producto requerido"}</option>
+              {productosFiltrados.map((row) => <option key={row.id} value={row.id}>{etiquetaProducto(row.nombre, row.codigo)}</option>)}
+            </select>
+          </Field>
+          <Field label="Cantidad">
+            <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
+          </Field>
+          <Field label="Unidad">
+            <input className="bf-input" {...form.register("unidad")} />
+          </Field>
+          <Field label="Observaciones">
+            <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
+          </Field>
+          <p className="text-xs text-[var(--bf-muted)]">
+            Si la cantidad es mayor que 0, el sistema descuenta automáticamente el insumo del inventario y deja trazabilidad como acondicionamiento del estanque.
+          </p>
+          <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || !puedeCrear}>
+            {mutation.isPending ? "Guardando…" : "Registrar acondicionamiento"}
+          </button>
+        </form>
+      </Modal>
+    </div>
   );
 }
