@@ -100,3 +100,18 @@ export function listProductosActivos(): Promise<Producto[]> {
 export function listUnidades(): Promise<Unidad[]> {
   return apiFetch<Unidad[]>("/api/v1/unidades/");
 }
+
+export function listAcondicionamientosBioflocEstanque(estanqueId: number): Promise<import("../types/operations").AcondicionamientoBioflocEstanque[]> {
+  return apiFetch<import("../types/operations").AcondicionamientoBioflocEstanque[]>(
+    `/api/v1/acondicionamientos-biofloc-estanque/${estanqueId}`,
+  );
+}
+
+export function createAcondicionamientoBioflocEstanque(
+  data: import("../types/operations").AcondicionamientoBioflocEstanqueCreate,
+): Promise<import("../types/operations").AcondicionamientoBioflocEstanque> {
+  return apiFetch<import("../types/operations").AcondicionamientoBioflocEstanque>(
+    "/api/v1/acondicionamientos-biofloc-estanque/",
+    { method: "POST", body: data },
+  );
+}
