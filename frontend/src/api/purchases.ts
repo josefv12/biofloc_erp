@@ -23,3 +23,8 @@ export function getCompra(id: number): Promise<CompraDetalle> {
 export function createCompra(data: CompraCreate): Promise<Compra> {
   return apiFetch<Compra>("/api/v1/compras/", { method: "POST", body: data });
 }
+
+
+export function updateCompra(id: number, data: CompraCreate): Promise<Compra> {
+  return apiFetch<Compra>(`/api/v1/compras/${id}`, { method: "PUT", body: data });
+}
