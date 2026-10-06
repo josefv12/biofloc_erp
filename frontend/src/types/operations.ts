@@ -200,3 +200,31 @@ export type Unidad = {
   simbolo: string;
   activo: boolean;
 };
+
+export type AcondicionamientoBioflocEstanque = {
+  id: number;
+  estanque_id: number;
+  tipo_aplicacion_id: number;
+  producto_id: number | null;
+  fecha_hora: string;
+  fecha_siembra_prevista: string;
+  cantidad: string | number | null;
+  unidad: string | null;
+  aireacion_activa: boolean;
+  observaciones: string | null;
+  registrado_por: number;
+  created_at: string;
+  stock_restante?: number | null;
+};
+
+export type AcondicionamientoBioflocEstanqueCreate = {
+  estanque_id: number;
+  tipo_aplicacion_id: number;
+  producto_id?: number | null;
+  fecha_hora: string;
+  fecha_siembra_prevista: string;
+  cantidad?: number | null;
+  unidad?: string | null;
+  aireacion_activa?: boolean;
+  observaciones?: string | null;
+};
