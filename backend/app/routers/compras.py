@@ -1,7 +1,7 @@
 """
 Router /api/v1/compras
 Registro maestro + detalle inmutable. POST 1-shot / GET lista / GET detalle.
-Sin PUT / PATCH / DELETE.
+PUT para editar una compra registrada; sin DELETE.
 
 RBAC:
   GET / y /{id} : ADMINISTRADOR, TECNICO, OPERARIO
@@ -14,7 +14,7 @@ from datetime import date
 
 from app.core.database import get_db
 from app.models.usuario import Usuario
-from app.schemas.compra import CompraCreate, CompraOut, CompraDetalleOut
+from app.schemas.compra import CompraCreate, CompraUpdate, CompraOut, CompraDetalleOut
 from app.services.auth_service import get_current_user
 from app.services import compra_service as svc
 
@@ -85,3 +85,14 @@ def crear(
 ):
     _require_roles(current_user, db, ROLES_TODOS)
     return svc.crear_compra(db, data, usuario_id=current_user.id)
+
+
+@router.put("/{compra_id}", response_model=CompraOut)
+def editar(
+    compra_id: int,
+    data: CompraUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    _require_roles(current_user, db, ROLES_TODOS)
+    return svc.editar_compra(db, compra_id, data, usuario_id=current_user.id)
