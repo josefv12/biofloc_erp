@@ -1482,18 +1482,32 @@ function AcondicionamientoBioflocEstanquePanel({
         </div>
         {query.data?.length ? (
           <div className="mt-5 overflow-x-auto rounded-xl bg-white">
-            <DataTable
-              rows={query.data}
-              rowKey={(row) => row.id}
-              columns={[
-                { key: "fecha", header: "Fecha", render: (row) => formatDate(row.fecha_hora) },
-                { key: "tipo", header: "Tipo", render: (row) => tipos.get(row.tipo_aplicacion_id)?.nombre ?? `#${row.tipo_aplicacion_id}` },
-                { key: "producto", header: "Insumo", render: (row) => row.producto_id ? (productos.get(row.producto_id)?.nombre ?? `#${row.producto_id}`) : "—" },
-                { key: "cantidad", header: "Cantidad", render: (row) => row.cantidad == null ? "—" : `${formatNumber(row.cantidad, { maximumFractionDigits: 4 })} ${row.unidad ?? ""}` },
-                { key: "aireacion", header: "Aireación", render: (row) => row.aireacion_activa ? "Activa" : "No" },
-              ]}
-              empty="Aún no hay aplicaciones de acondicionamiento."
-            />
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-[var(--bf-border)] text-xs text-[var(--bf-muted)]">
+                  <th className="px-4 py-3 font-semibold">Fecha</th>
+                  <th className="px-4 py-3 font-semibold">Tipo</th>
+                  <th className="px-4 py-3 font-semibold">Insumo</th>
+                  <th className="px-4 py-3 font-semibold">Cantidad</th>
+                  <th className="px-4 py-3 font-semibold">Aireación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(query.data ?? []).map((row) => (
+                  <tr key={row.id} className="border-b border-[var(--bf-border)] last:border-b-0">
+                    <td className="px-4 py-3">{formatDate(row.fecha_hora)}</td>
+                    <td className="px-4 py-3">{tipos.get(row.tipo_aplicacion_id)?.nombre ?? `#${row.tipo_aplicacion_id}`}</td>
+                    <td className="px-4 py-3">{row.producto_id ? (productos.get(row.producto_id)?.nombre ?? `#${row.producto_id}`) : "—"}</td>
+                    <td className="px-4 py-3">
+                      {row.cantidad == null
+                        ? "—"
+                        : `${formatNumber(row.cantidad, { maximumFractionDigits: 4 })} ${row.unidad ?? ""}`}
+                    </td>
+                    <td className="px-4 py-3">{row.aireacion_activa ? "Activa" : "No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : null}
       </div>
