@@ -9,6 +9,8 @@ export type CostosLote = {
   costo_directo_lote: string | number;
   costos_estanque_no_asignados: string | number;
   kg_alimento_suministrado: string | number;
+  peces_sembrados: number;
+  costo_por_pez: string | number | null;
   kg_cosechados: string | number;
   costo_por_kg: string | number | null;
   ventas: string | number;
