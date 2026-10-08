@@ -228,3 +228,22 @@ export type CosechaCreate = {
   peso_promedio_g?: number | null;
   observaciones?: string | null;
 };
+
+export type SiembraLoteCreate = {
+  producto_id: number;
+  cantidad: number;
+  fecha_hora: string;
+  peso_inicial_promedio_g?: number | null;
+  observaciones?: string | null;
+};
+
+export type SiembraLoteOut = {
+  lote_id: number;
+  codigo: string;
+  producto_id: number;
+  cantidad_sembrada: number;
+  costo_unitario: number;
+  costo_total: number;
+  fecha_hora: string;
+  movimiento_inventario_id: number;
+};
