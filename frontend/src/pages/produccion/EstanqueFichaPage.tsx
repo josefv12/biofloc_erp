@@ -60,6 +60,7 @@ import { listCategoriasInventario, listProductos } from "../../api/inventory";
 import { PATH_COMPARACION } from "./fichaPaths";
 import { LoteFichaWorkspace, parseLoteFichaTab, type LoteFichaTabId } from "./LoteFichaPage";
 import type { Lote, LoteCreate, SiembraLoteCreate } from "../../types/production";
+import type { CostosLote } from "../../types/costos";
 import type { BiometriaCreate, CosechaCreate, MortalidadCreate } from "../../types/production";
 import type {
   AlimentacionCreate,
@@ -527,29 +528,79 @@ export function EstanqueFichaPage() {
   );
 }
 
-function CostoLoteCard({ costos, lote }: { costos: import("../../types/costos").CostosLote | undefined; lote: Lote }) {
+function CostoLoteCard({ costos, lote }: { costos: CostosLote | undefined; lote: Lote }) {
+  const [abierto, setAbierto] = useState(false);
+  const detalle = costos?.detalle ?? [];
   return (
-    <div className="mx-6 mb-5 rounded-2xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Costo ejecutado del lote</p>
-          <p className="mt-1 text-2xl font-extrabold text-[var(--bf-ink)]">$ {nd(costos?.costo_directo_lote, 2)}</p>
-          <p className="mt-1 text-xs text-gray-500">
-            Solo consumos y aplicaciones asignados a este ciclo. Las compras de inventario permanecen en inventario.
-          </p>
+    <div className="mx-6 mb-5 overflow-hidden rounded-2xl border border-[var(--bf-border)] bg-[var(--bf-chip)]">
+      <div className="p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Costo ejecutado del lote</p>
+            <p className="mt-1 text-2xl font-extrabold text-[var(--bf-ink)]">$ {nd(costos?.costo_directo_lote, 2)}</p>
+            <p className="mt-1 text-xs text-gray-500">Solo consumos y aplicaciones asignados a este ciclo. Las compras permanecen en inventario.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
+            <div><span className="text-gray-500">Alevinos</span><div className="font-semibold">$ {nd(costos?.alevinos, 2)}</div></div>
+            <div><span className="text-gray-500">Alimento</span><div className="font-semibold">$ {nd(costos?.alimento, 2)}</div></div>
+            <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(costos?.biofloc_insumos, 2)}</div></div>
+            <div><span className="text-gray-500">Costo/pez</span><div className="font-semibold">{costos?.costo_por_pez == null ? "N/D" : "$ " + nd(costos.costo_por_pez, 2)}</div></div>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
-          <div><span className="text-gray-500">Alevinos</span><div className="font-semibold">$ {nd(costos?.alevinos, 2)}</div></div>
-          <div><span className="text-gray-500">Alimento</span><div className="font-semibold">$ {nd(costos?.alimento, 2)}</div></div>
-          <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(costos?.biofloc_insumos, 2)}</div></div>
-          <div><span className="text-gray-500">Costo/pez</span><div className="font-semibold">{costos?.costo_por_pez == null ? "N/D" : "$ " + nd(costos.costo_por_pez, 2)}</div></div>
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--bf-border)] pt-3">
+          <p className="text-xs text-[var(--bf-muted)]">
+            {lote.estado.nombre === "PLANIFICADO" ? "Costo acumulado de la preparación. Los alevinos se cargarán al registrar la siembra real." : "Costo acumulado del ciclo productivo."}
+          </p>
+          <button type="button" className="bf-btn-secondary whitespace-nowrap !py-1.5 text-xs" onClick={() => setAbierto((v) => !v)}>
+            {abierto ? "Ocultar detalle" : "Ver detalle"}
+          </button>
         </div>
       </div>
-      <p className="mt-3 text-xs text-[var(--bf-muted)]">
-        {lote.estado.nombre === "PLANIFICADO"
-          ? "Costo acumulado de la preparación del ciclo. Los alevinos se cargarán cuando se registre la siembra real."
-          : "Costo acumulado del ciclo productivo."}
-      </p>
+      {abierto ? (
+        <div className="border-t border-[var(--bf-border)] bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-[var(--bf-ink)]">Detalle de costos</p>
+              <p className="text-xs text-[var(--bf-muted)]">Cada línea corresponde a un consumo real asignado al lote.</p>
+            </div>
+            <span className="rounded-full bg-[var(--bf-chip)] px-3 py-1 text-xs font-semibold text-[var(--bf-accent)]">{detalle.length} movimientos</span>
+          </div>
+          {detalle.length ? (
+            <div className="overflow-x-auto rounded-xl border border-[var(--bf-border)]">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--bf-border)] bg-[var(--bf-chip)] text-xs text-[var(--bf-muted)]">
+                    <th className="px-3 py-2 font-semibold">Fecha</th>
+                    <th className="px-3 py-2 font-semibold">Categoría</th>
+                    <th className="px-3 py-2 font-semibold">Concepto</th>
+                    <th className="px-3 py-2 font-semibold">Cantidad</th>
+                    <th className="px-3 py-2 text-right font-semibold">Costo unit.</th>
+                    <th className="px-3 py-2 text-right font-semibold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detalle.map((item, index) => (
+                    <tr key={item.referencia_tipo + "-" + (item.referencia_id ?? index) + "-" + index} className="border-b border-[var(--bf-border)] last:border-b-0">
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDate(item.fecha)}</td>
+                      <td className="px-3 py-2">{item.categoria}</td>
+                      <td className="px-3 py-2 font-medium">{item.concepto}</td>
+                      <td className="px-3 py-2">{item.cantidad == null ? "—" : nd(item.cantidad, 3) + " " + (item.unidad ?? "")}</td>
+                      <td className="px-3 py-2 text-right">{item.costo_unitario == null ? "—" : "$ " + nd(item.costo_unitario, 2)}</td>
+                      <td className="px-3 py-2 text-right font-semibold">$ {nd(item.costo_total, 2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[var(--bf-chip)]">
+                    <td colSpan={5} className="px-3 py-2 text-right font-bold">TOTAL EJECUTADO</td>
+                    <td className="px-3 py-2 text-right font-bold">$ {nd(costos?.costo_directo_lote, 2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : <p className="text-sm text-[var(--bf-muted)]">Aún no hay movimientos de costo para este lote.</p>}
+        </div>
+      ) : null}
     </div>
   );
 }
