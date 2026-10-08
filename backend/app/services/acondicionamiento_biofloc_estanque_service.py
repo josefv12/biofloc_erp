@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.models.acondicionamiento_biofloc_estanque import AcondicionamientoBioflocEstanque
-from app.models.estanque import Estanque
 from app.models.lote import Lote
 from app.models.producto import Producto
 from app.models.categoria_inventario import CategoriaInventario
@@ -18,55 +17,45 @@ from app.services.validaciones_temporales import validar_evento_no_futuro
 
 DIAS_ACONDICIONAMIENTO_BIOFLOC = 7
 
-def _rol_tipo(db: Session, tipo: TipoAplicacionBiofloc) -> str:
+def _rol_tipo(tipo: TipoAplicacionBiofloc) -> str:
     return tipo.nombre.strip().upper()
 
-def _validar_fecha(data: AcondicionamientoBioflocEstanqueCreate) -> None:
+def _validar_fecha(data: AcondicionamientoBioflocEstanqueCreate, lote: Lote) -> None:
     fecha_evento = data.fecha_hora.date()
-    fecha_minima = data.fecha_siembra_prevista - timedelta(days=DIAS_ACONDICIONAMIENTO_BIOFLOC)
+    fecha_minima = lote.fecha_siembra - timedelta(days=DIAS_ACONDICIONAMIENTO_BIOFLOC)
     if fecha_evento < fecha_minima:
         raise HTTPException(
             status_code=422,
             detail=f"La aplicación no puede ser anterior a 7 días de la siembra prevista. Fecha mínima: {fecha_minima.isoformat()}."
         )
-    if fecha_evento > data.fecha_siembra_prevista:
-        raise HTTPException(
-            status_code=422,
-            detail="La preparación Biofloc debe ocurrir antes o hasta la fecha prevista de siembra."
-        )
+    if fecha_evento > lote.fecha_siembra:
+        raise HTTPException(status_code=422, detail="La preparación Biofloc debe ocurrir antes o hasta la fecha prevista de siembra.")
     validar_evento_no_futuro(data.fecha_hora, "la aplicación de acondicionamiento Biofloc")
 
-def listar(db: Session, estanque_id: int) -> list[AcondicionamientoBioflocEstanque]:
+def listar_por_lote(db: Session, lote_id: int) -> list[AcondicionamientoBioflocEstanque]:
     return (
         db.query(AcondicionamientoBioflocEstanque)
-        .filter(AcondicionamientoBioflocEstanque.estanque_id == estanque_id)
+        .filter(AcondicionamientoBioflocEstanque.lote_id == lote_id)
         .order_by(AcondicionamientoBioflocEstanque.fecha_hora.desc(), AcondicionamientoBioflocEstanque.id.desc())
         .all()
     )
 
 def crear(db: Session, data: AcondicionamientoBioflocEstanqueCreate, usuario_id: int) -> AcondicionamientoBioflocEstanque:
-    estanque = db.query(Estanque).filter(Estanque.id == data.estanque_id).first()
-    if not estanque:
-        raise HTTPException(status_code=404, detail="Estanque no encontrado")
+    lote = db.query(Lote).filter(Lote.id == data.lote_id).first()
+    if not lote:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
 
-    lote_activo = (
-        db.query(Lote)
-        .filter(Lote.estanque_id == data.estanque_id)
-        .join(Lote.estado)
-        .filter_by(nombre="ACTIVO")
-        .first()
-    )
-    if lote_activo:
+    if lote.estado.nombre != "PLANIFICADO":
         raise HTTPException(
             status_code=422,
-            detail="El estanque ya tiene un lote ACTIVO. Las aplicaciones posteriores a la siembra deben registrarse en Biofloc del lote."
+            detail="El acondicionamiento previo a la siembra solo puede registrarse en un lote PLANIFICADO."
         )
+
+    _validar_fecha(data, lote)
 
     tipo = db.query(TipoAplicacionBiofloc).filter(TipoAplicacionBiofloc.id == data.tipo_aplicacion_id).first()
     if not tipo:
         raise HTTPException(status_code=404, detail="Tipo de aplicación Biofloc no encontrado")
-
-    _validar_fecha(data)
 
     producto = None
     if data.producto_id is not None:
@@ -78,8 +67,8 @@ def crear(db: Session, data: AcondicionamientoBioflocEstanqueCreate, usuario_id:
             "FUENTE_CARBONO": "FUENTE_CARBONO",
             "PROBIOTICO": "PROBIOTICO",
             "CORRECTIVO": "CORRECTIVO",
-        }.get(_rol_tipo(db, tipo))
-        if _rol_tipo(db, tipo) == "PURGA":
+        }.get(_rol_tipo(tipo))
+        if _rol_tipo(tipo) == "PURGA":
             raise HTTPException(status_code=422, detail="Una PURGA no debe consumir un producto de inventario")
         if esperado and (not categoria or categoria.nombre != esperado):
             raise HTTPException(status_code=422, detail=f"El producto no corresponde al tipo {tipo.nombre}")
@@ -87,7 +76,19 @@ def crear(db: Session, data: AcondicionamientoBioflocEstanqueCreate, usuario_id:
     generar_salida = data.producto_id is not None and data.cantidad is not None and data.cantidad > 0
     salida_id = _obtener_tipo_salida_id(db) if generar_salida else None
 
-    nuevo = AcondicionamientoBioflocEstanque(**data.model_dump(), registrado_por=usuario_id)
+    nuevo = AcondicionamientoBioflocEstanque(
+        lote_id=lote.id,
+        estanque_id=lote.estanque_id,
+        tipo_aplicacion_id=data.tipo_aplicacion_id,
+        producto_id=data.producto_id,
+        fecha_hora=data.fecha_hora,
+        fecha_siembra_prevista=lote.fecha_siembra,
+        cantidad=data.cantidad,
+        unidad=data.unidad,
+        aireacion_activa=data.aireacion_activa,
+        observaciones=data.observaciones,
+        registrado_por=usuario_id,
+    )
     db.add(nuevo)
     try:
         db.flush()
@@ -103,7 +104,7 @@ def crear(db: Session, data: AcondicionamientoBioflocEstanqueCreate, usuario_id:
             fecha_hora=data.fecha_hora,
             referencia_tipo="ACONDICIONAMIENTO_BIOFLOC",
             referencia_id=nuevo.id,
-            observaciones=f"Acondicionamiento Biofloc - Estanque {estanque.codigo}",
+            observaciones=f"Acondicionamiento Biofloc - Lote {lote.codigo} - Estanque {lote.estanque.codigo}",
         )
         try:
             crear_movimiento_inventario(db, mov, usuario_id, flush_only=True)
@@ -117,11 +118,12 @@ def crear(db: Session, data: AcondicionamientoBioflocEstanqueCreate, usuario_id:
         registro_id=nuevo.id,
         accion="INSERT",
         detalle={
-            "estanque_id": data.estanque_id,
+            "lote_id": lote.id,
+            "estanque_id": lote.estanque_id,
             "tipo_aplicacion_id": data.tipo_aplicacion_id,
             "producto_id": data.producto_id,
             "cantidad": float(data.cantidad) if data.cantidad is not None else None,
-            "fecha_siembra_prevista": data.fecha_siembra_prevista.isoformat(),
+            "fecha_siembra_prevista": lote.fecha_siembra.isoformat(),
             "aireacion_activa": data.aireacion_activa,
             "inventario": generar_salida,
         },
