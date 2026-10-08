@@ -1437,7 +1437,6 @@ function AcondicionamientoBioflocEstanquePanel({
     ),
     [productosQuery.data],
   );
-  const ultimo = query.data?.[0];
   const puedeCrear = puedeRegistrar && Boolean(tiposQuery.data?.length) && Boolean(productosQuery.data);
 
   const form = useForm({
