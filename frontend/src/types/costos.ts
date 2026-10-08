@@ -4,6 +4,7 @@ export type CostosLote = {
   estanque_id: number;
   alevinos: string | number;
   alimento: string | number;
+  biofloc_insumos: string | number;
   otros_costos_directos: string | number;
   costo_directo_lote: string | number;
   costos_estanque_no_asignados: string | number;
