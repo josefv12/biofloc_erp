@@ -15,7 +15,7 @@ def _d(value, quant):
 
 def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
     lote = db.execute(text("""
-        SELECT id, codigo, estanque_id
+        SELECT id, codigo, estanque_id, cantidad_sembrada
         FROM biofloc.lotes
         WHERE id = :id
     """), {"id": lote_id}).mappings().first()
@@ -122,6 +122,8 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
     kg_cosechados = _d(row["kg_cosechados"], D3)
     kg_vendidos = _d(row["kg_vendidos"], D3)
     costo_por_kg = (directo / kg_cosechados).quantize(D2, rounding=ROUND_HALF_UP) if kg_cosechados > 0 else None
+    peces_sembrados = int(lote["cantidad_sembrada"] or 0)
+    costo_por_pez = (directo / Decimal(peces_sembrados)).quantize(D2, rounding=ROUND_HALF_UP) if peces_sembrados > 0 else None
     costo_ventas = (kg_vendidos * costo_por_kg).quantize(D2, rounding=ROUND_HALF_UP) if costo_por_kg is not None else Decimal("0.00")
     ventas = _d(row["ventas"], D2)
     utilidad = (ventas - costo_ventas).quantize(D2, rounding=ROUND_HALF_UP) if costo_por_kg is not None else None
@@ -133,6 +135,7 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
         costo_directo_lote=directo,
         costos_estanque_no_asignados=_d(row["costos_estanque"], D2),
         kg_alimento_suministrado=_d(row["alimento_suministrado"], D3),
+        peces_sembrados=peces_sembrados, costo_por_pez=costo_por_pez,
         kg_cosechados=kg_cosechados, costo_por_kg=costo_por_kg,
         ventas=ventas, kg_vendidos=kg_vendidos, costo_ventas_estimado=costo_ventas,
         utilidad_bruta_estimada=utilidad, margen_bruto_estimado_pct=margen,
