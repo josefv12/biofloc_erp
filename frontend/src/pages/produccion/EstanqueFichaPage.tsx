@@ -13,9 +13,13 @@ import {
   createBiometria,
   createCosecha,
   createMortalidad,
+  createLote,
   getEstanque,
   getLote,
   listLotes,
+  listEspecies,
+  listEtapasProductivas,
+  listEstadosLote,
 } from "../../api/production";
 import {
   createAlimentacion,
@@ -51,7 +55,7 @@ import {
 import { can } from "../../utils/rbac";
 import { PATH_COMPARACION } from "./fichaPaths";
 import { LoteFichaWorkspace, parseLoteFichaTab, type LoteFichaTabId } from "./LoteFichaPage";
-import type { Lote } from "../../types/production";
+import type { Lote, LoteCreate } from "../../types/production";
 import type { BiometriaCreate, CosechaCreate, MortalidadCreate } from "../../types/production";
 import type {
   AlimentacionCreate,
@@ -100,7 +104,9 @@ export function EstanqueFichaPage() {
 
   const lotes = [...(lotesQuery.data ?? [])].sort((a, b) => b.fecha_siembra.localeCompare(a.fecha_siembra));
   const loteResumen = elegirLote(lotes, loteParam);
-  const hayLoteActivo = lotes.some((lote) => lote.estado.nombre === "ACTIVO");
+  const loteActivo = lotes.find((item) => item.estado.nombre === "ACTIVO");
+  const lotePreparacion = lotes.find((item) => item.estado.nombre === "PLANIFICADO");
+  const hayLoteActivo = Boolean(loteActivo);
   const loteQuery = useQuery({
     queryKey: ["lote", loteResumen?.id],
     queryFn: () => getLote(loteResumen!.id),
@@ -110,7 +116,7 @@ export function EstanqueFichaPage() {
   const analisisQuery = useQuery({
     queryKey: ["analisis-lote", lote?.id, "", ""],
     queryFn: () => getAnalisisLote(lote!.id),
-    enabled: Boolean(lote?.id),
+    enabled: Boolean(lote?.id && lote?.estado.nombre !== "PLANIFICADO"),
   });
   const analisis = analisisQuery.data;
   const ind = analisis?.indicadores;
@@ -122,7 +128,7 @@ export function EstanqueFichaPage() {
 
   const pesoInicialPreferidoG = ind?.peso_inicial_g ?? lote?.peso_inicial_promedio_g ?? null;
 
-  type ModalAccion = "alimentar" | "biometria" | "mortalidad" | "agua" | "biofloc" | "cosechar" | "aguaEstanque" | "bioflocEstanque";
+  type ModalAccion = "alimentar" | "biometria" | "mortalidad" | "agua" | "biofloc" | "cosechar" | ;
   const [modalAccion, setModalAccion] = useState<ModalAccion | null>(null);
 
   async function refrescarPostOperacion() {
@@ -148,12 +154,6 @@ export function EstanqueFichaPage() {
     // En caso de cosecha: lote/estanques pueden cambiar de estado
     await queryClient.invalidateQueries({ queryKey: ["lotes", estanqueId] });
     await queryClient.invalidateQueries({ queryKey: ["lote", lote.id] });
-    await queryClient.invalidateQueries({ queryKey: ["estanque", estanqueId] });
-  }
-
-  async function refrescarMedicionesEstanque() {
-    await queryClient.invalidateQueries({ queryKey: ["mediciones-biofloc-estanque", estanqueId] });
-    await queryClient.invalidateQueries({ queryKey: ["mediciones-agua-estanque", estanqueId] });
     await queryClient.invalidateQueries({ queryKey: ["estanque", estanqueId] });
   }
 
@@ -201,7 +201,7 @@ export function EstanqueFichaPage() {
       : "Inactivo";
   const estadoTone =
     lote?.estado.nombre === "ACTIVO" || (estanque.activo && !lote) ? "ok" : "neutral";
-  const proyeccion = lote && ind
+  const proyeccion = lote && lote.estado.nombre !== "PLANIFICADO" && ind
     ? proyectarCosecha({
         fechaSiembra: lote.fecha_siembra,
         diasCultivo: ind.dias_cultivo,
@@ -209,7 +209,7 @@ export function EstanqueFichaPage() {
         gananciaDiariaG: num(ind.ganancia_diaria_g),
         poblacion: ind.poblacion_estimada,
       })
-    : lote
+    : lote && lote.estado.nombre !== "PLANIFICADO"
       ? proyectarCosecha({
           fechaSiembra: lote.fecha_siembra,
           diasCultivo: 0,
@@ -353,14 +353,25 @@ export function EstanqueFichaPage() {
         ) : null}
 
         {!hayLoteActivo ? (
-          <AcondicionamientoBioflocEstanquePanel
-            estanqueId={estanque.id}
-            puedeRegistrar={can(user?.rol, "registrarBiofloc")}
-            puedeMedirAgua={can(user?.rol, "registrarAgua")}
-            puedeMedirBiofloc={can(user?.rol, "registrarBiofloc")}
-            onMeasureWater={() => setModalAccion("aguaEstanque")}
-            onMeasureBiofloc={() => setModalAccion("bioflocEstanque")}
-          />
+          lotePreparacion ? (
+            <AcondicionamientoBioflocEstanquePanel
+              loteId={lotePreparacion.id}
+              puedeRegistrar={can(user?.rol, "registrarBiofloc")}
+              puedeMedirAgua={can(user?.rol, "registrarAgua")}
+              puedeMedirBiofloc={can(user?.rol, "registrarBiofloc")}
+              onMeasureWater={() => setModalAccion("agua")}
+              onMeasureBiofloc={() => setModalAccion("biofloc")}
+            />
+          ) : (
+            <CrearCicloPreparacionPanel
+              estanque={estanque}
+              puedeRegistrar={can(user?.rol, "crearLote")}
+              onCreated={(nuevoLote) => {
+                queryClient.invalidateQueries({ queryKey: ["lotes", estanqueId] });
+                setLote(nuevoLote.id);
+              }}
+            />
+          )
         ) : loteQuery.isLoading && !lote ? (
           <div className="px-6 pb-6">
             <LoadingState label="Cargando lote del estanque…" />
@@ -449,29 +460,6 @@ export function EstanqueFichaPage() {
           </div>
         ) : null}
 
-        {modalAccion === "aguaEstanque" ? (
-          <AguaModal
-            estanqueId={estanque.id}
-            open
-            onClose={() => setModalAccion(null)}
-            onSaved={async () => {
-              await refrescarMedicionesEstanque();
-              setModalAccion(null);
-            }}
-          />
-        ) : null}
-
-        {modalAccion === "bioflocEstanque" ? (
-          <BioflocModal
-            estanqueId={estanque.id}
-            open
-            onClose={() => setModalAccion(null)}
-            onSaved={async () => {
-              await refrescarMedicionesEstanque();
-              setModalAccion(null);
-            }}
-          />
-        ) : null}
       </div>
     </div>
   );
