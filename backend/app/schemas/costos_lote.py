@@ -8,6 +8,7 @@ class CostosLoteOut(BaseModel):
     estanque_id: int
     alevinos: Decimal = Field(..., max_digits=18, decimal_places=2)
     alimento: Decimal = Field(..., max_digits=18, decimal_places=2)
+    biofloc_insumos: Decimal = Field(..., max_digits=18, decimal_places=2)
     otros_costos_directos: Decimal = Field(..., max_digits=18, decimal_places=2)
     costo_directo_lote: Decimal = Field(..., max_digits=18, decimal_places=2)
     costos_estanque_no_asignados: Decimal = Field(..., max_digits=18, decimal_places=2)
