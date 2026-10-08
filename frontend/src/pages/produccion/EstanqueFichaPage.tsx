@@ -946,7 +946,7 @@ function BioflocModal({
     const tipo = (tipoAplicacion?.nombre ?? "").toUpperCase();
     const patrones: RegExp[] = tipo.includes("PROBIOTICO") ? [/probi[oó]tico/i]
       : tipo.includes("FUENTE_CARBONO") ? [/melaza/i]
-      : tipo.includes("CORRECTIVO") ? [/sal\\s*marina/i, /bicarbonato/i] : [];
+      : tipo.includes("CORRECTIVO") ? [/sal\s*marina/i, /bicarbonato/i] : [];
     return productos.filter((row) => patrones.some((patron) => patron.test(row.nombre) || patron.test(row.codigo)));
   }, [productos, tipoAplicacion?.nombre]);
 
