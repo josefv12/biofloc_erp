@@ -52,9 +52,7 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
                 WHERE mi.referencia_tipo = 'SIEMBRA'
                   AND mi.referencia_id = :lote_id
                   AND mi.costo_total IS NOT NULL
-            ), 0)
-            +
-            COALESCE((
+            ), (
                 SELECT SUM(g.valor)
                 FROM biofloc.gastos g
                 JOIN biofloc.categorias_gasto cg ON cg.id = g.categoria_id
