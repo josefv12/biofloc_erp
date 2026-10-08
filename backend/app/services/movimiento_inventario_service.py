@@ -63,6 +63,11 @@ def _validar_referencia(db: Session, referencia_tipo: str | None, referencia_id:
         alim = db.query(Alimentacion).filter(Alimentacion.id == referencia_id).first()
         if not alim:
             raise HTTPException(status_code=404, detail=f"Alimentación id={referencia_id} no existe para la trazabilidad")
+    elif referencia_tipo == "SIEMBRA":
+        from app.models.lote import Lote
+        lote = db.query(Lote).filter(Lote.id == referencia_id).first()
+        if not lote:
+            raise HTTPException(status_code=404, detail=f"Lote id={referencia_id} no existe para la trazabilidad de la siembra")
 
 
 def _obtener_tipo_salida_id(db: Session) -> int:
