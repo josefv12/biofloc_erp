@@ -1065,7 +1065,6 @@ function BioflocModal({
                 ))}
               </div>
             </div>
-          </div>
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">Mediciones recientes</h3>
             {medicionesQuery.isLoading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Cargando…</p> : null}
