@@ -14,6 +14,8 @@ import type {
   ReferenciaBiofloc,
   TipoAplicacionBiofloc,
   Unidad,
+  AcondicionamientoBioflocEstanque,
+  AcondicionamientoBioflocEstanqueCreate,
 } from "../types/operations";
 
 export function listParametrosAgua(soloActivos = true): Promise<ParametroAgua[]> {
@@ -103,16 +105,17 @@ export function listUnidades(): Promise<Unidad[]> {
   return apiFetch<Unidad[]>("/api/v1/unidades/");
 }
 
-export function listAcondicionamientosBioflocEstanque(loteId: number): Promise<import("../types/operations").AcondicionamientoBioflocEstanque[]> {
-  return apiFetch<import("../types/operations").AcondicionamientoBioflocEstanque[]>(
+// Pond conditioning is lot-scoped. The backend route is /lote/{loteId}.
+export function listAcondicionamientosBioflocEstanque(loteId: number): Promise<AcondicionamientoBioflocEstanque[]> {
+  return apiFetch<AcondicionamientoBioflocEstanque[]>(
     `/api/v1/acondicionamientos-biofloc-estanque/lote/${loteId}`,
   );
 }
 
 export function createAcondicionamientoBioflocEstanque(
-  data: import("../types/operations").AcondicionamientoBioflocEstanqueCreate,
-): Promise<import("../types/operations").AcondicionamientoBioflocEstanque> {
-  return apiFetch<import("../types/operations").AcondicionamientoBioflocEstanque>(
+  data: AcondicionamientoBioflocEstanqueCreate,
+): Promise<AcondicionamientoBioflocEstanque> {
+  return apiFetch<AcondicionamientoBioflocEstanque>(
     "/api/v1/acondicionamientos-biofloc-estanque/",
     { method: "POST", body: data },
   );
