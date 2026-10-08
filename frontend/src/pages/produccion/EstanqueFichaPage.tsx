@@ -435,7 +435,7 @@ export function EstanqueFichaPage() {
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
                   <div><span className="text-gray-500">Alevinos</span><div className="font-semibold">$ {nd(costosQuery.data?.alevinos, 2)}</div></div>
                   <div><span className="text-gray-500">Alimento</span><div className="font-semibold">$ {nd(costosQuery.data?.alimento, 2)}</div></div>
-                  <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(Math.max(0, Number(costosQuery.data?.otros_costos_directos ?? 0) - Number(costosQuery.data?.alimento ?? 0)), 2)}</div></div>
+                  <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(Math.max(0, Number(costosQuery.data?.biofloc_insumos ?? 0)), 2)}</div></div>
                   <div><span className="text-gray-500">Costo/kg</span><div className="font-semibold">{costosQuery.data?.costo_por_kg == null ? "N/D" : "$ " + nd(costosQuery.data.costo_por_kg, 2)}</div></div>
                 </div>
               </div>
