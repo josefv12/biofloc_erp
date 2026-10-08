@@ -34,12 +34,14 @@ import {
   listMedicionesBiofloc,
   listMedicionesAgua,
   listParametrosAgua,
+  listReferenciasAgua,
   listProductosActivos,
   listTiposAplicacionBiofloc,
   listUnidades,
 } from "../../api/operations";
 import { apiErrorMessage } from "../../utils/apiError";
 import { ChevronLeft } from "lucide-react";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { FichaBadge, FichaLabel, FichaMetric } from "../../components/ficha/FichaMetric";
 import {
   etiquetaProducto,
@@ -1633,6 +1635,19 @@ function AcondicionamientoBioflocEstanquePanel({
     () => new Map((parametrosAguaQuery.data ?? []).map((row) => [row.id, row])),
     [parametrosAguaQuery.data],
   );
+  const referenciasAguaQuery = useQuery({
+    queryKey: ["referencias-agua-lote", lote?.especie_id, lote?.etapa_productiva_id],
+    queryFn: () => listReferenciasAgua({
+      especie_id: lote!.especie_id,
+      etapa_productiva_id: lote!.etapa_productiva_id,
+      solo_activos: true,
+    }),
+    enabled: Boolean(lote?.especie_id && lote?.etapa_productiva_id),
+  });
+  const referenciasAgua = useMemo(
+    () => new Map((referenciasAguaQuery.data ?? []).map((row) => [row.parametro_id, row])),
+    [referenciasAguaQuery.data],
+  );
   const tipos = useMemo(
     () => new Map((tiposQuery.data ?? []).map((row) => [row.id, row])),
     [tiposQuery.data],
@@ -1782,6 +1797,89 @@ function AcondicionamientoBioflocEstanquePanel({
           ) : (
             <p className="mt-3 text-sm text-[var(--bf-muted)]">Aún no hay mediciones de calidad de agua para este lote.</p>
           )}
+
+          {medicionesAguaQuery.data?.length ? (
+            <div className="mt-5 border-t border-[var(--bf-border)] pt-5">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-[var(--bf-ink)]">Evolución y comparación con referencia</p>
+                <p className="text-xs text-[var(--bf-muted)]">
+                  La línea representa las mediciones reales. Las líneas de referencia muestran el mínimo y máximo configurados para la especie y etapa del lote.
+                </p>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {Array.from(
+                  new Set((medicionesAguaQuery.data ?? []).map((m) => m.parametro_id)),
+                ).map((parametroId) => {
+                  const parametro = parametrosAgua.get(parametroId);
+                  const referencia = referenciasAgua.get(parametroId);
+                  const datos = (medicionesAguaQuery.data ?? [])
+                    .filter((m) => m.parametro_id === parametroId)
+                    .slice()
+                    .sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora))
+                    .map((m) => ({
+                      fecha: formatDate(m.fecha_hora),
+                      valor: Number(m.valor),
+                    }));
+                  if (!parametro || !datos.length) return null;
+                  return (
+                    <div key={parametroId} className="rounded-xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-3">
+                      <div className="mb-2 flex items-baseline justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--bf-ink)]">{parametro.nombre}</p>
+                          <p className="text-xs text-[var(--bf-muted)]">{parametro.unidad}</p>
+                        </div>
+                        <span className="text-xs text-[var(--bf-muted)]">
+                          {referencia?.valor_minimo != null && referencia?.valor_maximo != null
+                            ? `Referencia: ${nd(referencia.valor_minimo, 2)} – ${nd(referencia.valor_maximo, 2)}`
+                            : "Sin rango configurado"}
+                        </span>
+                      </div>
+                      <div className="h-56">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={datos} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
+                            <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={42} />
+                            <Tooltip
+                              formatter={(value) => [nd(Number(value), 3), parametro.unidad]}
+                              labelFormatter={(label) => `Fecha: ${label}`}
+                            />
+                            {referencia?.valor_minimo != null ? (
+                              <Line
+                                type="monotone"
+                                dataKey={() => Number(referencia.valor_minimo)}
+                                name="Mínimo"
+                                strokeDasharray="5 5"
+                                dot={false}
+                                strokeWidth={1.5}
+                              />
+                            ) : null}
+                            <Line
+                              type="monotone"
+                              dataKey="valor"
+                              name="Medición"
+                              dot={{ r: 3 }}
+                              strokeWidth={2.5}
+                            />
+                            {referencia?.valor_maximo != null ? (
+                              <Line
+                                type="monotone"
+                                dataKey={() => Number(referencia.valor_maximo)}
+                                name="Máximo"
+                                strokeDasharray="5 5"
+                                dot={false}
+                                strokeWidth={1.5}
+                              />
+                            ) : null}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {query.data?.length ? (
