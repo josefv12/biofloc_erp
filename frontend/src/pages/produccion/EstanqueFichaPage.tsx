@@ -851,7 +851,7 @@ function BioflocModal({
   onSaved,
 }: {
   open: boolean;
-  loteId?: number;
+  loteId: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -935,13 +935,11 @@ function BioflocModal({
     <Modal open={open} title="Registrar Biofloc — Lote" onClose={onClose}>
       <div className="space-y-4">
         <div className="flex gap-2">
-          <div className="flex gap-2">
             <button type="button" className={modo === "aplicacion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"} onClick={() => setModo("aplicacion")}>Aplicación</button>
             <button type="button" className={modo === "medicion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"} onClick={() => setModo("medicion")}>Medición</button>
-          </div>
         </div>
 
-        {modo === "aplicacion" && !esEstanque ? (
+        {modo === "aplicacion" ? (
           <form className="space-y-3" onSubmit={form.handleSubmit((values) => {
             const fechaHora = withFechaHoraIso(values.fecha_hora, setFormErrorAplicacion);
             if (!fechaHora) return;
@@ -1421,7 +1419,6 @@ function AcondicionamientoBioflocEstanquePanel({
     defaultValues: {
       tipo_aplicacion_id: tiposQuery.data?.[0]?.id ?? 0,
       producto_id: "",
-      fecha_siembra_prevista: "",
       fecha_hora: toDatetimeLocalValue(),
       cantidad: "",
       unidad: "kg",
@@ -1479,24 +1476,16 @@ function AcondicionamientoBioflocEstanquePanel({
             <h2 className="mt-1 text-2xl font-bold text-[var(--bf-ink)]">Acondicionamiento Biofloc</h2>
             <p className="mt-1 max-w-3xl text-sm text-[var(--bf-muted)]">
               Este estanque no tiene lote activo. Aquí se prepara el sistema antes de sembrar los alevinos.
-              El acondicionamiento se registra hasta 7 días antes de la fecha prevista de siembra.
+              La aplicación debe quedar dentro de los 7 días previos a la siembra del lote.
             </p>
           </div>
           <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--bf-accent)]">PRE-SIEMBRA</span>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl bg-white p-3">
-            <p className="text-xs text-[var(--bf-muted)]">Aireación</p>
-            <p className="mt-1 font-semibold">{ultimo?.aireacion_activa ? "ACTIVA" : "No registrada"}</p>
-          </div>
-          <div className="rounded-xl bg-white p-3">
-            <p className="text-xs text-[var(--bf-muted)]">Siembra prevista</p>
-            <p className="mt-1 font-semibold">{fechaSiembraPrevista ? formatDate(fechaSiembraPrevista) : "Defínela al registrar"}</p>
-          </div>
-          <div className="rounded-xl bg-white p-3">
-            <p className="text-xs text-[var(--bf-muted)]">Aplicaciones registradas</p>
-            <p className="mt-1 font-semibold">{query.data?.length ?? 0}</p>
-          </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Especie</p><p className="mt-1 font-semibold">{lote?.especie.nombre_comun ?? "—"}</p></div>
+          <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Siembra prevista</p><p className="mt-1 font-semibold">{lote?.fecha_siembra ? formatDate(lote.fecha_siembra) : "—"}</p></div>
+          <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Peces previstos</p><p className="mt-1 font-semibold">{lote?.cantidad_sembrada ? formatNumber(lote.cantidad_sembrada) : "—"}</p></div>
+          <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Aplicaciones</p><p className="mt-1 font-semibold">{query.data?.length ?? 0}</p></div>
         </div>
         {stockMsg ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{stockMsg}</div> : null}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -1552,10 +1541,6 @@ function AcondicionamientoBioflocEstanquePanel({
         <form className="space-y-3" onSubmit={form.handleSubmit((values) => {
           const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
           if (!fechaHora) return;
-          if (!values.fecha_siembra_prevista) {
-            setFormError("Indique la fecha prevista de siembra.");
-            return;
-          }
           const cantidad = values.cantidad.trim();
           const producto = values.producto_id.trim();
           if (cantidad !== "" && Number(cantidad) > 0 && !producto) {
@@ -1604,7 +1589,7 @@ function AcondicionamientoBioflocEstanquePanel({
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
           </Field>
           <p className="text-xs text-[var(--bf-muted)]">
-            Si la cantidad es mayor que 0, el sistema descuenta automáticamente el insumo del inventario y deja trazabilidad como acondicionamiento del estanque.
+            Si la cantidad es mayor que 0, el sistema descuenta automáticamente el insumo del inventario y deja trazabilidad asociada al lote.
           </p>
           <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || !puedeCrear}>
             {mutation.isPending ? "Guardando…" : "Registrar acondicionamiento"}
