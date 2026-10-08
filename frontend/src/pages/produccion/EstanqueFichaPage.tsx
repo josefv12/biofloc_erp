@@ -16,6 +16,7 @@ import {
   createLote,
   getEstanque,
   getLote,
+  getCostosLote,
   listLotes,
   registrarSiembra,
   listEspecies,
@@ -115,6 +116,11 @@ export function EstanqueFichaPage() {
     enabled: Boolean(loteResumen?.id),
   });
   const lote = loteQuery.data ?? loteResumen;
+  const costosQuery = useQuery({
+    queryKey: ["costos-lote", lote?.id],
+    queryFn: () => getCostosLote(lote!.id),
+    enabled: Boolean(lote?.id),
+  });
   const analisisQuery = useQuery({
     queryKey: ["analisis-lote", lote?.id, "", ""],
     queryFn: () => getAnalisisLote(lote!.id),
@@ -136,6 +142,7 @@ export function EstanqueFichaPage() {
   async function refrescarPostOperacion() {
     if (!lote?.id) return;
     await queryClient.invalidateQueries({ queryKey: ["analisis-lote", lote.id] });
+    await queryClient.invalidateQueries({ queryKey: ["costos-lote", lote.id] });
     await queryClient.invalidateQueries({ queryKey: ["analisis-estanques"] });
     await queryClient.invalidateQueries({ queryKey: ["analisis-estanque-historial", estanqueId] });
 
@@ -418,6 +425,22 @@ export function EstanqueFichaPage() {
           </div>
         ) : lote ? (
           <div>
+            <div className="mx-6 mb-5 rounded-2xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-4">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Costo ejecutado del lote</p>
+                  <p className="mt-1 text-2xl font-extrabold text-[var(--bf-ink)]">$ {nd(costosQuery.data?.costo_directo_lote, 2)}</p>
+                  <p className="mt-1 text-xs text-gray-500">Solo consumos y aplicaciones asignados a este ciclo; las compras de inventario no se cargan aquí.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
+                  <div><span className="text-gray-500">Alevinos</span><div className="font-semibold">$ {nd(costosQuery.data?.alevinos, 2)}</div></div>
+                  <div><span className="text-gray-500">Alimento</span><div className="font-semibold">$ {nd(costosQuery.data?.alimento, 2)}</div></div>
+                  <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(Math.max(0, Number(costosQuery.data?.otros_costos_directos ?? 0) - Number(costosQuery.data?.alimento ?? 0)), 2)}</div></div>
+                  <div><span className="text-gray-500">Costo/kg</span><div className="font-semibold">{costosQuery.data?.costo_por_kg == null ? "N/D" : "$ " + nd(costosQuery.data.costo_por_kg, 2)}</div></div>
+                </div>
+              </div>
+            </div>
+
             <LoteFichaWorkspace lote={lote} tab={tab} onTab={setTab} mostrarGraficasResumen={false} modoOperativo />
 
             {modalAccion === "alimentar" ? (
