@@ -222,7 +222,6 @@ export type AcondicionamientoBioflocEstanqueCreate = {
   tipo_aplicacion_id: number;
   producto_id?: number | null;
   fecha_hora: string;
-  fecha_siembra_prevista: string;
   cantidad?: number | null;
   unidad?: string | null;
   aireacion_activa?: boolean;
