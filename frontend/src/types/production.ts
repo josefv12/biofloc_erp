@@ -155,7 +155,7 @@ export type LoteCreate = {
   estado_id: number;
   fecha_siembra: string;
   fecha_cierre?: string | null;
-  cantidad_sembrada: number;
+  cantidad_prevista: number;
   peso_inicial_promedio_g?: number | null;
   observaciones?: string | null;
 };
