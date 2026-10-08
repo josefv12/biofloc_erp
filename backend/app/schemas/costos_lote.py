@@ -13,6 +13,8 @@ class CostosLoteOut(BaseModel):
     costo_directo_lote: Decimal = Field(..., max_digits=18, decimal_places=2)
     costos_estanque_no_asignados: Decimal = Field(..., max_digits=18, decimal_places=2)
     kg_alimento_suministrado: Decimal = Field(..., max_digits=18, decimal_places=3)
+    peces_sembrados: int = 0
+    costo_por_pez: Decimal | None = Field(None, max_digits=18, decimal_places=2)
     kg_cosechados: Decimal = Field(..., max_digits=18, decimal_places=3)
     costo_por_kg: Decimal | None = Field(None, max_digits=18, decimal_places=2)
     ventas: Decimal = Field(..., max_digits=18, decimal_places=2)
