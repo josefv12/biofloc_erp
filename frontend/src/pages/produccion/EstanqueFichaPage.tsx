@@ -17,6 +17,7 @@ import {
   getEstanque,
   getLote,
   listLotes,
+  registrarSiembra,
   listEspecies,
   listEtapasProductivas,
   listEstadosLote,
@@ -53,9 +54,10 @@ import {
   proyectarCosecha,
 } from "../../utils/indicadoresProduccion";
 import { can } from "../../utils/rbac";
+import { listCategoriasInventario, listProductos } from "../../api/inventory";
 import { PATH_COMPARACION } from "./fichaPaths";
 import { LoteFichaWorkspace, parseLoteFichaTab, type LoteFichaTabId } from "./LoteFichaPage";
-import type { Lote, LoteCreate } from "../../types/production";
+import type { Lote, LoteCreate, SiembraLoteCreate } from "../../types/production";
 import type { BiometriaCreate, CosechaCreate, MortalidadCreate } from "../../types/production";
 import type {
   AlimentacionCreate,
@@ -355,6 +357,16 @@ export function EstanqueFichaPage() {
         {!hayLoteActivo ? (
           lotePreparacion ? (
             <>
+              <SiembraLotePanel
+                lote={lotePreparacion}
+                puedeRegistrar={can(user?.rol, "crearLote")}
+                onSown={async () => {
+                  await queryClient.invalidateQueries({ queryKey: ["lotes", estanqueId] });
+                  await queryClient.invalidateQueries({ queryKey: ["lote", lotePreparacion.id] });
+                  await queryClient.invalidateQueries({ queryKey: ["stock"] });
+                  await queryClient.invalidateQueries({ queryKey: ["productos-stock"] });
+                }}
+              />
               <AcondicionamientoBioflocEstanquePanel
                 loteId={lotePreparacion.id}
                 puedeRegistrar={can(user?.rol, "registrarBiofloc")}
@@ -1382,6 +1394,88 @@ function CrearCicloPreparacionPanel({
           <p className="text-xs text-[var(--bf-muted)]">El lote quedará en estado PLANIFICADO. Todavía no representa peces sembrados; representa el ciclo que se está preparando.</p>
           <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || !puedeRegistrar || especiesQuery.isLoading || etapasQuery.isLoading || estadosQuery.isLoading}>
             {mutation.isPending ? "Creando…" : "Crear ciclo de preparación"}
+          </button>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function SiembraLotePanel({ lote, puedeRegistrar, onSown }: { lote: Lote; puedeRegistrar: boolean; onSown: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const categoriasQuery = useQuery({ queryKey: ["categorias-inventario"], queryFn: () => listCategoriasInventario(true) });
+  const categoriaAlevinos = categoriasQuery.data?.find((row) => row.nombre === "ALEVINOS");
+  const productosQuery = useQuery({
+    queryKey: ["productos-alevinos", categoriaAlevinos?.id],
+    queryFn: () => listProductos({ soloActivos: true, categoriaId: categoriaAlevinos!.id }),
+    enabled: Boolean(categoriaAlevinos?.id),
+  });
+  const mutation = useMutation({
+    mutationFn: (data: SiembraLoteCreate) => registrarSiembra(lote.id, data),
+    onSuccess: async (resp) => {
+      setOpen(false);
+      setFormError(null);
+      setSuccess("Siembra registrada: " + formatNumber(resp.cantidad_sembrada) + " peces · costo imputado " + formatNumber(resp.costo_total, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      await onSown();
+      setTimeout(() => setSuccess(null), 7000);
+    },
+    onError: (error) => setFormError(apiErrorMessage(error)),
+  });
+  const form = useForm({
+    defaultValues: { producto_id: "", cantidad: String(lote.cantidad_sembrada), fecha_hora: toDatetimeLocalValue(), peso: "", observaciones: "" },
+  });
+  return (
+    <div className="border-t border-[var(--bf-border)] px-6 pb-5 pt-5">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <FichaLabel>Acción pendiente</FichaLabel>
+            <h2 className="mt-1 text-xl font-bold text-[var(--bf-ink)]">Registrar siembra</h2>
+            <p className="mt-1 max-w-3xl text-sm text-[var(--bf-muted)]">La compra de alevinos solo aumenta el inventario. El costo del lote nace aquí, cuando los peces realmente se consumen para la siembra.</p>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-700">PLANIFICADO</span>
+        </div>
+        {success ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{success}</div> : null}
+        {puedeRegistrar ? (
+          <div className="mt-4 flex justify-end">
+            <button type="button" className="bf-btn-primary" onClick={() => { setFormError(null); form.reset({ producto_id: "", cantidad: String(lote.cantidad_sembrada), fecha_hora: toDatetimeLocalValue(), peso: "", observaciones: "" }); setOpen(true); }}>
+              Sembrar lote
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <Modal open={open} title={"Registrar siembra · " + lote.codigo} onClose={() => setOpen(false)}>
+        <form className="space-y-3" onSubmit={form.handleSubmit((values) => {
+          const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
+          if (!fechaHora) return;
+          const cantidad = Number(values.cantidad);
+          const peso = values.peso.trim();
+          if (!values.producto_id) { setFormError("Seleccione el producto de alevinos."); return; }
+          if (!Number.isInteger(cantidad) || cantidad <= 0) { setFormError("La cantidad sembrada debe ser un número entero mayor que 0."); return; }
+          mutation.mutate({ producto_id: Number(values.producto_id), cantidad, fecha_hora: fechaHora, peso_inicial_promedio_g: peso === "" ? null : Number(peso), observaciones: values.observaciones.trim() || null });
+        })}>
+          {formError ? <ErrorAlert message={formError} /> : null}
+          <Field label="Producto de alevinos">
+            <select className="bf-input" {...form.register("producto_id")} disabled={!productosQuery.data?.length}>
+              <option value="">{productosQuery.isLoading ? "Cargando alevinos…" : productosQuery.data?.length ? "Seleccione el producto" : "No hay productos ALEVINOS activos"}</option>
+              {(productosQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{etiquetaProducto(row.nombre, row.codigo)}</option>)}
+            </select>
+          </Field>
+          <Field label={"Cantidad real sembrada (prevista: " + formatNumber(lote.cantidad_sembrada) + ")"}>
+            <input type="number" min="1" step="1" className="bf-input" {...form.register("cantidad")} />
+          </Field>
+          <Field label="Fecha y hora de siembra">
+            <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
+          </Field>
+          <Field label="Peso inicial promedio (g, opcional)">
+            <input type="number" min="0" step="any" className="bf-input" {...form.register("peso")} />
+          </Field>
+          <Field label="Observaciones"><textarea className="bf-input min-h-20" {...form.register("observaciones")} /></Field>
+          <p className="text-xs text-[var(--bf-muted)]">La operación descuenta los alevinos del inventario y toma automáticamente su costo promedio histórico. La compra original no se suma al lote.</p>
+          <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || !productosQuery.data?.length}>
+            {mutation.isPending ? "Registrando…" : "Confirmar siembra"}
           </button>
         </form>
       </Modal>
