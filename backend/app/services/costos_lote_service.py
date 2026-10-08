@@ -3,7 +3,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.schemas.costos_lote import CostosLoteOut
+from app.schemas.costos_lote import CostosLoteOut, CostoLoteDetalle
 
 D2 = Decimal("0.01")
 D3 = Decimal("0.001")
@@ -129,6 +129,78 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
     utilidad = (ventas - costo_ventas).quantize(D2, rounding=ROUND_HALF_UP) if costo_por_kg is not None else None
     margen = ((utilidad / ventas) * 100).quantize(D2, rounding=ROUND_HALF_UP) if utilidad is not None and ventas else None
 
+    detalle_rows = db.execute(text("""
+        SELECT
+            mi.fecha_hora::text AS fecha,
+            CASE
+                WHEN mi.referencia_tipo = 'SIEMBRA' THEN 'Alevinos'
+                WHEN mi.referencia_tipo = 'ALIMENTACION' THEN 'Alimento'
+                WHEN mi.referencia_tipo IN ('ACONDICIONAMIENTO_BIOFLOC', 'APLICACION_BIOFLOC') THEN 'Biofloc'
+                ELSE 'Inventario'
+            END AS categoria,
+            COALESCE(p.nombre, 'Producto #' || mi.producto_id::text) AS concepto,
+            mi.cantidad,
+            COALESCE(u.simbolo, '') AS unidad,
+            mi.costo_unitario,
+            mi.costo_total,
+            mi.referencia_tipo,
+            mi.referencia_id
+        FROM biofloc.movimientos_inventario mi
+        JOIN biofloc.productos p ON p.id = mi.producto_id
+        LEFT JOIN biofloc.unidades u ON u.id = p.unidad_id
+        WHERE mi.costo_total > 0
+          AND (
+            (mi.referencia_tipo = 'SIEMBRA' AND mi.referencia_id = :lote_id)
+            OR (mi.referencia_tipo = 'ALIMENTACION' AND EXISTS (
+                SELECT 1 FROM biofloc.alimentaciones a
+                WHERE a.id = mi.referencia_id AND a.lote_id = :lote_id
+            ))
+            OR (mi.referencia_tipo = 'ACONDICIONAMIENTO_BIOFLOC' AND EXISTS (
+                SELECT 1 FROM biofloc.acondicionamientos_biofloc_estanque ac
+                WHERE ac.id = mi.referencia_id AND ac.lote_id = :lote_id
+            ))
+            OR (mi.referencia_tipo = 'APLICACION_BIOFLOC' AND EXISTS (
+                SELECT 1 FROM biofloc.aplicaciones_biofloc ab
+                WHERE ab.id = mi.referencia_id AND ab.lote_id = :lote_id
+            ))
+          )
+        ORDER BY mi.fecha_hora, mi.id
+    """), {"lote_id": lote_id}).mappings().all()
+
+    gasto_rows = db.execute(text("""
+        SELECT
+            g.fecha::text AS fecha,
+            CASE WHEN cg.nombre = 'ALEVINOS' THEN 'Alevinos' ELSE 'Otros' END AS categoria,
+            g.descripcion AS concepto,
+            NULL::numeric AS cantidad,
+            NULL::text AS unidad,
+            NULL::numeric AS costo_unitario,
+            g.valor AS costo_total,
+            'GASTO' AS referencia_tipo,
+            g.id AS referencia_id
+        FROM biofloc.gastos g
+        JOIN biofloc.categorias_gasto cg ON cg.id = g.categoria_id
+        WHERE g.lote_id = :lote_id
+          AND g.valor > 0
+        ORDER BY g.fecha, g.id
+    """), {"lote_id": lote_id}).mappings().all()
+
+    detalle = [
+        CostoLoteDetalle(
+            fecha=str(r["fecha"]),
+            categoria=str(r["categoria"]),
+            concepto=str(r["concepto"]),
+            cantidad=_d(r["cantidad"], D3) if r["cantidad"] is not None else None,
+            unidad=str(r["unidad"]) if r["unidad"] else None,
+            costo_unitario=_d(r["costo_unitario"], D2) if r["costo_unitario"] is not None else None,
+            costo_total=_d(r["costo_total"], D2),
+            referencia_tipo=str(r["referencia_tipo"]) if r["referencia_tipo"] else None,
+            referencia_id=int(r["referencia_id"]) if r["referencia_id"] is not None else None,
+        )
+        for r in [*detalle_rows, *gasto_rows]
+    ]
+    detalle.sort(key=lambda r: (r.fecha, r.referencia_id or 0))
+
     return CostosLoteOut(
         lote_id=int(lote["id"]), codigo=str(lote["codigo"]), estanque_id=int(lote["estanque_id"]),
         alevinos=alevinos, alimento=alimento, biofloc_insumos=biofloc_insumos, otros_costos_directos=otros,
@@ -139,4 +211,5 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
         kg_cosechados=kg_cosechados, costo_por_kg=costo_por_kg,
         ventas=ventas, kg_vendidos=kg_vendidos, costo_ventas_estimado=costo_ventas,
         utilidad_bruta_estimada=utilidad, margen_bruto_estimado_pct=margen,
+        detalle=detalle,
     )
