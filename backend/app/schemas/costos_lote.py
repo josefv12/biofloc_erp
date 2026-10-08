@@ -2,6 +2,18 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
+class CostoLoteDetalle(BaseModel):
+    fecha: str
+    categoria: str
+    concepto: str
+    cantidad: Decimal | None = Field(None, max_digits=18, decimal_places=3)
+    unidad: str | None = None
+    costo_unitario: Decimal | None = Field(None, max_digits=18, decimal_places=2)
+    costo_total: Decimal = Field(..., max_digits=18, decimal_places=2)
+    referencia_tipo: str | None = None
+    referencia_id: int | None = None
+
+
 class CostosLoteOut(BaseModel):
     lote_id: int
     codigo: str
@@ -22,3 +34,4 @@ class CostosLoteOut(BaseModel):
     costo_ventas_estimado: Decimal = Field(..., max_digits=18, decimal_places=2)
     utilidad_bruta_estimada: Decimal | None = Field(None, max_digits=18, decimal_places=2)
     margen_bruto_estimado_pct: Decimal | None = Field(None, max_digits=8, decimal_places=2)
+    detalle: list[CostoLoteDetalle] = Field(default_factory=list)
