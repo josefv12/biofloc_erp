@@ -1885,16 +1885,6 @@ function AcondicionamientoBioflocEstanquePanel({
         </div>
         {stockMsg ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{stockMsg}</div> : null}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          {puedeMedirAgua ? (
-            <button type="button" className="bf-btn-secondary" onClick={onMeasureWater}>
-              Medir agua
-            </button>
-          ) : null}
-          {puedeMedirBiofloc ? (
-            <button type="button" className="bf-btn-secondary" onClick={onMeasureBiofloc}>
-              Medir Biofloc
-            </button>
-          ) : null}
           {puedeCrear ? (
             <button type="button" className="bf-btn-primary" onClick={() => { setFormError(null); setOpen(true); }}>
               Acondicionar Biofloc
