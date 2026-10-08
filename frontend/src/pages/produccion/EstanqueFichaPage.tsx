@@ -1424,7 +1424,7 @@ function SiembraLotePanel({ lote, puedeRegistrar, onSown }: { lote: Lote; puedeR
     onError: (error) => setFormError(apiErrorMessage(error)),
   });
   const form = useForm({
-    defaultValues: { producto_id: "", cantidad: String(lote.cantidad_sembrada), fecha_hora: toDatetimeLocalValue(), peso: "", observaciones: "" },
+    defaultValues: { producto_id: "", cantidad: String(lote.cantidad_prevista), fecha_hora: toDatetimeLocalValue(), peso: "", observaciones: "" },
   });
   return (
     <div className="border-t border-[var(--bf-border)] px-6 pb-5 pt-5">
@@ -1463,7 +1463,7 @@ function SiembraLotePanel({ lote, puedeRegistrar, onSown }: { lote: Lote; puedeR
               {(productosQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{etiquetaProducto(row.nombre, row.codigo)}</option>)}
             </select>
           </Field>
-          <Field label={"Cantidad real sembrada (prevista: " + formatNumber(lote.cantidad_sembrada) + ")"}>
+          <Field label={"Cantidad real sembrada (prevista: " + formatNumber(lote.cantidad_prevista) + ")"}>
             <input type="number" min="1" step="1" className="bf-input" {...form.register("cantidad")} />
           </Field>
           <Field label="Fecha y hora de siembra">
