@@ -384,6 +384,9 @@ export function EstanqueFichaPage() {
               <AcondicionamientoBioflocEstanquePanel
                 loteId={lotePreparacion.id}
                 puedeRegistrar={can(user?.rol, "registrarBiofloc")}
+              />
+              <ControlMedicionesLotePanel
+                loteId={lotePreparacion.id}
                 puedeMedirAgua={can(user?.rol, "registrarAgua")}
                 puedeMedirBiofloc={can(user?.rol, "registrarBiofloc")}
                 onMeasureWater={() => setModalAccion("agua")}
@@ -1590,20 +1593,187 @@ function SiembraLotePanel({ lote, puedeRegistrar, onSown }: { lote: Lote; puedeR
   );
 }
 
-function AcondicionamientoBioflocEstanquePanel({
+function ControlMedicionesLotePanel({
   loteId,
-  puedeRegistrar,
   puedeMedirAgua,
   puedeMedirBiofloc,
   onMeasureWater,
   onMeasureBiofloc,
 }: {
   loteId: number;
-  puedeRegistrar: boolean;
   puedeMedirAgua: boolean;
   puedeMedirBiofloc: boolean;
   onMeasureWater: () => void;
   onMeasureBiofloc: () => void;
+}) {
+  const loteQuery = useQuery({ queryKey: ["lote", loteId], queryFn: () => getLote(loteId) });
+  const lote = loteQuery.data;
+  const medicionesAguaQuery = useQuery({
+    queryKey: ["mediciones-agua", loteId],
+    queryFn: () => listMedicionesAgua({ lote_id: loteId }),
+    enabled: Boolean(loteId),
+  });
+  const parametrosAguaQuery = useQuery({
+    queryKey: ["parametros-agua"],
+    queryFn: () => listParametrosAgua(true),
+  });
+  const referenciasAguaQuery = useQuery({
+    queryKey: ["referencias-agua-lote", lote?.especie_id, lote?.etapa_productiva_id],
+    queryFn: () => listReferenciasAgua({
+      especie_id: lote!.especie_id,
+      etapa_productiva_id: lote!.etapa_productiva_id,
+      solo_activos: true,
+    }),
+    enabled: Boolean(lote?.especie_id && lote?.etapa_productiva_id),
+  });
+  const parametrosAgua = useMemo(
+    () => new Map((parametrosAguaQuery.data ?? []).map((row) => [row.id, row])),
+    [parametrosAguaQuery.data],
+  );
+  const referenciasAgua = useMemo(
+    () => new Map((referenciasAguaQuery.data ?? []).map((row) => [row.parametro_id, row])),
+    [referenciasAguaQuery.data],
+  );
+
+  const medicionesBioflocQuery = useQuery({
+    queryKey: ["mediciones-biofloc", loteId],
+    queryFn: () => listMedicionesBiofloc(loteId),
+    enabled: Boolean(loteId),
+  });
+  const referenciasBioflocQuery = useQuery({
+    queryKey: ["referencias-biofloc-lote", lote?.especie_id, lote?.etapa_productiva_id],
+    queryFn: () => listReferenciasBiofloc({
+      especie_id: lote!.especie_id,
+      etapa_productiva_id: lote!.etapa_productiva_id,
+      indicador: "VOLUMEN_SEDIMENTABLE",
+      solo_activos: true,
+    }),
+    enabled: Boolean(lote?.especie_id && lote?.etapa_productiva_id),
+  });
+  const referenciaBiofloc = referenciasBioflocQuery.data?.[0];
+
+  return (
+    <div className="border-t border-[var(--bf-border)] px-6 pb-8 pt-6 space-y-5">
+      <section className="rounded-2xl border border-[var(--bf-border)] bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <FichaLabel>Control del agua</FichaLabel>
+            <h2 className="mt-1 text-xl font-bold text-[var(--bf-ink)]">Calidad de agua</h2>
+            <p className="mt-1 text-sm text-[var(--bf-muted)]">
+              Mediciones del agua del ciclo: pH, oxígeno, temperatura, amonio, nitrito, alcalinidad y demás parámetros configurados.
+            </p>
+          </div>
+          {puedeMedirAgua ? (
+            <button type="button" className="bf-btn-primary" onClick={onMeasureWater}>
+              Registrar medición de agua
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--bf-border)]">
+          <table className="min-w-full text-left text-sm">
+            <thead><tr className="border-b border-[var(--bf-border)] bg-[var(--bf-chip)] text-xs text-[var(--bf-muted)]">
+              <th className="px-3 py-2 font-semibold">Fecha</th>
+              <th className="px-3 py-2 font-semibold">Parámetro</th>
+              <th className="px-3 py-2 font-semibold">Valor</th>
+              <th className="px-3 py-2 font-semibold">Observaciones</th>
+            </tr></thead>
+            <tbody>
+              {(medicionesAguaQuery.data ?? []).map((row) => {
+                const parametro = parametrosAgua.get(row.parametro_id);
+                return <tr key={row.id} className="border-b border-[var(--bf-border)] last:border-b-0">
+                  <td className="px-3 py-2">{formatDate(row.fecha_hora)}</td>
+                  <td className="px-3 py-2">{parametro?.nombre ?? `#${row.parametro_id}`}</td>
+                  <td className="px-3 py-2 font-semibold">{nd(row.valor, 3)} {parametro?.unidad ?? ""}</td>
+                  <td className="px-3 py-2 text-[var(--bf-muted)]">{row.observaciones ?? "—"}</td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {medicionesAguaQuery.data?.length ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            {Array.from(new Set(medicionesAguaQuery.data.map((m) => m.parametro_id))).map((parametroId) => {
+              const parametro = parametrosAgua.get(parametroId);
+              const referencia = referenciasAgua.get(parametroId);
+              const datos = medicionesAguaQuery.data!.filter((m) => m.parametro_id === parametroId).slice().sort((a,b) => a.fecha_hora.localeCompare(b.fecha_hora)).map((m) => ({ fecha: formatDate(m.fecha_hora), valor: Number(m.valor) }));
+              if (!parametro || !datos.length) return null;
+              return <div key={parametroId} className="rounded-xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-3">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <div><p className="text-sm font-semibold">{parametro.nombre}</p><p className="text-xs text-[var(--bf-muted)]">{parametro.unidad}</p></div>
+                  <span className="text-xs text-[var(--bf-muted)]">{referencia?.valor_minimo != null && referencia?.valor_maximo != null ? `Referencia: ${nd(referencia.valor_minimo, 2)} – ${nd(referencia.valor_maximo, 2)}` : "Sin rango configurado"}</span>
+                </div>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={datos}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="fecha" tick={{fontSize:10}} /><YAxis domain={["auto","auto"]} tick={{fontSize:10}} width={42} />
+                      <Tooltip formatter={(value) => [nd(Number(value), 3), parametro.unidad]} />
+                      {referencia?.valor_minimo != null ? <Line type="monotone" dataKey={() => Number(referencia.valor_minimo)} name="Mínimo" strokeDasharray="5 5" dot={false} /> : null}
+                      <Line type="monotone" dataKey="valor" name="Medición" dot={{r:3}} strokeWidth={2.5} />
+                      {referencia?.valor_maximo != null ? <Line type="monotone" dataKey={() => Number(referencia.valor_maximo)} name="Máximo" strokeDasharray="5 5" dot={false} /> : null}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>;
+            })}
+          </div>
+        ) : <p className="mt-4 text-sm text-[var(--bf-muted)]">Aún no hay mediciones de calidad de agua para este lote.</p>}
+      </section>
+
+      <section className="rounded-2xl border border-[var(--bf-border)] bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <FichaLabel>Control del Biofloc</FichaLabel>
+            <h2 className="mt-1 text-xl font-bold text-[var(--bf-ink)]">Mediciones de Biofloc</h2>
+            <p className="mt-1 text-sm text-[var(--bf-muted)]">Sólidos sedimentables y relación C:N del lote. Este control es independiente de la calidad general del agua.</p>
+          </div>
+          {puedeMedirBiofloc ? (
+            <button type="button" className="bf-btn-primary" onClick={onMeasureBiofloc}>
+              Registrar medición de Biofloc
+            </button>
+          ) : null}
+        </div>
+
+        {medicionesBioflocQuery.data?.length ? (
+          <>
+            <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--bf-border)]">
+              <table className="min-w-full text-left text-sm">
+                <thead><tr className="border-b border-[var(--bf-border)] bg-[var(--bf-chip)] text-xs text-[var(--bf-muted)]">
+                  <th className="px-3 py-2 font-semibold">Fecha</th><th className="px-3 py-2 font-semibold">Sólidos sedimentables</th><th className="px-3 py-2 font-semibold">Relación C:N</th><th className="px-3 py-2 font-semibold">Observaciones</th>
+                </tr></thead>
+                <tbody>{medicionesBioflocQuery.data.slice().sort((a,b)=>a.fecha_hora.localeCompare(b.fecha_hora)).map((row)=><tr key={row.id} className="border-b border-[var(--bf-border)] last:border-b-0">
+                  <td className="px-3 py-2">{formatDate(row.fecha_hora)}</td><td className="px-3 py-2 font-semibold">{nd(row.volumen_sedimentable,2)} {row.unidad}</td><td className="px-3 py-2">{row.relacion_cn == null ? "—" : nd(row.relacion_cn,2)}</td><td className="px-3 py-2 text-[var(--bf-muted)]">{row.observaciones ?? "—"}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+            <div className="mt-5 border-t border-[var(--bf-border)] pt-5">
+              <p className="text-sm font-semibold">Evolución de sólidos sedimentables</p>
+              <p className="text-xs text-[var(--bf-muted)]">Comparación con la referencia de la especie y etapa.</p>
+              <div className="mt-3 h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={medicionesBioflocQuery.data.slice().sort((a,b)=>a.fecha_hora.localeCompare(b.fecha_hora)).map((row)=>({fecha:formatDate(row.fecha_hora),medicion:Number(row.volumen_sedimentable),minimo:referenciaBiofloc?.valor_minimo != null ? Number(referenciaBiofloc.valor_minimo):undefined,objetivo:referenciaBiofloc?.valor_objetivo != null ? Number(referenciaBiofloc.valor_objetivo):undefined,maximo:referenciaBiofloc?.valor_maximo != null ? Number(referenciaBiofloc.valor_maximo):undefined}))}>
+                    <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="fecha" tick={{fontSize:10}} /><YAxis tick={{fontSize:10}} width={42} /><Tooltip />
+                    {referenciaBiofloc?.valor_minimo != null ? <Line type="monotone" dataKey="minimo" name="Mínimo" strokeDasharray="5 5" dot={false} /> : null}
+                    {referenciaBiofloc?.valor_objetivo != null ? <Line type="monotone" dataKey="objetivo" name="Objetivo" strokeDasharray="2 2" dot={false} /> : null}
+                    <Line type="monotone" dataKey="medicion" name="Medición" dot={{r:3}} strokeWidth={2.5} />
+                    {referenciaBiofloc?.valor_maximo != null ? <Line type="monotone" dataKey="maximo" name="Máximo" strokeDasharray="5 5" dot={false} /> : null}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </>
+        ) : <p className="mt-4 text-sm text-[var(--bf-muted)]">Aún no hay mediciones de Biofloc para este lote.</p>}
+      </section>
+    </div>
+  );
+}
+
+function AcondicionamientoBioflocEstanquePanel({
+  loteId,
+  puedeRegistrar,
+}: {
+  loteId: number;
+  puedeRegistrar: boolean;
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -1623,48 +1793,6 @@ function AcondicionamientoBioflocEstanquePanel({
   });
   const loteQuery = useQuery({ queryKey: ["lote", loteId], queryFn: () => getLote(loteId) });
   const lote = loteQuery.data;
-  const medicionesAguaQuery = useQuery({
-    queryKey: ["mediciones-agua", loteId],
-    queryFn: () => listMedicionesAgua({ lote_id: loteId }),
-    enabled: Boolean(loteId),
-  });
-  const parametrosAguaQuery = useQuery({
-    queryKey: ["parametros-agua"],
-    queryFn: () => listParametrosAgua(true),
-  });
-  const parametrosAgua = useMemo(
-    () => new Map((parametrosAguaQuery.data ?? []).map((row) => [row.id, row])),
-    [parametrosAguaQuery.data],
-  );
-  const referenciasAguaQuery = useQuery({
-    queryKey: ["referencias-agua-lote", lote?.especie_id, lote?.etapa_productiva_id],
-    queryFn: () => listReferenciasAgua({
-      especie_id: lote!.especie_id,
-      etapa_productiva_id: lote!.etapa_productiva_id,
-      solo_activos: true,
-    }),
-    enabled: Boolean(lote?.especie_id && lote?.etapa_productiva_id),
-  });
-  const referenciasAgua = useMemo(
-    () => new Map((referenciasAguaQuery.data ?? []).map((row) => [row.parametro_id, row])),
-    [referenciasAguaQuery.data],
-  );
-  const medicionesBioflocQuery = useQuery({
-    queryKey: ["mediciones-biofloc", lote?.id],
-    queryFn: () => listMedicionesBiofloc(lote!.id),
-    enabled: Boolean(lote?.id),
-  });
-  const referenciasBioflocQuery = useQuery({
-    queryKey: ["referencias-biofloc-lote", lote?.especie_id, lote?.etapa_productiva_id],
-    queryFn: () => listReferenciasBiofloc({
-      especie_id: lote!.especie_id,
-      etapa_productiva_id: lote!.etapa_productiva_id,
-      indicador: "VOLUMEN_SEDIMENTABLE",
-      solo_activos: true,
-    }),
-    enabled: Boolean(lote?.especie_id && lote?.etapa_productiva_id),
-  });
-  const referenciaBiofloc = referenciasBioflocQuery.data?.[0];
   const tipos = useMemo(
     () => new Map((tiposQuery.data ?? []).map((row) => [row.id, row])),
     [tiposQuery.data],
@@ -1773,215 +1901,6 @@ function AcondicionamientoBioflocEstanquePanel({
             </button>
           ) : null}
         </div>
-        <div className="mt-6 mb-2 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--bf-accent)]">Control del agua</p>
-            <p className="text-sm font-semibold text-[var(--bf-ink)]">Calidad de agua del lote</p>
-          </div>
-        </div>
-        <div className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-[var(--bf-ink)]">Mediciones de calidad de agua</p>
-              <p className="text-xs text-[var(--bf-muted)]">Historial de mediciones registradas para este lote, incluida la preparación pre-siembra.</p>
-            </div>
-            <span className="rounded-full bg-[var(--bf-chip)] px-3 py-1 text-xs font-semibold text-[var(--bf-accent)]">
-              {medicionesAguaQuery.data?.length ?? 0} mediciones
-            </span>
-          </div>
-          {medicionesAguaQuery.isLoading ? (
-            <div className="mt-3 text-sm text-[var(--bf-muted)]">Cargando mediciones…</div>
-          ) : medicionesAguaQuery.data?.length ? (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--bf-border)] text-xs text-[var(--bf-muted)]">
-                    <th className="px-3 py-2 font-semibold">Fecha</th>
-                    <th className="px-3 py-2 font-semibold">Parámetro</th>
-                    <th className="px-3 py-2 font-semibold">Valor</th>
-                    <th className="px-3 py-2 font-semibold">Observaciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(medicionesAguaQuery.data ?? []).map((row) => {
-                    const parametro = parametrosAgua.get(row.parametro_id);
-                    return (
-                      <tr key={row.id} className="border-b border-[var(--bf-border)] last:border-b-0">
-                        <td className="px-3 py-2">{formatDate(row.fecha_hora)}</td>
-                        <td className="px-3 py-2">{parametro?.nombre ?? `#${row.parametro_id}`}</td>
-                        <td className="px-3 py-2 font-semibold">{nd(row.valor, 3)} {parametro?.unidad ?? ""}</td>
-                        <td className="px-3 py-2 text-[var(--bf-muted)]">{row.observaciones ?? "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-[var(--bf-muted)]">Aún no hay mediciones de calidad de agua para este lote.</p>
-          )}
-
-          <div className="mt-6 mb-2 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--bf-accent)]">Control del Biofloc</p>
-              <p className="text-sm font-semibold text-[var(--bf-ink)]">Calidad y concentración del Biofloc</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-[var(--bf-ink)]">Mediciones de Biofloc</p>
-                <p className="text-xs text-[var(--bf-muted)]">Sólidos sedimentables y relación C:N registrados para este lote.</p>
-              </div>
-              <span className="rounded-full bg-[var(--bf-chip)] px-3 py-1 text-xs font-semibold text-[var(--bf-accent)]">
-                {medicionesBioflocQuery.data?.length ?? 0} mediciones
-              </span>
-            </div>
-            {medicionesBioflocQuery.data?.length ? (
-              <>
-                <div className="mt-3 overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--bf-border)] text-xs text-[var(--bf-muted)]">
-                        <th className="px-3 py-2 font-semibold">Fecha</th>
-                        <th className="px-3 py-2 font-semibold">Sólidos sedimentables</th>
-                        <th className="px-3 py-2 font-semibold">Relación C:N</th>
-                        <th className="px-3 py-2 font-semibold">Observaciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {medicionesBioflocQuery.data.slice().sort((a,b) => a.fecha_hora.localeCompare(b.fecha_hora)).map((row) => (
-                        <tr key={row.id} className="border-b border-[var(--bf-border)] last:border-b-0">
-                          <td className="px-3 py-2">{formatDate(row.fecha_hora)}</td>
-                          <td className="px-3 py-2 font-semibold">{nd(row.volumen_sedimentable, 2)} {row.unidad}</td>
-                          <td className="px-3 py-2">{row.relacion_cn == null ? "—" : nd(row.relacion_cn, 2)}</td>
-                          <td className="px-3 py-2 text-[var(--bf-muted)]">{row.observaciones ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-5 border-t border-[var(--bf-border)] pt-5">
-                  <div className="mb-3">
-                    <p className="text-sm font-semibold text-[var(--bf-ink)]">Evolución de sólidos sedimentables</p>
-                    <p className="text-xs text-[var(--bf-muted)]">
-                      La medición real se compara con el mínimo, objetivo y máximo configurados para la especie y etapa.
-                    </p>
-                  </div>
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={medicionesBioflocQuery.data.slice().sort((a,b) => a.fecha_hora.localeCompare(b.fecha_hora)).map((row) => ({
-                          fecha: formatDate(row.fecha_hora),
-                          medicion: Number(row.volumen_sedimentable),
-                          minimo: referenciaBiofloc?.valor_minimo != null ? Number(referenciaBiofloc.valor_minimo) : undefined,
-                          objetivo: referenciaBiofloc?.valor_objetivo != null ? Number(referenciaBiofloc.valor_objetivo) : undefined,
-                          maximo: referenciaBiofloc?.valor_maximo != null ? Number(referenciaBiofloc.valor_maximo) : undefined,
-                        }))}
-                        margin={{ top: 8, right: 12, left: 0, bottom: 4 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} width={42} />
-                        <Tooltip formatter={(value) => [nd(Number(value), 2), referenciaBiofloc?.unidad ?? "mL/L"]} />
-                        {referenciaBiofloc?.valor_minimo != null ? <Line type="monotone" dataKey="minimo" name="Mínimo" strokeDasharray="5 5" dot={false} /> : null}
-                        {referenciaBiofloc?.valor_objetivo != null ? <Line type="monotone" dataKey="objetivo" name="Objetivo" strokeDasharray="2 2" dot={false} /> : null}
-                        <Line type="monotone" dataKey="medicion" name="Medición" dot={{ r: 3 }} strokeWidth={2.5} />
-                        {referenciaBiofloc?.valor_maximo != null ? <Line type="monotone" dataKey="maximo" name="Máximo" strokeDasharray="5 5" dot={false} /> : null}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="mt-3 text-sm text-[var(--bf-muted)]">Aún no hay mediciones de Biofloc para este lote.</p>
-            )}
-          </div>
-
-          {medicionesAguaQuery.data?.length ? (
-            <div className="mt-5 border-t border-[var(--bf-border)] pt-5">
-              <div className="mb-3">
-                <p className="text-sm font-semibold text-[var(--bf-ink)]">Evolución y comparación con referencia</p>
-                <p className="text-xs text-[var(--bf-muted)]">
-                  La línea representa las mediciones reales. Las líneas de referencia muestran el mínimo y máximo configurados para la especie y etapa del lote.
-                </p>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                {Array.from(
-                  new Set((medicionesAguaQuery.data ?? []).map((m) => m.parametro_id)),
-                ).map((parametroId) => {
-                  const parametro = parametrosAgua.get(parametroId);
-                  const referencia = referenciasAgua.get(parametroId);
-                  const datos = (medicionesAguaQuery.data ?? [])
-                    .filter((m) => m.parametro_id === parametroId)
-                    .slice()
-                    .sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora))
-                    .map((m) => ({
-                      fecha: formatDate(m.fecha_hora),
-                      valor: Number(m.valor),
-                    }));
-                  if (!parametro || !datos.length) return null;
-                  return (
-                    <div key={parametroId} className="rounded-xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-3">
-                      <div className="mb-2 flex items-baseline justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--bf-ink)]">{parametro.nombre}</p>
-                          <p className="text-xs text-[var(--bf-muted)]">{parametro.unidad}</p>
-                        </div>
-                        <span className="text-xs text-[var(--bf-muted)]">
-                          {referencia?.valor_minimo != null && referencia?.valor_maximo != null
-                            ? `Referencia: ${nd(referencia.valor_minimo, 2)} – ${nd(referencia.valor_maximo, 2)}`
-                            : "Sin rango configurado"}
-                        </span>
-                      </div>
-                      <div className="h-56">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={datos} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
-                            <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={42} />
-                            <Tooltip
-                              formatter={(value) => [nd(Number(value), 3), parametro.unidad]}
-                              labelFormatter={(label) => `Fecha: ${label}`}
-                            />
-                            {referencia?.valor_minimo != null ? (
-                              <Line
-                                type="monotone"
-                                dataKey={() => Number(referencia.valor_minimo)}
-                                name="Mínimo"
-                                strokeDasharray="5 5"
-                                dot={false}
-                                strokeWidth={1.5}
-                              />
-                            ) : null}
-                            <Line
-                              type="monotone"
-                              dataKey="valor"
-                              name="Medición"
-                              dot={{ r: 3 }}
-                              strokeWidth={2.5}
-                            />
-                            {referencia?.valor_maximo != null ? (
-                              <Line
-                                type="monotone"
-                                dataKey={() => Number(referencia.valor_maximo)}
-                                name="Máximo"
-                                strokeDasharray="5 5"
-                                dot={false}
-                                strokeWidth={1.5}
-                              />
-                            ) : null}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
         {query.data?.length ? (
           <div className="mt-5 overflow-x-auto rounded-xl bg-white">
             <table className="min-w-full text-left text-sm">
