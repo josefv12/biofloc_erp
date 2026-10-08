@@ -6,9 +6,20 @@ BEGIN;
 ALTER TABLE biofloc.acondicionamientos_biofloc_estanque
     ADD COLUMN IF NOT EXISTS lote_id BIGINT;
 
-ALTER TABLE biofloc.acondicionamientos_biofloc_estanque
-    ADD CONSTRAINT fk_acond_biofloc_lote
-    FOREIGN KEY (lote_id) REFERENCES biofloc.lotes(id);
+DO $func$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_acond_biofloc_lote'
+          AND conrelid = 'biofloc.acondicionamientos_biofloc_estanque'::regclass
+    ) THEN
+        ALTER TABLE biofloc.acondicionamientos_biofloc_estanque
+            ADD CONSTRAINT fk_acond_biofloc_lote
+            FOREIGN KEY (lote_id) REFERENCES biofloc.lotes(id);
+    END IF;
+END
+$func$;
 
 UPDATE biofloc.acondicionamientos_biofloc_estanque a
 SET lote_id = l.id
@@ -22,6 +33,19 @@ WHERE a.lote_id IS NULL
 
 CREATE INDEX IF NOT EXISTS idx_acond_biofloc_lote_fecha
     ON biofloc.acondicionamientos_biofloc_estanque(lote_id, fecha_hora);
+
+DO $func$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM biofloc.acondicionamientos_biofloc_estanque
+        WHERE lote_id IS NULL
+    ) THEN
+        ALTER TABLE biofloc.acondicionamientos_biofloc_estanque
+            ALTER COLUMN lote_id SET NOT NULL;
+    END IF;
+END
+$func$;
 
 -- Las mediciones ya no tienen contexto directo de estanque.
 -- El estanque se obtiene mediante lote.estanque_id.
