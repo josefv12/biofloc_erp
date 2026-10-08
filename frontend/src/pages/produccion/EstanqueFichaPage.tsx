@@ -356,6 +356,8 @@ export function EstanqueFichaPage() {
           <AcondicionamientoBioflocEstanquePanel
             estanqueId={estanque.id}
             puedeRegistrar={can(user?.rol, "registrarBiofloc")}
+            puedeMedirAgua={can(user?.rol, "registrarAgua")}
+            puedeMedirBiofloc={can(user?.rol, "registrarBiofloc")}
             onMeasureWater={() => setModalAccion("aguaEstanque")}
             onMeasureBiofloc={() => setModalAccion("bioflocEstanque")}
           />
@@ -1288,9 +1290,17 @@ function CosechaModal({
 function AcondicionamientoBioflocEstanquePanel({
   estanqueId,
   puedeRegistrar,
+  puedeMedirAgua,
+  puedeMedirBiofloc,
+  onMeasureWater,
+  onMeasureBiofloc,
 }: {
   estanqueId: number;
   puedeRegistrar: boolean;
+  puedeMedirAgua: boolean;
+  puedeMedirBiofloc: boolean;
+  onMeasureWater: () => void;
+  onMeasureBiofloc: () => void;
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -1410,7 +1420,17 @@ function AcondicionamientoBioflocEstanquePanel({
           </div>
         </div>
         {stockMsg ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{stockMsg}</div> : null}
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {puedeMedirAgua ? (
+            <button type="button" className="bf-btn-secondary" onClick={onMeasureWater}>
+              Medir agua
+            </button>
+          ) : null}
+          {puedeMedirBiofloc ? (
+            <button type="button" className="bf-btn-secondary" onClick={onMeasureBiofloc}>
+              Medir Biofloc
+            </button>
+          ) : null}
           {puedeCrear ? (
             <button type="button" className="bf-btn-primary" onClick={() => { setFormError(null); setOpen(true); }}>
               Acondicionar Biofloc
