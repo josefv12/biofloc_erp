@@ -431,30 +431,6 @@ export function EstanqueFichaPage() {
               />
             ) : null}
 
-            {modalAccion === "aguaEstanque" ? (
-              <AguaModal
-                estanqueId={estanque.id}
-                open
-                onClose={() => setModalAccion(null)}
-                onSaved={async () => {
-                  await refrescarMedicionesEstanque();
-                  setModalAccion(null);
-                }}
-              />
-            ) : null}
-
-            {modalAccion === "bioflocEstanque" ? (
-              <BioflocModal
-                estanqueId={estanque.id}
-                open
-                onClose={() => setModalAccion(null)}
-                onSaved={async () => {
-                  await refrescarMedicionesEstanque();
-                  setModalAccion(null);
-                }}
-              />
-            ) : null}
-
             {modalAccion === "cosechar" ? (
               <CosechaModal
                 lote={lote}
@@ -469,6 +445,30 @@ export function EstanqueFichaPage() {
               />
             ) : null}
           </div>
+        ) : null}
+
+        {modalAccion === "aguaEstanque" ? (
+          <AguaModal
+            estanqueId={estanque.id}
+            open
+            onClose={() => setModalAccion(null)}
+            onSaved={async () => {
+              await refrescarMedicionesEstanque();
+              setModalAccion(null);
+            }}
+          />
+        ) : null}
+
+        {modalAccion === "bioflocEstanque" ? (
+          <BioflocModal
+            estanqueId={estanque.id}
+            open
+            onClose={() => setModalAccion(null)}
+            onSaved={async () => {
+              await refrescarMedicionesEstanque();
+              setModalAccion(null);
+            }}
+          />
         ) : null}
       </div>
     </div>
