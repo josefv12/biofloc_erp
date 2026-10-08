@@ -364,6 +364,7 @@ export function EstanqueFichaPage() {
         {!hayLoteActivo ? (
           lotePreparacion ? (
             <>
+              <CostoLoteCard costos={costosQuery.data} lote={lotePreparacion} />
               <SiembraLotePanel
                 lote={lotePreparacion}
                 puedeRegistrar={can(user?.rol, "crearLote")}
@@ -372,6 +373,7 @@ export function EstanqueFichaPage() {
                   await queryClient.invalidateQueries({ queryKey: ["lote", lotePreparacion.id] });
                   await queryClient.invalidateQueries({ queryKey: ["stock"] });
                   await queryClient.invalidateQueries({ queryKey: ["productos-stock"] });
+                  await queryClient.invalidateQueries({ queryKey: ["costos-lote", lotePreparacion.id] });
                 }}
               />
               <AcondicionamientoBioflocEstanquePanel
@@ -520,6 +522,33 @@ export function EstanqueFichaPage() {
         ) : null}
 
       </div>
+    </div>
+  );
+}
+
+function CostoLoteCard({ costos, lote }: { costos: import("../../types/costos").CostosLote | undefined; lote: Lote }) {
+  return (
+    <div className="mx-6 mb-5 rounded-2xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Costo ejecutado del lote</p>
+          <p className="mt-1 text-2xl font-extrabold text-[var(--bf-ink)]">$ {nd(costos?.costo_directo_lote, 2)}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Solo consumos y aplicaciones asignados a este ciclo. Las compras de inventario permanecen en inventario.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
+          <div><span className="text-gray-500">Alevinos</span><div className="font-semibold">$ {nd(costos?.alevinos, 2)}</div></div>
+          <div><span className="text-gray-500">Alimento</span><div className="font-semibold">$ {nd(costos?.alimento, 2)}</div></div>
+          <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(costos?.biofloc_insumos, 2)}</div></div>
+          <div><span className="text-gray-500">Costo/pez</span><div className="font-semibold">{costos?.costo_por_pez == null ? "N/D" : "$ " + nd(costos.costo_por_pez, 2)}</div></div>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-[var(--bf-muted)]">
+        {lote.estado.nombre === "PLANIFICADO"
+          ? "Costo acumulado de la preparación del ciclo. Los alevinos se cargarán cuando se registre la siembra real."
+          : "Costo acumulado del ciclo productivo."}
+      </p>
     </div>
   );
 }
@@ -1593,6 +1622,7 @@ function AcondicionamientoBioflocEstanquePanel({
         setTimeout(() => setStockMsg(null), 6000);
       }
       await queryClient.invalidateQueries({ queryKey: ["acondicionamientos-biofloc-lote", loteId] });
+      await queryClient.invalidateQueries({ queryKey: ["costos-lote", loteId] });
       await queryClient.invalidateQueries({ queryKey: ["stock"] });
       await queryClient.invalidateQueries({ queryKey: ["productos-stock"] });
       form.reset({
@@ -1625,7 +1655,7 @@ function AcondicionamientoBioflocEstanquePanel({
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Especie</p><p className="mt-1 font-semibold">{lote?.especie.nombre_comun ?? "—"}</p></div>
           <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Siembra prevista</p><p className="mt-1 font-semibold">{lote?.fecha_siembra ? formatDate(lote.fecha_siembra) : "—"}</p></div>
-          <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Peces previstos</p><p className="mt-1 font-semibold">{lote?.cantidad_sembrada ? formatNumber(lote.cantidad_sembrada) : "—"}</p></div>
+          <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Peces previstos</p><p className="mt-1 font-semibold">{lote?.cantidad_prevista ? formatNumber(lote.cantidad_prevista) : "—"}</p></div>
           <div className="rounded-xl bg-white p-3"><p className="text-xs text-[var(--bf-muted)]">Aplicaciones</p><p className="mt-1 font-semibold">{query.data?.length ?? 0}</p></div>
         </div>
         {stockMsg ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{stockMsg}</div> : null}
