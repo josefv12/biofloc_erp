@@ -24,7 +24,7 @@ type LoteCreateForm = {
   estado_id: number;
   fecha_siembra: string;
   fecha_cierre: string;
-  cantidad_sembrada: number | "";
+  cantidad_prevista: number | "";
   peso_inicial_promedio_g: string;
   observaciones: string;
 };
@@ -118,7 +118,7 @@ export function LotesPage() {
       estado_id: 0,
       fecha_siembra: new Date().toISOString().slice(0, 10),
       fecha_cierre: "",
-      cantidad_sembrada: "",
+      cantidad_prevista: "",
       peso_inicial_promedio_g: "1.0",
       observaciones: "",
     });
@@ -155,7 +155,7 @@ export function LotesPage() {
       estado_id: Number(values.estado_id),
       fecha_siembra: values.fecha_siembra,
       fecha_cierre: values.fecha_cierre || null,
-      cantidad_sembrada: Number(values.cantidad_sembrada),
+      cantidad_prevista: Number(values.cantidad_prevista),
       peso_inicial_promedio_g: pesoNum,
       observaciones: values.observaciones.trim() || null,
     });
@@ -377,12 +377,12 @@ export function LotesPage() {
             <Field label="Fecha de cierre (opcional)">
               <input type="date" className="bf-input" {...createForm.register("fecha_cierre")} />
             </Field>
-            <Field label="Cantidad sembrada">
+            <Field label="Cantidad prevista de siembra">
               <input
                 type="number"
                 min="1"
                 className="bf-input"
-                {...createForm.register("cantidad_sembrada", { required: true, valueAsNumber: true })}
+                {...createForm.register("cantidad_prevista", { required: true, valueAsNumber: true })}
               />
             </Field>
             <Field label="Peso inicial promedio (g)">
