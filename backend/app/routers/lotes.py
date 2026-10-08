@@ -9,9 +9,11 @@ from app.core.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.lote import LoteCreate, LoteUpdate, LoteOut
 from app.schemas.costos_lote import CostosLoteOut
+from app.schemas.siembra import SiembraLoteCreate, SiembraLoteOut
 from app.services.auth_service import get_current_user
 from app.services import lote_service as svc
 from app.services.costos_lote_service import obtener_costos_lote
+from app.services.siembra_service import sembrar_lote
 
 router = APIRouter()
 
@@ -34,6 +36,12 @@ def listar(estanque_id: Optional[int] = None, db: Session = Depends(get_db), cur
 def costos(lote_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     _require_roles(current_user, db, {"ADMINISTRADOR", "TECNICO", "OPERARIO"})
     return obtener_costos_lote(db, lote_id)
+
+
+@router.post("/{lote_id}/siembra", response_model=SiembraLoteOut, status_code=201, summary="Registrar siembra y consumir alevinos del inventario")
+def registrar_siembra(lote_id: int, data: SiembraLoteCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    _require_roles(current_user, db, {"ADMINISTRADOR", "TECNICO", "OPERARIO"})
+    return sembrar_lote(db, lote_id, data, current_user.id)
 
 
 @router.get("/{lote_id}", response_model=LoteOut, summary="Obtener lote")
