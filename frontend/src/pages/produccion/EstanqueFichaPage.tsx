@@ -1365,7 +1365,7 @@ function CrearCicloPreparacionPanel({
             etapa_productiva_id: etapaInicial.id,
             estado_id: estadoPlanificado.id,
             fecha_siembra: fechaSiembra,
-            cantidad_sembrada: Number(cantidad),
+            cantidad_prevista: Number(cantidad),
             peso_inicial_promedio_g: null,
             observaciones: observaciones.trim() || "Ciclo creado para preparación y acondicionamiento Biofloc previo a la siembra.",
           });
