@@ -746,22 +746,23 @@ function MortalidadModal({
 function AguaModal({
   open,
   loteId,
+  estanqueId,
   onClose,
   onSaved,
 }: {
   open: boolean;
-  loteId: number;
+  loteId?: number;
+  estanqueId?: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const parametrosQuery = useQuery({ queryKey: ["parametros-agua"], queryFn: () => listParametrosAgua(true) });
   const [formError, setFormError] = useState<string | null>(null);
-
   const parametros = parametrosQuery.data ?? [];
-
   const form = useForm({
     defaultValues: {
       lote_id: loteId,
+      estanque_id: estanqueId,
       parametro_id: 0,
       fecha_hora: toDatetimeLocalValue(),
       valor: "",
@@ -773,12 +774,7 @@ function AguaModal({
     if (parametros.length === 0) return;
     const primero = parametros[0]?.id ?? 0;
     const actual = form.getValues("parametro_id");
-    if (actual === 0 && primero) {
-      form.reset({
-        ...form.getValues(),
-        parametro_id: primero,
-      });
-    }
+    if (actual === 0 && primero) form.setValue("parametro_id", primero);
   }, [parametrosQuery.data]);
 
   const mutation = useMutation({
@@ -791,14 +787,15 @@ function AguaModal({
   });
 
   return (
-    <Modal open={open} title="Registrar medición de agua" onClose={onClose}>
+    <Modal open={open} title={estanqueId ? "Medir calidad de agua — Estanque" : "Registrar medición de agua"} onClose={onClose}>
       <form
         className="space-y-3"
         onSubmit={form.handleSubmit((values) => {
           const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
           if (!fechaHora) return;
           mutation.mutate({
-            lote_id: loteId,
+            lote_id: loteId ?? null,
+            estanque_id: estanqueId ?? null,
             parametro_id: Number(values.parametro_id),
             fecha_hora: fechaHora,
             valor: Number(values.valor),
@@ -807,35 +804,23 @@ function AguaModal({
         })}
       >
         {formError ? <ErrorAlert message={formError} /> : null}
-
         {parametrosQuery.isLoading ? <LoadingState label="Cargando parámetros…" /> : null}
-
-        <input type="hidden" {...form.register("lote_id", { valueAsNumber: true })} />
-
         <Field label="Parámetro">
           <select className="bf-input" {...form.register("parametro_id", { valueAsNumber: true, required: true })}>
-            {parametros.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.nombre} ({row.unidad})
-              </option>
-            ))}
+            {parametros.map((row) => <option key={row.id} value={row.id}>{row.nombre} ({row.unidad})</option>)}
           </select>
         </Field>
-
         <Field label="Fecha y hora">
           <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
         </Field>
-
         <Field label="Valor">
           <input type="number" step="any" min="0" className="bf-input" {...form.register("valor", { valueAsNumber: true, required: true })} />
         </Field>
-
         <Field label="Observaciones">
           <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
         </Field>
-
         <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || parametros.length === 0}>
-          {mutation.isPending ? "Guardando…" : "Registrar"}
+          {mutation.isPending ? "Guardando…" : "Registrar medición"}
         </button>
       </form>
     </Modal>
@@ -845,22 +830,31 @@ function AguaModal({
 function BioflocModal({
   open,
   loteId,
+  estanqueId,
   onClose,
   onSaved,
 }: {
   open: boolean;
-  loteId: number;
+  loteId?: number;
+  estanqueId?: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const [modo, setModo] = useState<"aplicacion" | "medicion">("aplicacion");
-  const tiposQuery = useQuery({ queryKey: ["tipos-aplicacion-biofloc"], queryFn: () => listTiposAplicacionBiofloc(true) });
-  const productosQuery = useQuery({ queryKey: ["productos-activos"], queryFn: listProductosActivos });
-  const medicionesQuery = useQuery({ queryKey: ["mediciones-biofloc", loteId], queryFn: () => listMedicionesBiofloc(loteId) });
-  const aplicacionesQuery = useQuery({ queryKey: ["aplicaciones-biofloc", loteId], queryFn: () => listAplicacionesBiofloc(loteId) });
+  const esEstanque = Boolean(estanqueId);
+  const [modo, setModo] = useState<"aplicacion" | "medicion">(esEstanque ? "medicion" : "aplicacion");
+  const tiposQuery = useQuery({ queryKey: ["tipos-aplicacion-biofloc"], queryFn: () => listTiposAplicacionBiofloc(true), enabled: !esEstanque });
+  const productosQuery = useQuery({ queryKey: ["productos-activos"], queryFn: listProductosActivos, enabled: !esEstanque });
+  const medicionesQuery = useQuery({
+    queryKey: esEstanque ? ["mediciones-biofloc-estanque", estanqueId] : ["mediciones-biofloc", loteId],
+    queryFn: () => listMedicionesBiofloc(loteId, estanqueId),
+  });
+  const aplicacionesQuery = useQuery({
+    queryKey: ["aplicaciones-biofloc", loteId],
+    queryFn: () => listAplicacionesBiofloc(loteId),
+    enabled: Boolean(loteId),
+  });
   const [formErrorAplicacion, setFormErrorAplicacion] = useState<string | null>(null);
   const [formErrorMedicion, setFormErrorMedicion] = useState<string | null>(null);
-
   const tipos = tiposQuery.data ?? [];
 
   const form = useForm({
@@ -878,21 +872,16 @@ function BioflocModal({
   useEffect(() => {
     if (tipos.length === 0) return;
     const primero = tipos[0]?.id ?? 0;
-    const actual = form.getValues("tipo_aplicacion_id");
-    if (actual === 0 && primero) {
-      form.reset({
-        ...form.getValues(),
-        tipo_aplicacion_id: primero,
-      });
-    }
+    if (form.getValues("tipo_aplicacion_id") === 0 && primero) form.setValue("tipo_aplicacion_id", primero);
   }, [tiposQuery.data]);
 
   const formMedicion = useForm({
     defaultValues: {
       lote_id: loteId,
+      estanque_id: estanqueId,
       fecha_hora: toDatetimeLocalValue(),
       volumen_sedimentable: "",
-      unidad: medicionesQuery.data?.[0]?.unidad ?? "",
+      unidad: "mL/L",
       relacion_cn: "",
       observaciones: "",
     },
@@ -921,224 +910,140 @@ function BioflocModal({
   const tipoAplicacion = tipos.find((row) => row.id === Number(tipoAplicacionId));
   const productosBiofloc = useMemo(() => {
     const tipo = (tipoAplicacion?.nombre ?? "").toUpperCase();
-    let patrones: RegExp[] = [];
-    if (tipo.includes("PROBIOTICO")) patrones = [/probi[oó]tico/i];
-    else if (tipo.includes("FUENTE_CARBONO")) patrones = [/melaza/i];
-    else if (tipo.includes("CORRECTIVO")) patrones = [/sal\s*marina/i, /bicarbonato/i];
-    return productos.filter((row) =>
-      patrones.some((patron) => patron.test(row.nombre) || patron.test(row.codigo)),
-    );
+    const patrones: RegExp[] = tipo.includes("PROBIOTICO") ? [/probi[oó]tico/i]
+      : tipo.includes("FUENTE_CARBONO") ? [/melaza/i]
+      : tipo.includes("CORRECTIVO") ? [/sal\\s*marina/i, /bicarbonato/i] : [];
+    return productos.filter((row) => patrones.some((patron) => patron.test(row.nombre) || patron.test(row.codigo)));
   }, [productos, tipoAplicacion?.nombre]);
+
   const historialMediciones = (medicionesQuery.data ?? []).slice(0, 5);
   const historialAplicaciones = (aplicacionesQuery.data ?? []).slice(0, 5);
 
   return (
-    <Modal open={open} title="Registrar Biofloc" onClose={onClose}>
+    <Modal open={open} title={esEstanque ? "Medir Biofloc — Estanque" : "Registrar Biofloc"} onClose={onClose}>
       <div className="space-y-4">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className={modo === "aplicacion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"}
-            onClick={() => setModo("aplicacion")}
-          >
-            Aplicación
-          </button>
-          <button
-            type="button"
-            className={modo === "medicion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"}
-            onClick={() => setModo("medicion")}
-          >
-            Medición
-          </button>
-        </div>
+        {!esEstanque ? (
+          <div className="flex gap-2">
+            <button type="button" className={modo === "aplicacion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"} onClick={() => setModo("aplicacion")}>Aplicación</button>
+            <button type="button" className={modo === "medicion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"} onClick={() => setModo("medicion")}>Medición</button>
+          </div>
+        ) : null}
 
-        {modo === "aplicacion" ? (
-          <form
-            className="space-y-3"
-            onSubmit={form.handleSubmit((values) => {
-              const fechaHora = withFechaHoraIso(values.fecha_hora, setFormErrorAplicacion);
-              if (!fechaHora) return;
-              const producto = values.producto_id.trim();
-              const cantidad = values.cantidad.trim();
-              if (cantidad !== "" && Number(cantidad) > 0 && producto === "") {
-                setFormErrorAplicacion("Seleccione un insumo Biofloc cuando registre una cantidad mayor que 0.");
-                return;
-              }
-              mutationAplicacion.mutate({
-                lote_id: loteId,
-                tipo_aplicacion_id: Number(values.tipo_aplicacion_id),
-                producto_id: producto === "" ? null : Number(producto),
-                fecha_hora: fechaHora,
-                cantidad: cantidad === "" ? null : Number(cantidad),
-                unidad: values.unidad.trim() || null,
-                observaciones: values.observaciones.trim() || null,
-              });
-            })}
-          >
+        {modo === "aplicacion" && !esEstanque ? (
+          <form className="space-y-3" onSubmit={form.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormErrorAplicacion);
+            if (!fechaHora) return;
+            const producto = values.producto_id.trim();
+            const cantidad = values.cantidad.trim();
+            if (cantidad !== "" && Number(cantidad) > 0 && producto === "") {
+              setFormErrorAplicacion("Seleccione un insumo Biofloc cuando registre una cantidad mayor que 0.");
+              return;
+            }
+            mutationAplicacion.mutate({
+              lote_id: loteId!,
+              tipo_aplicacion_id: Number(values.tipo_aplicacion_id),
+              producto_id: producto === "" ? null : Number(producto),
+              fecha_hora: fechaHora,
+              cantidad: cantidad === "" ? null : Number(cantidad),
+              unidad: values.unidad.trim() || null,
+              observaciones: values.observaciones.trim() || null,
+            });
+          })}>
             {formErrorAplicacion ? <ErrorAlert message={formErrorAplicacion} /> : null}
             {tiposQuery.isLoading || productosQuery.isLoading ? <LoadingState label="Cargando catálogos…" /> : null}
-
-            <input type="hidden" {...form.register("lote_id", { valueAsNumber: true })} />
-
             <Field label="Tipo de aplicación">
-              <select
-                className="bf-input"
-                {...form.register("tipo_aplicacion_id", {
-                  valueAsNumber: true,
-                  required: true,
-                  onChange: () => form.setValue("producto_id", ""),
-                })}
-              >
-                {tipos.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.nombre}
-                  </option>
-                ))}
+              <select className="bf-input" {...form.register("tipo_aplicacion_id", { valueAsNumber: true, required: true, onChange: () => form.setValue("producto_id", "") })}>
+                {tipos.map((row) => <option key={row.id} value={row.id}>{row.nombre}</option>)}
               </select>
             </Field>
-
             <Field label="Producto">
-              <select
-                className="bf-input"
-                disabled={productosBiofloc.length === 0}
-                {...form.register("producto_id")}
-              >
-                <option value="">
-                  {productosBiofloc.length ? "Seleccione un insumo" : "No requiere producto"}
-                </option>
-                {productosBiofloc.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {etiquetaProducto(row.nombre, row.codigo)}
-                  </option>
-                ))}
+              <select className="bf-input" disabled={productosBiofloc.length === 0} {...form.register("producto_id")}>
+                <option value="">{productosBiofloc.length ? "Seleccione un insumo" : "No requiere producto"}</option>
+                {productosBiofloc.map((row) => <option key={row.id} value={row.id}>{etiquetaProducto(row.nombre, row.codigo)}</option>)}
               </select>
             </Field>
-
             <Field label="Fecha y hora">
               <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
             </Field>
-
             <Field label="Cantidad (opcional)">
               <input type="number" step="any" min="0" className="bf-input" {...form.register("cantidad")} />
-              <p className="mt-1 text-xs text-[var(--bf-muted)]">
-                Si registra una cantidad mayor que 0, debe seleccionar un insumo.
-              </p>
             </Field>
-
-            <Field label="Unidad (opcional, texto del API)">
+            <Field label="Unidad (opcional)">
               <input className="bf-input" {...form.register("unidad")} />
             </Field>
-
             <Field label="Observaciones">
               <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
             </Field>
-
-            <p className="text-xs text-[var(--bf-muted)]">
-              Los consumos con cantidad mayor que 0 generan automáticamente una salida de inventario y afectan el costo de producción.
-            </p>
-
-            <button
-              type="submit"
-              className="bf-btn-primary"
-              disabled={mutationAplicacion.isPending || tipos.length === 0}
-            >
-              {mutationAplicacion.isPending ? "Guardando…" : "Registrar aplicación"}
-            </button>
+            <p className="text-xs text-[var(--bf-muted)]">Los consumos con cantidad mayor que 0 generan automáticamente una salida de inventario y afectan el costo de producción.</p>
+            <button type="submit" className="bf-btn-primary" disabled={mutationAplicacion.isPending || tipos.length === 0}>{mutationAplicacion.isPending ? "Guardando…" : "Registrar aplicación"}</button>
           </form>
         ) : null}
 
         {modo === "medicion" ? (
-          <form
-            className="space-y-3"
-            onSubmit={formMedicion.handleSubmit((values) => {
-              const fechaHora = withFechaHoraIso(values.fecha_hora, setFormErrorMedicion);
-              if (!fechaHora) return;
-              const cn = values.relacion_cn.trim();
-              mutationMedicion.mutate({
-                lote_id: loteId,
-                fecha_hora: fechaHora,
-                volumen_sedimentable: Number(values.volumen_sedimentable),
-                unidad: values.unidad.trim() || "mL/L",
-                relacion_cn: cn === "" ? null : Number(cn),
-                observaciones: values.observaciones.trim() || null,
-              });
-            })}
-          >
+          <form className="space-y-3" onSubmit={formMedicion.handleSubmit((values) => {
+            const fechaHora = withFechaHoraIso(values.fecha_hora, setFormErrorMedicion);
+            if (!fechaHora) return;
+            const cn = values.relacion_cn.trim();
+            mutationMedicion.mutate({
+              lote_id: loteId ?? null,
+              estanque_id: estanqueId ?? null,
+              fecha_hora: fechaHora,
+              volumen_sedimentable: Number(values.volumen_sedimentable),
+              unidad: values.unidad.trim() || "mL/L",
+              relacion_cn: cn === "" ? null : Number(cn),
+              observaciones: values.observaciones.trim() || null,
+            });
+          })}>
             {formErrorMedicion ? <ErrorAlert message={formErrorMedicion} /> : null}
-
-            <input type="hidden" {...formMedicion.register("lote_id", { valueAsNumber: true })} />
-
             <Field label="Parámetro / indicador">
               <input className="bf-input" value="VOLUMEN_SEDIMENTABLE" readOnly />
             </Field>
-
             <Field label="Fecha y hora">
               <input type="datetime-local" className="bf-input" {...formMedicion.register("fecha_hora", { required: true })} />
             </Field>
-
-            <Field label="Valor medido">
-              <input
-                type="number"
-                step="any"
-                min="0"
-                className="bf-input"
-                {...formMedicion.register("volumen_sedimentable", { valueAsNumber: true, required: true })}
-              />
+            <Field label="Volumen sedimentable">
+              <input type="number" step="any" min="0" className="bf-input" {...formMedicion.register("volumen_sedimentable", { valueAsNumber: true, required: true })} />
             </Field>
-
             <Field label="Unidad">
               <input className="bf-input" {...formMedicion.register("unidad")} />
             </Field>
-
             <Field label="Relación C/N (opcional)">
               <input type="number" step="any" min="0" className="bf-input" {...formMedicion.register("relacion_cn")} />
             </Field>
-
             <Field label="Observaciones">
               <textarea className="bf-input min-h-20" {...formMedicion.register("observaciones")} />
             </Field>
-
-            <button type="submit" className="bf-btn-primary" disabled={mutationMedicion.isPending}>
-              {mutationMedicion.isPending ? "Guardando…" : "Registrar medición"}
-            </button>
+            <button type="submit" className="bf-btn-primary" disabled={mutationMedicion.isPending}>{mutationMedicion.isPending ? "Guardando…" : "Registrar medición"}</button>
           </form>
         ) : null}
 
         <div className="grid gap-3 border-t border-[var(--bf-border)] pt-3 sm:grid-cols-2">
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">Aplicaciones recientes</h3>
-            {aplicacionesQuery.isLoading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Cargando…</p> : null}
-            {!aplicacionesQuery.isLoading && historialAplicaciones.length === 0 ? (
-              <p className="mt-2 text-xs text-[var(--bf-muted)]">N/D — Sin aplicaciones</p>
-            ) : null}
-            <div className="mt-2 space-y-2">
-              {historialAplicaciones.map((row) => (
-                <div key={row.id} className="rounded-lg border border-[var(--bf-border)] p-2 text-xs">
-                  <p className="font-medium text-[var(--bf-ink)]">{formatDate(row.fecha_hora)}</p>
-                  <p className="text-[var(--bf-muted)]">
-                    {tipos.find((t) => t.id === row.tipo_aplicacion_id)?.nombre ?? `Tipo #${row.tipo_aplicacion_id}`}
-                  </p>
-                  <p className="text-[var(--bf-muted)]">
-                    {row.cantidad == null ? "—" : `${formatNumber(row.cantidad, { maximumFractionDigits: 3 })} ${row.unidad ?? ""}`}
-                  </p>
-                </div>
-              ))}
+          {!esEstanque ? (
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">Aplicaciones recientes</h3>
+              {aplicacionesQuery.isLoading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Cargando…</p> : null}
+              {!aplicacionesQuery.isLoading && historialAplicaciones.length === 0 ? <p className="mt-2 text-xs text-[var(--bf-muted)]">N/D — Sin aplicaciones</p> : null}
+              <div className="mt-2 space-y-2">
+                {historialAplicaciones.map((row) => (
+                  <div key={row.id} className="rounded-lg border border-[var(--bf-border)] p-2 text-xs">
+                    <p className="font-medium text-[var(--bf-ink)]">{formatDate(row.fecha_hora)}</p>
+                    <p className="text-[var(--bf-muted)]">{tipos.find((t) => t.id === row.tipo_aplicacion_id)?.nombre ?? `Tipo #${row.tipo_aplicacion_id}`}</p>
+                    <p className="text-[var(--bf-muted)]">{row.cantidad == null ? "—" : `${formatNumber(row.cantidad, { maximumFractionDigits: 3 })} ${row.unidad ?? ""}`}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">Mediciones recientes</h3>
             {medicionesQuery.isLoading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Cargando…</p> : null}
-            {!medicionesQuery.isLoading && historialMediciones.length === 0 ? (
-              <p className="mt-2 text-xs text-[var(--bf-muted)]">N/D — Sin mediciones</p>
-            ) : null}
+            {!medicionesQuery.isLoading && historialMediciones.length === 0 ? <p className="mt-2 text-xs text-[var(--bf-muted)]">N/D — Sin mediciones</p> : null}
             <div className="mt-2 space-y-2">
               {historialMediciones.map((row) => (
                 <div key={row.id} className="rounded-lg border border-[var(--bf-border)] p-2 text-xs">
                   <p className="font-medium text-[var(--bf-ink)]">{formatDate(row.fecha_hora)}</p>
                   <p className="text-[var(--bf-muted)]">Sólidos sedimentables</p>
-                  <p className="text-[var(--bf-muted)]">
-                    {formatNumber(row.volumen_sedimentable, { maximumFractionDigits: 3 })} {row.unidad}
-                  </p>
+                  <p className="text-[var(--bf-muted)]">{formatNumber(row.volumen_sedimentable, { maximumFractionDigits: 3 })} {row.unidad}</p>
                 </div>
               ))}
             </div>
