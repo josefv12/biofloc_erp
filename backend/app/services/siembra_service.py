@@ -47,6 +47,8 @@ def sembrar_lote(db: Session, lote_id: int, data: SiembraLoteCreate, usuario_id:
 
     try:
         mov = crear_movimiento_inventario(db, mov_data, usuario_id, flush_only=True)
+        if data.cantidad > lote.cantidad_prevista:
+            raise HTTPException(status_code=422, detail=f"La cantidad sembrada ({data.cantidad}) no puede superar la cantidad prevista ({lote.cantidad_prevista}).")
         lote.cantidad_sembrada = data.cantidad
         if data.peso_inicial_promedio_g is not None:
             lote.peso_inicial_promedio_g = data.peso_inicial_promedio_g
