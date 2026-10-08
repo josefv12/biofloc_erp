@@ -768,13 +768,11 @@ function MortalidadModal({
 function AguaModal({
   open,
   loteId,
-  estanqueId,
   onClose,
   onSaved,
 }: {
   open: boolean;
-  loteId?: number;
-  estanqueId?: number;
+  loteId: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -783,8 +781,6 @@ function AguaModal({
   const parametros = parametrosQuery.data ?? [];
   const form = useForm({
     defaultValues: {
-      lote_id: loteId,
-      estanque_id: estanqueId,
       parametro_id: 0,
       fecha_hora: toDatetimeLocalValue(),
       valor: "",
@@ -809,15 +805,14 @@ function AguaModal({
   });
 
   return (
-    <Modal open={open} title={estanqueId ? "Medir calidad de agua — Estanque" : "Registrar medición de agua"} onClose={onClose}>
+    <Modal open={open} title="Medir calidad de agua — Lote" onClose={onClose}>
       <form
         className="space-y-3"
         onSubmit={form.handleSubmit((values) => {
           const fechaHora = withFechaHoraIso(values.fecha_hora, setFormError);
           if (!fechaHora) return;
           mutation.mutate({
-            lote_id: loteId ?? null,
-            estanque_id: estanqueId ?? null,
+            lote_id: loteId,
             parametro_id: Number(values.parametro_id),
             fecha_hora: fechaHora,
             valor: Number(values.valor),
@@ -852,23 +847,20 @@ function AguaModal({
 function BioflocModal({
   open,
   loteId,
-  estanqueId,
   onClose,
   onSaved,
 }: {
   open: boolean;
   loteId?: number;
-  estanqueId?: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const esEstanque = Boolean(estanqueId);
-  const [modo, setModo] = useState<"aplicacion" | "medicion">(esEstanque ? "medicion" : "aplicacion");
-  const tiposQuery = useQuery({ queryKey: ["tipos-aplicacion-biofloc"], queryFn: () => listTiposAplicacionBiofloc(true), enabled: !esEstanque });
-  const productosQuery = useQuery({ queryKey: ["productos-activos"], queryFn: listProductosActivos, enabled: !esEstanque });
+  const [modo, setModo] = useState<"aplicacion" | "medicion">("medicion");
+  const tiposQuery = useQuery({ queryKey: ["tipos-aplicacion-biofloc"], queryFn: () => listTiposAplicacionBiofloc(true) });
+  const productosQuery = useQuery({ queryKey: ["productos-activos"], queryFn: listProductosActivos });
   const medicionesQuery = useQuery({
-    queryKey: esEstanque ? ["mediciones-biofloc-estanque", estanqueId] : ["mediciones-biofloc", loteId],
-    queryFn: () => listMedicionesBiofloc(loteId, estanqueId),
+    queryKey: ["mediciones-biofloc", loteId],
+    queryFn: () => listMedicionesBiofloc(loteId),
   });
   const aplicacionesQuery = useQuery({
     queryKey: ["aplicaciones-biofloc", loteId],
@@ -899,8 +891,6 @@ function BioflocModal({
 
   const formMedicion = useForm({
     defaultValues: {
-      lote_id: loteId,
-      estanque_id: estanqueId,
       fecha_hora: toDatetimeLocalValue(),
       volumen_sedimentable: "",
       unidad: "mL/L",
@@ -942,14 +932,14 @@ function BioflocModal({
   const historialAplicaciones = (aplicacionesQuery.data ?? []).slice(0, 5);
 
   return (
-    <Modal open={open} title={esEstanque ? "Medir Biofloc — Estanque" : "Registrar Biofloc"} onClose={onClose}>
+    <Modal open={open} title="Registrar Biofloc — Lote" onClose={onClose}>
       <div className="space-y-4">
-        {!esEstanque ? (
+        <div className="flex gap-2">
           <div className="flex gap-2">
             <button type="button" className={modo === "aplicacion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"} onClick={() => setModo("aplicacion")}>Aplicación</button>
             <button type="button" className={modo === "medicion" ? "bf-btn-primary !py-1.5 text-xs" : "bf-btn-secondary !py-1.5 text-xs"} onClick={() => setModo("medicion")}>Medición</button>
           </div>
-        ) : null}
+        </div>
 
         {modo === "aplicacion" && !esEstanque ? (
           <form className="space-y-3" onSubmit={form.handleSubmit((values) => {
@@ -1007,8 +997,7 @@ function BioflocModal({
             if (!fechaHora) return;
             const cn = values.relacion_cn.trim();
             mutationMedicion.mutate({
-              lote_id: loteId ?? null,
-              estanque_id: estanqueId ?? null,
+              lote_id: loteId,
               fecha_hora: fechaHora,
               volumen_sedimentable: Number(values.volumen_sedimentable),
               unidad: values.unidad.trim() || "mL/L",
@@ -1040,8 +1029,7 @@ function BioflocModal({
         ) : null}
 
         <div className="grid gap-3 border-t border-[var(--bf-border)] pt-3 sm:grid-cols-2">
-          {!esEstanque ? (
-            <div>
+          <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">Aplicaciones recientes</h3>
               {aplicacionesQuery.isLoading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Cargando…</p> : null}
               {!aplicacionesQuery.isLoading && historialAplicaciones.length === 0 ? <p className="mt-2 text-xs text-[var(--bf-muted)]">N/D — Sin aplicaciones</p> : null}
@@ -1055,7 +1043,7 @@ function BioflocModal({
                 ))}
               </div>
             </div>
-          ) : null}
+          </div>
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">Mediciones recientes</h3>
             {medicionesQuery.isLoading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Cargando…</p> : null}
