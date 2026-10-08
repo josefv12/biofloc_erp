@@ -129,7 +129,7 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
 
     return CostosLoteOut(
         lote_id=int(lote["id"]), codigo=str(lote["codigo"]), estanque_id=int(lote["estanque_id"]),
-        alevinos=alevinos, alimento=alimento, otros_costos_directos=otros,
+        alevinos=alevinos, alimento=alimento, biofloc_insumos=biofloc_insumos, otros_costos_directos=otros,
         costo_directo_lote=directo,
         costos_estanque_no_asignados=_d(row["costos_estanque"], D2),
         kg_alimento_suministrado=_d(row["alimento_suministrado"], D3),
