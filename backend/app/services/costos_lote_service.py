@@ -47,6 +47,14 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
                 WHERE a.lote_id = :lote_id
             ), 0) AS alimento_suministrado,
             COALESCE((
+                SELECT SUM(mi.costo_total)
+                FROM biofloc.movimientos_inventario mi
+                WHERE mi.referencia_tipo = 'SIEMBRA'
+                  AND mi.referencia_id = :lote_id
+                  AND mi.costo_total IS NOT NULL
+            ), 0)
+            +
+            COALESCE((
                 SELECT SUM(g.valor)
                 FROM biofloc.gastos g
                 JOIN biofloc.categorias_gasto cg ON cg.id = g.categoria_id
