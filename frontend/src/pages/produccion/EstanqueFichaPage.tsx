@@ -1773,7 +1773,13 @@ function AcondicionamientoBioflocEstanquePanel({
             </button>
           ) : null}
         </div>
-        <div className="mt-5 rounded-xl border border-[var(--bf-border)] bg-white p-4">
+        <div className="mt-6 mb-2 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--bf-accent)]">Control del agua</p>
+            <p className="text-sm font-semibold text-[var(--bf-ink)]">Calidad de agua del lote</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--bf-ink)]">Mediciones de calidad de agua</p>
@@ -1815,7 +1821,13 @@ function AcondicionamientoBioflocEstanquePanel({
             <p className="mt-3 text-sm text-[var(--bf-muted)]">Aún no hay mediciones de calidad de agua para este lote.</p>
           )}
 
-          <div className="mt-5 rounded-xl border border-[var(--bf-border)] bg-white p-4">
+          <div className="mt-6 mb-2 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--bf-accent)]">Control del Biofloc</p>
+              <p className="text-sm font-semibold text-[var(--bf-ink)]">Calidad y concentración del Biofloc</p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-[var(--bf-border)] bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[var(--bf-ink)]">Mediciones de Biofloc</p>
