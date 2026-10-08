@@ -56,11 +56,10 @@ class LoteCreate(BaseModel):
     fecha_siembra: date
     fecha_cierre: Optional[date] = None
     cantidad_prevista: int
-    cantidad_sembrada: int = 0
     peso_inicial_promedio_g: Optional[float] = None
     observaciones: Optional[str] = None
 
-    @field_validator("cantidad_sembrada")
+    @field_validator("cantidad_prevista")
     @classmethod
     def cantidad_positiva(cls, v: int) -> int:
         if v <= 0:
