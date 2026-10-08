@@ -49,11 +49,12 @@ def _require_roles(usuario: Usuario, db: Session, roles_permitidos: set[str]):
 )
 def listar(
     lote_id: Optional[int] = None,
+    estanque_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
     _require_roles(current_user, db, ROLES_PERMITIDOS)
-    return svc.listar_mediciones_biofloc(db, lote_id=lote_id)
+    return svc.listar_mediciones_biofloc(db, lote_id=lote_id, estanque_id=estanque_id)
 
 
 # ---------------------------------------------------------------------------
