@@ -1,21 +1,13 @@
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional
 from decimal import Decimal
 
 class MedicionAguaBase(BaseModel):
-    lote_id: Optional[int] = None
-    estanque_id: Optional[int] = None
+    lote_id: int
     parametro_id: int
     fecha_hora: datetime
     valor: Decimal = Field(..., ge=0)
-    observaciones: Optional[str] = None
-
-    @model_validator(mode="after")
-    def validar_contexto(self):
-        if (self.lote_id is None) == (self.estanque_id is None):
-            raise ValueError("Debe indicar exactamente un contexto: lote_id o estanque_id.")
-        return self
+    observaciones: str | None = None
 
 class MedicionAguaCreate(MedicionAguaBase):
     pass
