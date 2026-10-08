@@ -1397,6 +1397,8 @@ function AcondicionamientoBioflocEstanquePanel({
     queryKey: ["acondicionamientos-biofloc-lote", loteId],
     queryFn: () => listAcondicionamientosBioflocEstanque(loteId),
   });
+  const loteQuery = useQuery({ queryKey: ["lote", loteId], queryFn: () => getLote(loteId) });
+  const lote = loteQuery.data;
   const tipos = useMemo(
     () => new Map((tiposQuery.data ?? []).map((row) => [row.id, row])),
     [tiposQuery.data],
