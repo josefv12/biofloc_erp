@@ -1463,7 +1463,7 @@ function SiembraLotePanel({ lote, puedeRegistrar, onSown }: { lote: Lote; puedeR
         {success ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{success}</div> : null}
         {puedeRegistrar ? (
           <div className="mt-4 flex justify-end">
-            <button type="button" className="bf-btn-primary" onClick={() => { setFormError(null); form.reset({ producto_id: "", cantidad: String(lote.cantidad_sembrada), fecha_hora: toDatetimeLocalValue(), peso: "", observaciones: "" }); setOpen(true); }}>
+            <button type="button" className="bf-btn-primary" onClick={() => { setFormError(null); form.reset({ producto_id: "", cantidad: String(lote.cantidad_prevista), fecha_hora: toDatetimeLocalValue(), peso: "", observaciones: "" }); setOpen(true); }}>
               Sembrar lote
             </button>
           </div>
