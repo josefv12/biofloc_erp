@@ -1263,15 +1263,120 @@ function CosechaModal({
   );
 }
 
+function CrearCicloPreparacionPanel({
+  estanque,
+  puedeRegistrar,
+  onCreated,
+}: {
+  estanque: { id: number; codigo: string; nombre: string };
+  puedeRegistrar: boolean;
+  onCreated: (lote: Lote) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const especiesQuery = useQuery({ queryKey: ["especies", "ciclo-preparacion"], queryFn: () => listEspecies(true) });
+  const etapasQuery = useQuery({ queryKey: ["etapas-productivas", "ciclo-preparacion"], queryFn: () => listEtapasProductivas(true) });
+  const estadosQuery = useQuery({ queryKey: ["estados-lote", "ciclo-preparacion"], queryFn: () => listEstadosLote(true) });
+  const especieInicial = especiesQuery.data?.[0]?.id ?? 0;
+  const etapaInicial = etapasQuery.data?.find((row) => row.nombre.toUpperCase() === "ALEVINAJE") ?? etapasQuery.data?.[0];
+  const estadoPlanificado = estadosQuery.data?.find((row) => row.nombre.toUpperCase() === "PLANIFICADO");
+  const [fechaSiembra, setFechaSiembra] = useState("");
+  const [cantidad, setCantidad] = useState("1100");
+  const [especieId, setEspecieId] = useState(0);
+  const [observaciones, setObservaciones] = useState("");
+
+  useEffect(() => {
+    if (!especieId && especieInicial) setEspecieId(especieInicial);
+  }, [especieInicial, especieId]);
+
+  const mutation = useMutation({
+    mutationFn: (data: LoteCreate) => createLote(data),
+    onSuccess: (lote) => {
+      setOpen(false);
+      setFormError(null);
+      onCreated(lote);
+    },
+    onError: (err) => setFormError(apiErrorMessage(err)),
+  });
+
+  const fechaMinima = new Date().toISOString().slice(0, 10);
+  const codigo = fechaSiembra ? "LT-" + estanque.codigo + "-" + fechaSiembra.replaceAll("-", "") : "LT-" + estanque.codigo + "-NUEVO";
+
+  return (
+    <div className="border-t border-[var(--bf-border)] px-6 pb-8 pt-6">
+      <div className="rounded-2xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-5">
+        <FichaLabel>Nuevo ciclo</FichaLabel>
+        <h2 className="mt-1 text-2xl font-bold text-[var(--bf-ink)]">Preparar estanque para una siembra</h2>
+        <p className="mt-2 max-w-3xl text-sm text-[var(--bf-muted)]">
+          Primero se crea el lote planificado. Desde ese momento, el acondicionamiento y las mediciones de agua/Biofloc quedan asociados a ese ciclo.
+        </p>
+        <div className="mt-4 flex justify-end">
+          {puedeRegistrar ? <button type="button" className="bf-btn-primary" onClick={() => { setFormError(null); setOpen(true); }}>Crear lote de preparación</button> : null}
+        </div>
+      </div>
+
+      <Modal open={open} title="Crear lote — Preparación de siembra" onClose={() => setOpen(false)}>
+        <form className="space-y-3" onSubmit={(event) => {
+          event.preventDefault();
+          setFormError(null);
+          if (!especieId || !etapaInicial?.id || !estadoPlanificado?.id) {
+            setFormError("No se pudieron cargar los catálogos necesarios para crear el ciclo.");
+            return;
+          }
+          if (!fechaSiembra) { setFormError("Indique la fecha prevista de siembra."); return; }
+          if (Number(cantidad) <= 0) { setFormError("La cantidad prevista debe ser mayor que 0."); return; }
+          mutation.mutate({
+            codigo,
+            estanque_id: estanque.id,
+            especie_id: especieId,
+            etapa_productiva_id: etapaInicial.id,
+            estado_id: estadoPlanificado.id,
+            fecha_siembra: fechaSiembra,
+            cantidad_sembrada: Number(cantidad),
+            peso_inicial_promedio_g: null,
+            observaciones: observaciones.trim() || "Ciclo creado para preparación y acondicionamiento Biofloc previo a la siembra.",
+          });
+        }}>
+          {formError ? <ErrorAlert message={formError} /> : null}
+          <Field label="Especie">
+            <select className="bf-input" value={especieId} onChange={(e) => setEspecieId(Number(e.target.value))}>
+              {(especiesQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{row.nombre_comun}</option>)}
+            </select>
+          </Field>
+          <Field label="Etapa inicial">
+            <input className="bf-input" value={etapaInicial?.nombre ?? "Alevinaje"} readOnly />
+          </Field>
+          <Field label="Fecha prevista de siembra">
+            <input type="date" min={fechaMinima} className="bf-input" value={fechaSiembra} onChange={(e) => setFechaSiembra(e.target.value)} required />
+          </Field>
+          <Field label="Cantidad prevista de peces">
+            <input type="number" min="1" step="1" className="bf-input" value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
+          </Field>
+          <Field label="Código del ciclo">
+            <input className="bf-input" value={codigo} readOnly />
+          </Field>
+          <Field label="Observaciones">
+            <textarea className="bf-input min-h-20" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
+          </Field>
+          <p className="text-xs text-[var(--bf-muted)]">El lote quedará en estado PLANIFICADO. Todavía no representa peces sembrados; representa el ciclo que se está preparando.</p>
+          <button type="submit" className="bf-btn-primary" disabled={mutation.isPending || !puedeRegistrar || especiesQuery.isLoading || etapasQuery.isLoading || estadosQuery.isLoading}>
+            {mutation.isPending ? "Creando…" : "Crear ciclo de preparación"}
+          </button>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
 function AcondicionamientoBioflocEstanquePanel({
-  estanqueId,
+  loteId,
   puedeRegistrar,
   puedeMedirAgua,
   puedeMedirBiofloc,
   onMeasureWater,
   onMeasureBiofloc,
 }: {
-  estanqueId: number;
+  loteId: number;
   puedeRegistrar: boolean;
   puedeMedirAgua: boolean;
   puedeMedirBiofloc: boolean;
@@ -1291,8 +1396,8 @@ function AcondicionamientoBioflocEstanquePanel({
     queryFn: listProductosActivos,
   });
   const query = useQuery({
-    queryKey: ["acondicionamientos-biofloc-estanque", estanqueId],
-    queryFn: () => listAcondicionamientosBioflocEstanque(estanqueId),
+    queryKey: ["acondicionamientos-biofloc-lote", loteId],
+    queryFn: () => listAcondicionamientosBioflocEstanque(loteId),
   });
   const tipos = useMemo(
     () => new Map((tiposQuery.data ?? []).map((row) => [row.id, row])),
@@ -1310,7 +1415,6 @@ function AcondicionamientoBioflocEstanquePanel({
     [productosQuery.data],
   );
   const ultimo = query.data?.[0];
-  const fechaSiembraPrevista = ultimo?.fecha_siembra_prevista ?? "";
   const puedeCrear = puedeRegistrar && Boolean(tiposQuery.data?.length) && Boolean(productosQuery.data);
 
   const form = useForm({
@@ -1350,13 +1454,12 @@ function AcondicionamientoBioflocEstanquePanel({
         setStockMsg(`Inventario actualizado: ${resp.stock_restante.toFixed(2)} disponibles`);
         setTimeout(() => setStockMsg(null), 6000);
       }
-      await queryClient.invalidateQueries({ queryKey: ["acondicionamientos-biofloc-estanque", estanqueId] });
+      await queryClient.invalidateQueries({ queryKey: ["acondicionamientos-biofloc-lote", loteId] });
       await queryClient.invalidateQueries({ queryKey: ["stock"] });
       await queryClient.invalidateQueries({ queryKey: ["productos-stock"] });
       form.reset({
         tipo_aplicacion_id: tiposQuery.data?.[0]?.id ?? 0,
         producto_id: "",
-        fecha_siembra_prevista: "",
         fecha_hora: toDatetimeLocalValue(),
         cantidad: "",
         unidad: "kg",
@@ -1460,11 +1563,10 @@ function AcondicionamientoBioflocEstanquePanel({
             return;
           }
           mutation.mutate({
-            estanque_id: estanqueId,
+            lote_id: loteId,
             tipo_aplicacion_id: Number(values.tipo_aplicacion_id),
             producto_id: producto ? Number(producto) : null,
             fecha_hora: fechaHora,
-            fecha_siembra_prevista: values.fecha_siembra_prevista,
             cantidad: cantidad === "" ? null : Number(cantidad),
             unidad: values.unidad.trim() || null,
             aireacion_activa: values.aireacion_activa,
@@ -1472,10 +1574,6 @@ function AcondicionamientoBioflocEstanquePanel({
           });
         })}>
           {formError ? <ErrorAlert message={formError} /> : null}
-          <Field label="Fecha prevista de siembra">
-            <input type="date" className="bf-input" {...form.register("fecha_siembra_prevista", { required: true })} />
-            <p className="mt-1 text-xs text-[var(--bf-muted)]">El acondicionamiento se permite desde 7 días antes hasta la fecha prevista.</p>
-          </Field>
           <Field label="Fecha y hora de aplicación">
             <input type="datetime-local" className="bf-input" {...form.register("fecha_hora", { required: true })} />
           </Field>
