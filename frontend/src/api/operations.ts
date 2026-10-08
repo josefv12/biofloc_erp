@@ -48,10 +48,9 @@ export function listReferenciasBiofloc(params: {
   return apiFetch<ReferenciaBiofloc[]>(`/api/v1/referencias-biofloc/?${query.toString()}`);
 }
 
-export function listMedicionesAgua(params: { lote_id?: number; estanque_id?: number; parametro_id?: number } = {}): Promise<MedicionAgua[]> {
+export function listMedicionesAgua(params: { lote_id?: number; parametro_id?: number } = {}): Promise<MedicionAgua[]> {
   const query = new URLSearchParams();
   if (params.lote_id) query.set("lote_id", String(params.lote_id));
-  if (params.estanque_id) query.set("estanque_id", String(params.estanque_id));
   if (params.parametro_id) query.set("parametro_id", String(params.parametro_id));
   const suffix = query.toString();
   return apiFetch<MedicionAgua[]>(`/api/v1/mediciones-agua/${suffix ? `?${suffix}` : ""}`);
@@ -67,10 +66,9 @@ export function listTiposAplicacionBiofloc(soloActivos = true): Promise<TipoApli
   );
 }
 
-export function listMedicionesBiofloc(loteId?: number, estanqueId?: number): Promise<MedicionBiofloc[]> {
+export function listMedicionesBiofloc(loteId?: number): Promise<MedicionBiofloc[]> {
   const query = new URLSearchParams();
   if (loteId) query.set("lote_id", String(loteId));
-  if (estanqueId) query.set("estanque_id", String(estanqueId));
   const suffix = query.toString();
   return apiFetch<MedicionBiofloc[]>(`/api/v1/mediciones-biofloc/${suffix ? `?${suffix}` : ""}`);
 }
@@ -105,9 +103,9 @@ export function listUnidades(): Promise<Unidad[]> {
   return apiFetch<Unidad[]>("/api/v1/unidades/");
 }
 
-export function listAcondicionamientosBioflocEstanque(estanqueId: number): Promise<import("../types/operations").AcondicionamientoBioflocEstanque[]> {
+export function listAcondicionamientosBioflocEstanque(loteId: number): Promise<import("../types/operations").AcondicionamientoBioflocEstanque[]> {
   return apiFetch<import("../types/operations").AcondicionamientoBioflocEstanque[]>(
-    `/api/v1/acondicionamientos-biofloc-estanque/${estanqueId}`,
+    `/api/v1/acondicionamientos-biofloc-estanque/lote/${loteId}`,
   );
 }
 
