@@ -3,7 +3,7 @@ import type {
   Biometria, BiometriaCreate, Cosecha, CosechaCreate, EspecieCatalogo, EspecieCreate, EspecieUpdate,
   EstadoLoteCatalogo, EstadoEstanque, Estanque, EstanqueCreate, EstanqueUpdate, EtapaProductivaCatalogo,
   Lote, LoteCreate, LoteUpdate, Mortalidad, MortalidadCreate, ReferenciaProduccion, ReferenciaProduccionCreate,
-  ReferenciaProduccionUpdate,
+  ReferenciaProduccionUpdate, SiembraLoteCreate, SiembraLoteOut,
 } from "../types/production";
 import type { CostosLote } from "../types/costos";
 
@@ -16,6 +16,7 @@ export function getLote(id: number): Promise<Lote> { return apiFetch<Lote>(`/api
 export function getCostosLote(id: number): Promise<CostosLote> { return apiFetch<CostosLote>(`/api/v1/lotes/${id}/costos`); }
 export function createLote(data: LoteCreate): Promise<Lote> { return apiFetch<Lote>("/api/v1/lotes/", { method: "POST", body: data }); }
 export function updateLote(id: number, data: LoteUpdate): Promise<Lote> { return apiFetch<Lote>(`/api/v1/lotes/${id}`, { method: "PUT", body: data }); }
+export function registrarSiembra(id: number, data: SiembraLoteCreate): Promise<SiembraLoteOut> { return apiFetch<SiembraLoteOut>(`/api/v1/lotes/${id}/siembra`, { method: "POST", body: data }); }
 export function listBiometrias(loteId?: number): Promise<Biometria[]> { return apiFetch<Biometria[]>(`/api/v1/biometrias/${loteId ? `?lote_id=${loteId}` : ""}`); }
 export function createBiometria(data: BiometriaCreate): Promise<Biometria> { return apiFetch<Biometria>("/api/v1/biometrias/", { method: "POST", body: data }); }
 export function listMortalidades(loteId?: number): Promise<Mortalidad[]> { return apiFetch<Mortalidad[]>(`/api/v1/mortalidades/${loteId ? `?lote_id=${loteId}` : ""}`); }
