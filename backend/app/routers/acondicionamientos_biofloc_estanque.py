@@ -16,10 +16,10 @@ def require_role(usuario: Usuario, db: Session):
     if not rol or rol.nombre not in ROLES:
         raise HTTPException(status_code=403, detail="Rol no autorizado para acondicionamiento Biofloc")
 
-@router.get("/{estanque_id}", response_model=list[AcondicionamientoBioflocEstanqueOut])
-def listar(estanque_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+@router.get("/lote/{lote_id}", response_model=list[AcondicionamientoBioflocEstanqueOut])
+def listar(lote_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     require_role(current_user, db)
-    return svc.listar(db, estanque_id)
+    return svc.listar_por_lote(db, lote_id)
 
 @router.post("/", response_model=AcondicionamientoBioflocEstanqueOut, status_code=status.HTTP_201_CREATED)
 def crear(data: AcondicionamientoBioflocEstanqueCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
