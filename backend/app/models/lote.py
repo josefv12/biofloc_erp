@@ -56,7 +56,8 @@ class Lote(Base):
     estado_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("estados_lote.id"), nullable=False)
     fecha_siembra: Mapped[date] = mapped_column(Date, nullable=False)
     fecha_cierre: Mapped[date | None] = mapped_column(Date, nullable=True)
-    cantidad_sembrada: Mapped[int] = mapped_column(Integer, nullable=False)
+    cantidad_prevista: Mapped[int] = mapped_column(Integer, nullable=False)
+    cantidad_sembrada: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     peso_inicial_promedio_g: Mapped[float | None] = mapped_column(Numeric(10, 3), nullable=True)
     observaciones: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
@@ -69,7 +70,8 @@ class Lote(Base):
     estado: Mapped["EstadoLote"] = relationship("EstadoLote")
 
     __table_args__ = (
-        CheckConstraint("cantidad_sembrada > 0", name="lotes_cantidad_sembrada_check"),
+        CheckConstraint("cantidad_prevista > 0", name="lotes_cantidad_prevista_check"),
+        CheckConstraint("cantidad_sembrada >= 0 AND cantidad_sembrada <= cantidad_prevista", name="lotes_cantidad_sembrada_check"),
         CheckConstraint("peso_inicial_promedio_g IS NULL OR peso_inicial_promedio_g >= 0", name="lotes_peso_inicial_promedio_g_check"),
         CheckConstraint("fecha_cierre IS NULL OR fecha_cierre >= fecha_siembra", name="lotes_fecha_cierre_check"),
         Index("idx_lotes_estanque", "estanque_id"),
