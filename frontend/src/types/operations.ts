@@ -91,8 +91,7 @@ export type ReferenciaBioflocUpdate = {
 
 export type MedicionAgua = {
   id: number;
-  lote_id: number | null;
-  estanque_id: number | null;
+  lote_id: number;
   parametro_id: number;
   fecha_hora: string;
   valor: string | number;
@@ -102,8 +101,7 @@ export type MedicionAgua = {
 };
 
 export type MedicionAguaCreate = {
-  lote_id?: number | null;
-  estanque_id?: number | null;
+  lote_id: number;
   parametro_id: number;
   fecha_hora: string;
   valor: number;
@@ -119,8 +117,7 @@ export type TipoAplicacionBiofloc = {
 
 export type MedicionBiofloc = {
   id: number;
-  lote_id: number | null;
-  estanque_id: number | null;
+  lote_id: number;
   fecha_hora: string;
   volumen_sedimentable: string | number;
   unidad: string;
@@ -131,8 +128,7 @@ export type MedicionBiofloc = {
 };
 
 export type MedicionBioflocCreate = {
-  lote_id?: number | null;
-  estanque_id?: number | null;
+  lote_id: number;
   fecha_hora: string;
   volumen_sedimentable: number;
   unidad?: string;
@@ -207,11 +203,11 @@ export type Unidad = {
 
 export type AcondicionamientoBioflocEstanque = {
   id: number;
+  lote_id: number;
   estanque_id: number;
   tipo_aplicacion_id: number;
   producto_id: number | null;
   fecha_hora: string;
-  fecha_siembra_prevista: string;
   cantidad: string | number | null;
   unidad: string | null;
   aireacion_activa: boolean;
@@ -222,7 +218,7 @@ export type AcondicionamientoBioflocEstanque = {
 };
 
 export type AcondicionamientoBioflocEstanqueCreate = {
-  estanque_id: number;
+  lote_id: number;
   tipo_aplicacion_id: number;
   producto_id?: number | null;
   fecha_hora: string;
