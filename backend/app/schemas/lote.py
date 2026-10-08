@@ -55,7 +55,8 @@ class LoteCreate(BaseModel):
     estado_id: int
     fecha_siembra: date
     fecha_cierre: Optional[date] = None
-    cantidad_sembrada: int
+    cantidad_prevista: int
+    cantidad_sembrada: int = 0
     peso_inicial_promedio_g: Optional[float] = None
     observaciones: Optional[str] = None
 
@@ -63,7 +64,7 @@ class LoteCreate(BaseModel):
     @classmethod
     def cantidad_positiva(cls, v: int) -> int:
         if v <= 0:
-            raise ValueError("cantidad_sembrada debe ser mayor que 0")
+            raise ValueError("cantidad_prevista debe ser mayor que 0")
         return v
 
     @field_validator("peso_inicial_promedio_g")
@@ -96,6 +97,7 @@ class LoteOut(BaseModel):
     estado_id: int
     fecha_siembra: date
     fecha_cierre: Optional[date] = None
+    cantidad_prevista: int
     cantidad_sembrada: int
     peso_inicial_promedio_g: Optional[float] = None
     observaciones: Optional[str] = None
