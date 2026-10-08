@@ -13,6 +13,7 @@ Reglas de negocio aplicadas:
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, InternalError
 from fastapi import HTTPException
+from datetime import date
 
 from app.models.lote import Lote, Especie, EtapaProductiva, EstadoLote
 from app.models.estanque import Estanque
@@ -66,6 +67,26 @@ def obtener_lote(db: Session, lote_id: int) -> Lote:
 
 def crear_lote(db: Session, data: LoteCreate, usuario_id: int) -> Lote:
     _verificar_referencias(db, data)
+
+    # Un estanque solo puede tener un ciclo abierto: PLANIFICADO o ACTIVO.
+    estado = db.query(EstadoLote).filter(EstadoLote.id == data.estado_id).first()
+    if not estado:
+        raise HTTPException(status_code=404, detail=f"EstadoLote id={data.estado_id} no existe")
+
+    if estado.nombre == "PLANIFICADO":
+        if data.fecha_siembra < date.today():
+            raise HTTPException(status_code=422, detail="La fecha prevista de siembra de un lote PLANIFICADO no puede estar en el pasado.")
+        lote_abierto = (
+            db.query(Lote)
+            .join(Lote.estado)
+            .filter(Lote.estanque_id == data.estanque_id, Lote.estado.has(EstadoLote.nombre.in_({"PLANIFICADO", "ACTIVO"})))
+            .first()
+        )
+        if lote_abierto:
+            raise HTTPException(
+                status_code=409,
+                detail=f"El estanque ya tiene un ciclo abierto ({lote_abierto.codigo} · {lote_abierto.estado.nombre}).",
+            )
 
     # Verificar código único
     if db.query(Lote).filter(Lote.codigo == data.codigo).first():
