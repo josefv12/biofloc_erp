@@ -1650,7 +1650,7 @@ function AcondicionamientoBioflocEstanquePanel({
     [referenciasAguaQuery.data],
   );
   const medicionesBioflocQuery = useQuery({
-    queryKey: ["mediciones-biofloc-ficha", lote?.id],
+    queryKey: ["mediciones-biofloc", lote?.id],
     queryFn: () => listMedicionesBiofloc(lote!.id),
     enabled: Boolean(lote?.id),
   });
