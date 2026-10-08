@@ -32,6 +32,7 @@ import {
   listAplicacionesBiofloc,
   listAcondicionamientosBioflocEstanque,
   listMedicionesBiofloc,
+  listMedicionesAgua,
   listParametrosAgua,
   listProductosActivos,
   listTiposAplicacionBiofloc,
