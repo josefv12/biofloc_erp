@@ -354,14 +354,38 @@ export function EstanqueFichaPage() {
 
         {!hayLoteActivo ? (
           lotePreparacion ? (
-            <AcondicionamientoBioflocEstanquePanel
-              loteId={lotePreparacion.id}
-              puedeRegistrar={can(user?.rol, "registrarBiofloc")}
-              puedeMedirAgua={can(user?.rol, "registrarAgua")}
-              puedeMedirBiofloc={can(user?.rol, "registrarBiofloc")}
-              onMeasureWater={() => setModalAccion("agua")}
-              onMeasureBiofloc={() => setModalAccion("biofloc")}
-            />
+            <>
+              <AcondicionamientoBioflocEstanquePanel
+                loteId={lotePreparacion.id}
+                puedeRegistrar={can(user?.rol, "registrarBiofloc")}
+                puedeMedirAgua={can(user?.rol, "registrarAgua")}
+                puedeMedirBiofloc={can(user?.rol, "registrarBiofloc")}
+                onMeasureWater={() => setModalAccion("agua")}
+                onMeasureBiofloc={() => setModalAccion("biofloc")}
+              />
+              {modalAccion === "agua" ? (
+                <AguaModal
+                  loteId={lotePreparacion.id}
+                  open
+                  onClose={() => setModalAccion(null)}
+                  onSaved={async () => {
+                    await queryClient.invalidateQueries({ queryKey: ["mediciones-agua", lotePreparacion.id] });
+                    setModalAccion(null);
+                  }}
+                />
+              ) : null}
+              {modalAccion === "biofloc" ? (
+                <BioflocModal
+                  loteId={lotePreparacion.id}
+                  open
+                  onClose={() => setModalAccion(null)}
+                  onSaved={async () => {
+                    await queryClient.invalidateQueries({ queryKey: ["mediciones-biofloc", lotePreparacion.id] });
+                    setModalAccion(null);
+                  }}
+                />
+              ) : null}
+            </>
           ) : (
             <CrearCicloPreparacionPanel
               estanque={estanque}
