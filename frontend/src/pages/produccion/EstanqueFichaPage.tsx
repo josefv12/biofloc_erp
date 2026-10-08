@@ -128,7 +128,7 @@ export function EstanqueFichaPage() {
 
   const pesoInicialPreferidoG = ind?.peso_inicial_g ?? lote?.peso_inicial_promedio_g ?? null;
 
-  type ModalAccion = "alimentar" | "biometria" | "mortalidad" | "agua" | "biofloc" | "cosechar" | ;
+  type ModalAccion = "alimentar" | "biometria" | "mortalidad" | "agua" | "biofloc" | "cosechar";
   const [modalAccion, setModalAccion] = useState<ModalAccion | null>(null);
 
   async function refrescarPostOperacion() {
