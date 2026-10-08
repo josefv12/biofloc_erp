@@ -62,6 +62,17 @@ def obtener_costos_lote(db: Session, lote_id: int) -> CostosLoteOut:
                   AND mi.referencia_id IS NOT NULL
                   AND ab.lote_id = :lote_id
                   AND mi.costo_total IS NOT NULL
+            ), 0)
+            +
+            COALESCE((
+                SELECT SUM(mi.costo_total)
+                FROM biofloc.movimientos_inventario mi
+                JOIN biofloc.acondicionamientos_biofloc_estanque ac
+                  ON ac.id = mi.referencia_id
+                WHERE mi.referencia_tipo = 'ACONDICIONAMIENTO_BIOFLOC'
+                  AND mi.referencia_id IS NOT NULL
+                  AND ac.lote_id = :lote_id
+                  AND mi.costo_total IS NOT NULL
             ), 0) AS biofloc_insumos,
             COALESCE((
                 SELECT SUM(g.valor)
