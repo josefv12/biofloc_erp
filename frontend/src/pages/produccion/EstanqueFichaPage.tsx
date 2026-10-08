@@ -122,7 +122,7 @@ export function EstanqueFichaPage() {
 
   const pesoInicialPreferidoG = ind?.peso_inicial_g ?? lote?.peso_inicial_promedio_g ?? null;
 
-  type ModalAccion = "alimentar" | "biometria" | "mortalidad" | "agua" | "biofloc" | "cosechar";
+  type ModalAccion = "alimentar" | "biometria" | "mortalidad" | "agua" | "biofloc" | "cosechar" | "aguaEstanque" | "bioflocEstanque";
   const [modalAccion, setModalAccion] = useState<ModalAccion | null>(null);
 
   async function refrescarPostOperacion() {
@@ -148,6 +148,12 @@ export function EstanqueFichaPage() {
     // En caso de cosecha: lote/estanques pueden cambiar de estado
     await queryClient.invalidateQueries({ queryKey: ["lotes", estanqueId] });
     await queryClient.invalidateQueries({ queryKey: ["lote", lote.id] });
+    await queryClient.invalidateQueries({ queryKey: ["estanque", estanqueId] });
+  }
+
+  async function refrescarMedicionesEstanque() {
+    await queryClient.invalidateQueries({ queryKey: ["mediciones-biofloc-estanque", estanqueId] });
+    await queryClient.invalidateQueries({ queryKey: ["mediciones-agua-estanque", estanqueId] });
     await queryClient.invalidateQueries({ queryKey: ["estanque", estanqueId] });
   }
 
@@ -350,6 +356,8 @@ export function EstanqueFichaPage() {
           <AcondicionamientoBioflocEstanquePanel
             estanqueId={estanque.id}
             puedeRegistrar={can(user?.rol, "registrarBiofloc")}
+            onMeasureWater={() => setModalAccion("aguaEstanque")}
+            onMeasureBiofloc={() => setModalAccion("bioflocEstanque")}
           />
         ) : loteQuery.isLoading && !lote ? (
           <div className="px-6 pb-6">
@@ -418,6 +426,30 @@ export function EstanqueFichaPage() {
                 onClose={() => setModalAccion(null)}
                 onSaved={async () => {
                   await refrescarPostOperacion();
+                  setModalAccion(null);
+                }}
+              />
+            ) : null}
+
+            {modalAccion === "aguaEstanque" ? (
+              <AguaModal
+                estanqueId={estanque.id}
+                open
+                onClose={() => setModalAccion(null)}
+                onSaved={async () => {
+                  await refrescarMedicionesEstanque();
+                  setModalAccion(null);
+                }}
+              />
+            ) : null}
+
+            {modalAccion === "bioflocEstanque" ? (
+              <BioflocModal
+                estanqueId={estanque.id}
+                open
+                onClose={() => setModalAccion(null)}
+                onSaved={async () => {
+                  await refrescarMedicionesEstanque();
                   setModalAccion(null);
                 }}
               />
