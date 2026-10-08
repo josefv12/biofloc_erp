@@ -1,3 +1,15 @@
+export type CostoLoteDetalle = {
+  fecha: string;
+  categoria: string;
+  concepto: string;
+  cantidad: string | number | null;
+  unidad: string | null;
+  costo_unitario: string | number | null;
+  costo_total: string | number;
+  referencia_tipo: string | null;
+  referencia_id: number | null;
+};
+
 export type CostosLote = {
   lote_id: number;
   codigo: string;
@@ -18,4 +30,5 @@ export type CostosLote = {
   costo_ventas_estimado: string | number;
   utilidad_bruta_estimada: string | number | null;
   margen_bruto_estimado_pct: string | number | null;
+  detalle: CostoLoteDetalle[];
 };
