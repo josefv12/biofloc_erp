@@ -1568,6 +1568,19 @@ function AcondicionamientoBioflocEstanquePanel({
   });
   const loteQuery = useQuery({ queryKey: ["lote", loteId], queryFn: () => getLote(loteId) });
   const lote = loteQuery.data;
+  const medicionesAguaQuery = useQuery({
+    queryKey: ["mediciones-agua", loteId],
+    queryFn: () => listMedicionesAgua({ lote_id: loteId }),
+    enabled: Boolean(loteId),
+  });
+  const parametrosAguaQuery = useQuery({
+    queryKey: ["parametros-agua"],
+    queryFn: () => listParametrosAgua(true),
+  });
+  const parametrosAgua = useMemo(
+    () => new Map((parametrosAguaQuery.data ?? []).map((row) => [row.id, row])),
+    [parametrosAguaQuery.data],
+  );
   const tipos = useMemo(
     () => new Map((tiposQuery.data ?? []).map((row) => [row.id, row])),
     [tiposQuery.data],
@@ -1676,6 +1689,49 @@ function AcondicionamientoBioflocEstanquePanel({
             </button>
           ) : null}
         </div>
+        <div className="mt-5 rounded-xl border border-[var(--bf-border)] bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[var(--bf-ink)]">Mediciones de calidad de agua</p>
+              <p className="text-xs text-[var(--bf-muted)]">Historial de mediciones registradas para este lote, incluida la preparación pre-siembra.</p>
+            </div>
+            <span className="rounded-full bg-[var(--bf-chip)] px-3 py-1 text-xs font-semibold text-[var(--bf-accent)]">
+              {medicionesAguaQuery.data?.length ?? 0} mediciones
+            </span>
+          </div>
+          {medicionesAguaQuery.isLoading ? (
+            <div className="mt-3 text-sm text-[var(--bf-muted)]">Cargando mediciones…</div>
+          ) : medicionesAguaQuery.data?.length ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--bf-border)] text-xs text-[var(--bf-muted)]">
+                    <th className="px-3 py-2 font-semibold">Fecha</th>
+                    <th className="px-3 py-2 font-semibold">Parámetro</th>
+                    <th className="px-3 py-2 font-semibold">Valor</th>
+                    <th className="px-3 py-2 font-semibold">Observaciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(medicionesAguaQuery.data ?? []).map((row) => {
+                    const parametro = parametrosAgua.get(row.parametro_id);
+                    return (
+                      <tr key={row.id} className="border-b border-[var(--bf-border)] last:border-b-0">
+                        <td className="px-3 py-2">{formatDate(row.fecha_hora)}</td>
+                        <td className="px-3 py-2">{parametro?.nombre ?? `#${row.parametro_id}`}</td>
+                        <td className="px-3 py-2 font-semibold">{nd(row.valor, 3)} {parametro?.unidad ?? ""}</td>
+                        <td className="px-3 py-2 text-[var(--bf-muted)]">{row.observaciones ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-[var(--bf-muted)]">Aún no hay mediciones de calidad de agua para este lote.</p>
+          )}
+        </div>
+
         {query.data?.length ? (
           <div className="mt-5 overflow-x-auto rounded-xl bg-white">
             <table className="min-w-full text-left text-sm">
