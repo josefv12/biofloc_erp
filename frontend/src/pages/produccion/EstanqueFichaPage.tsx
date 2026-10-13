@@ -1670,9 +1670,11 @@ function ControlMedicionesLotePanel({
           ) : null}
         </div>
 
-        <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--bf-border)]">
+        <div
+          className={`mt-4 overflow-x-auto rounded-xl border border-[var(--bf-border)] ${(medicionesAguaQuery.data?.length ?? 0) >= 10 ? "max-h-[420px] overflow-y-auto" : ""}`}
+        >
           <table className="min-w-full text-left text-sm">
-            <thead><tr className="border-b border-[var(--bf-border)] bg-[var(--bf-chip)] text-xs text-[var(--bf-muted)]">
+            <thead className={(medicionesAguaQuery.data?.length ?? 0) >= 10 ? "sticky top-0 z-10 bg-[var(--bf-chip)]" : ""}><tr className="border-b border-[var(--bf-border)] bg-[var(--bf-chip)] text-xs text-[var(--bf-muted)]">
               <th className="px-3 py-2 font-semibold">Fecha</th>
               <th className="px-3 py-2 font-semibold">Parámetro</th>
               <th className="px-3 py-2 font-semibold">Valor</th>
