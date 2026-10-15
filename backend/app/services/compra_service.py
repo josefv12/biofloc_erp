@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
@@ -302,7 +303,7 @@ def editar_compra(db: Session, compra_id: int, payload: CompraCreate, usuario_id
     cambios_productos = set()
     try:
         # Actualizar compra y detalles primero.
-        compra.fecha = payload.fecha
+        # La fecha contable de la compra permanece intacta; solo se puede ajustar la hora de entrada.
         compra.proveedor = payload.proveedor or None
         compra.observaciones = payload.observaciones or None
         compra.total = _quant2(total_calculado)
@@ -333,7 +334,19 @@ def editar_compra(db: Session, compra_id: int, payload: CompraCreate, usuario_id
             detalle.subtotal = subtotal
 
             mov.cantidad = cantidad
-            mov.fecha_hora = datetime.combine(payload.fecha, datetime.max.time(), tzinfo=timezone.utc)
+            zona_local = ZoneInfo("America/Bogota")
+            if payload.hora is not None:
+                hora_local = payload.hora
+            elif mov.fecha_hora is not None:
+                fecha_movimiento = mov.fecha_hora
+                if fecha_movimiento.tzinfo is None:
+                    fecha_movimiento = fecha_movimiento.replace(tzinfo=timezone.utc)
+                hora_local = fecha_movimiento.astimezone(zona_local).time().replace(tzinfo=None)
+            else:
+                hora_local = datetime.max.time().replace(tzinfo=None)
+            mov.fecha_hora = datetime.combine(
+                compra.fecha, hora_local, tzinfo=zona_local
+            ).astimezone(timezone.utc)
             mov.costo_unitario = pu
             mov.costo_total = subtotal
             mov.observaciones = f"Compra #{compra.id} editada"
