@@ -11,7 +11,7 @@ from app.models.detalle_compra import DetalleCompra
 from app.models.producto import Producto
 from app.models.tipo_movimiento_inventario import TipoMovimientoInventario
 from app.models.auditoria import Auditoria
-from app.schemas.compra import CompraCreate
+from app.schemas.compra import CompraCreate, CompraUpdate
 from app.schemas.movimiento_inventario import MovimientoInventarioCreate
 from app.services.movimiento_inventario_service import crear_movimiento_inventario
 
@@ -243,7 +243,7 @@ def obtener_movimientos_asociados(db: Session, compra_id: int) -> list[dict]:
     return out
 
 
-def editar_compra(db: Session, compra_id: int, payload: CompraCreate, usuario_id: int) -> Compra:
+def editar_compra(db: Session, compra_id: int, payload: CompraUpdate, usuario_id: int) -> Compra:
     """Edita una compra y sincroniza sus movimientos de entrada.
 
     Se permite modificar fecha, proveedor, observaciones, cantidades y precios.
