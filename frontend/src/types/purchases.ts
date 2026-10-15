@@ -48,3 +48,9 @@ export type CompraCreate = {
   observaciones?: string | null;
   detalles: DetalleCompraIn[];
 };
+
+export type CompraUpdate = Omit<CompraCreate, "fecha"> & {
+  // La fecha se envía sin cambios por compatibilidad con la API; la edición solo ajusta la hora.
+  fecha: string;
+  hora: string;
+};
