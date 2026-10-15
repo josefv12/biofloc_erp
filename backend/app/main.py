@@ -80,6 +80,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://biofloc-erp.vercel.app"],
+    # Permite también URLs de preview del mismo proyecto Vercel, necesarias para PUT/OPTIONS.
+    allow_origin_regex=r"https://biofloc-erp(?:-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
