@@ -24,9 +24,6 @@ def sembrar_lote(db: Session, lote_id: int, data: SiembraLoteCreate, usuario_id:
         raise HTTPException(status_code=404, detail="Lote no encontrado")
     if lote.estado.nombre != "PLANIFICADO":
         raise HTTPException(status_code=422, detail="Solo un lote PLANIFICADO puede ser sembrado. La siembra no puede registrarse dos veces.")
-    if data.fecha_hora.date() != lote.fecha_siembra:
-        raise HTTPException(status_code=422, detail=f"La fecha de siembra debe coincidir con la fecha prevista del lote: {lote.fecha_siembra.isoformat()}.")
-
     producto = db.query(Producto).filter(Producto.id == data.producto_id, Producto.activo == True).first()
     if not producto:
         raise HTTPException(status_code=404, detail="El producto de alevinos no existe o está inactivo")
