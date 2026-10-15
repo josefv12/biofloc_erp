@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, date, timezone
 from sqlalchemy.orm import Session, joinedload
@@ -414,6 +415,9 @@ def editar_compra(db: Session, compra_id: int, payload: CompraCreate, usuario_id
         db.rollback()
         raise HTTPException(status_code=400, detail="No fue posible editar la compra por una regla de integridad.")
     except Exception:
+        logging.getLogger(__name__).exception(
+            "Error inesperado al editar compra_id=%s usuario_id=%s", compra_id, usuario_id
+        )
         db.rollback()
         raise HTTPException(status_code=500, detail="No fue posible editar la compra por un error interno.")
 
