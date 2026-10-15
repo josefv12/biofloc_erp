@@ -12,7 +12,7 @@ import { etiquetaProducto, formatCop, formatDate, formatDateTime, formatNumber }
 import { cantidadDesdePresentacion, cantidadParaPresentacion, precioConUnidad, precioDesdePresentacion, precioParaPresentacion, unidadPresentacion } from "../../utils/unidades";
 import { useAuth } from "../../auth/AuthProvider";
 import { can } from "../../utils/rbac";
-import type { CompraCreate } from "../../types/purchases";
+import type { CompraUpdate } from "../../types/purchases";
 
 export function CompraDetallePage() {
   const { id } = useParams();
@@ -28,7 +28,7 @@ export function CompraDetallePage() {
   const tiposQuery = useQuery({ queryKey: ["tipos-movimiento-inventario"], queryFn: listTiposMovimientoInventario });
   const stockQuery = useQuery({ queryKey: ["productos-stock"], queryFn: listProductosStock });
   const updateMutation = useMutation({
-    mutationFn: (data: CompraCreate) => updateCompra(compraId, data),
+    mutationFn: (data: CompraUpdate) => updateCompra(compraId, data),
     onSuccess: async () => {
       setEditOpen(false);
       await Promise.all([
@@ -131,10 +131,11 @@ export function CompraDetallePage() {
           event.preventDefault();
           setEditError(null);
           const form = event.currentTarget;
-          const fecha = (form.elements.namedItem("edit_fecha") as HTMLInputElement).value;
+          const fecha = compra.fecha;
+          const hora = (form.elements.namedItem("edit_hora") as HTMLInputElement).value;
           const proveedor = (form.elements.namedItem("edit_proveedor") as HTMLInputElement).value.trim();
           const observaciones = (form.elements.namedItem("edit_observaciones") as HTMLTextAreaElement).value.trim();
-          const detalles: CompraCreate["detalles"] = compra.detalles.map((detalle) => {
+          const detalles: CompraUpdate["detalles"] = compra.detalles.map((detalle) => {
             const cantidadPresentada = Number((form.elements.namedItem(`cantidad_${detalle.id}`) as HTMLInputElement).value);
             const precioPresentado = Number((form.elements.namedItem(`precio_${detalle.id}`) as HTMLInputElement).value);
             const productoStock = stock.get(detalle.producto_id);
@@ -146,16 +147,17 @@ export function CompraDetallePage() {
               precio_unitario: precioDesdePresentacion(precioPresentado, simboloInterno, factor),
             };
           });
-          if (!fecha || detalles.some((d) => !Number.isFinite(d.cantidad) || d.cantidad <= 0 || !Number.isFinite(d.precio_unitario) || d.precio_unitario < 0)) {
-            setEditError("Revisa fecha, cantidades y precios.");
+          if (!hora || detalles.some((d) => !Number.isFinite(d.cantidad) || d.cantidad <= 0 || !Number.isFinite(d.precio_unitario) || d.precio_unitario < 0)) {
+            setEditError("Revisa la hora, las cantidades y los precios.");
             return;
           }
-          updateMutation.mutate({ fecha, proveedor: proveedor || null, observaciones: observaciones || null, detalles });
+          updateMutation.mutate({ fecha, hora, proveedor: proveedor || null, observaciones: observaciones || null, detalles });
         }}>
           {editError ? <ErrorAlert message={editError} /> : null}
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm"><span className="mb-1 block font-medium">Fecha</span><input name="edit_fecha" type="date" className="bf-input" defaultValue={compra.fecha} required /></label>
-            <label className="block text-sm"><span className="mb-1 block font-medium">Proveedor</span><input name="edit_proveedor" className="bf-input" defaultValue={compra.proveedor ?? ""} /></label>
+            <label className="block text-sm"><span className="mb-1 block font-medium">Fecha de compra (no editable)</span><input type="date" className="bf-input opacity-70" value={compra.fecha} readOnly /></label>
+            <label className="block text-sm"><span className="mb-1 block font-medium">Hora de entrada al inventario</span><input name="edit_hora" type="time" className="bf-input" defaultValue={horaLocalMovimiento(compra.movimientos?.[0]?.fecha_hora)} required /></label>
+            <label className="block text-sm sm:col-span-2"><span className="mb-1 block font-medium">Proveedor</span><input name="edit_proveedor" className="bf-input" defaultValue={compra.proveedor ?? ""} /></label>
           </div>
           <div className="space-y-3">
             {compra.detalles.map((detalle) => {
@@ -186,4 +188,11 @@ export function CompraDetallePage() {
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-xs uppercase tracking-wide text-[var(--bf-muted)]">{label}</dt><dd className="mt-1 text-lg font-medium text-[var(--bf-ink)]">{value}</dd></div>;
+}
+
+function horaLocalMovimiento(fechaHora: string | null | undefined): string {
+  if (!fechaHora) return "23:59";
+  const fecha = new Date(fechaHora);
+  if (Number.isNaN(fecha.getTime())) return "23:59";
+  return String(fecha.getHours()).padStart(2, "0") + ":" + String(fecha.getMinutes()).padStart(2, "0");
 }
