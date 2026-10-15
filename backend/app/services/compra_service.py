@@ -255,7 +255,9 @@ def editar_compra(db: Session, compra_id: int, payload: CompraUpdate, usuario_id
         db.query(Compra)
         .options(joinedload(Compra.detalles))
         .filter(Compra.id == compra_id)
-        .with_for_update()
+        # Bloquea solo la fila de compras; PostgreSQL no permite bloquear
+        # el lado nullable del LEFT OUTER JOIN usado por joinedload(detalles).
+        .with_for_update(of=Compra)
         .first()
     )
     if not compra:
