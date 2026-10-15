@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { Compra, CompraCreate, CompraDetalle } from "../types/purchases";
+import type { Compra, CompraCreate, CompraDetalle, CompraUpdate } from "../types/purchases";
 
 export function listCompras(params: {
   fechaDesde?: string;
@@ -25,6 +25,6 @@ export function createCompra(data: CompraCreate): Promise<Compra> {
 }
 
 
-export function updateCompra(id: number, data: CompraCreate): Promise<Compra> {
+export function updateCompra(id: number, data: CompraUpdate): Promise<Compra> {
   return apiFetch<Compra>(`/api/v1/compras/${id}`, { method: "PUT", body: data });
 }
