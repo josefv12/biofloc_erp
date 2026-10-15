@@ -251,13 +251,13 @@ def editar_compra(db: Session, compra_id: int, payload: CompraUpdate, usuario_id
     productos de cada línea deben mantenerse. Los movimientos posteriores de
     esos productos se revaloran con promedio ponderado móvil.
     """
+    # Bloquear la compra en una consulta independiente. No usar joinedload()
+    # aquí: combina el bloqueo con un LEFT OUTER JOIN sobre los detalles y
+    # PostgreSQL rechaza FOR UPDATE en el lado nullable de esa unión.
     compra = (
         db.query(Compra)
-        .options(joinedload(Compra.detalles))
         .filter(Compra.id == compra_id)
-        # Bloquea solo la fila de compras; PostgreSQL no permite bloquear
-        # el lado nullable del LEFT OUTER JOIN usado por joinedload(detalles).
-        .with_for_update(of=Compra)
+        .with_for_update()
         .first()
     )
     if not compra:
