@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
-from datetime import datetime, date
+from datetime import datetime, date, time
 from decimal import Decimal
 
 
@@ -18,7 +18,8 @@ class CompraCreate(BaseModel):
 
 
 class CompraUpdate(CompraCreate):
-    pass
+    # Hora local de la entrada de inventario; la fecha original de compra no se modifica.
+    hora: Optional[time] = None
 
 
 class DetalleCompraOut(BaseModel):
