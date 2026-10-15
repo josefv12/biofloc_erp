@@ -57,8 +57,11 @@ def sembrar_lote(db: Session, lote_id: int, data: SiembraLoteCreate, usuario_id:
             usuario_id=usuario_id,
             tabla="lotes",
             registro_id=lote.id,
-            accion="SIEMBRA",
+            # La columna accion está restringida en BD a INSERT/UPDATE/DELETE.
+            # La siembra cambia el estado y la cantidad del lote, por eso se audita como UPDATE.
+            accion="UPDATE",
             detalle={
+                "evento": "SIEMBRA",
                 "producto_id": data.producto_id,
                 "cantidad_sembrada": data.cantidad,
                 "movimiento_inventario_id": mov.id,
