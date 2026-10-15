@@ -435,21 +435,7 @@ export function EstanqueFichaPage() {
           </div>
         ) : lote ? (
           <div>
-            <div className="mx-6 mb-5 rounded-2xl border border-[var(--bf-border)] bg-[var(--bf-chip)] p-4">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Costo ejecutado del lote</p>
-                  <p className="mt-1 text-2xl font-extrabold text-[var(--bf-ink)]">$ {nd(costosQuery.data?.costo_directo_lote, 2)}</p>
-                  <p className="mt-1 text-xs text-gray-500">Solo consumos y aplicaciones asignados a este ciclo; las compras de inventario no se cargan aquí.</p>
-                </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
-                  <div><span className="text-gray-500">Alevinos</span><div className="font-semibold">$ {nd(costosQuery.data?.alevinos, 2)}</div></div>
-                  <div><span className="text-gray-500">Alimento</span><div className="font-semibold">$ {nd(costosQuery.data?.alimento, 2)}</div></div>
-                  <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(Math.max(0, Number(costosQuery.data?.biofloc_insumos ?? 0)), 2)}</div></div>
-                  <div><span className="text-gray-500">Costo/kg</span><div className="font-semibold">{costosQuery.data?.costo_por_kg == null ? "N/D" : "$ " + nd(costosQuery.data.costo_por_kg, 2)}</div></div>
-                </div>
-              </div>
-            </div>
+            <CostoLoteCard costos={costosQuery.data} lote={lote} modoOperativo />
 
             <LoteFichaWorkspace lote={lote} tab={tab} onTab={setTab} mostrarGraficasResumen={false} modoOperativo />
 
@@ -534,7 +520,7 @@ export function EstanqueFichaPage() {
   );
 }
 
-function CostoLoteCard({ costos, lote }: { costos: CostosLote | undefined; lote: Lote }) {
+function CostoLoteCard({ costos, lote, modoOperativo = false }: { costos: CostosLote | undefined; lote: Lote; modoOperativo?: boolean }) {
   const [abierto, setAbierto] = useState(false);
   const detalle = costos?.detalle ?? [];
   return (
@@ -550,7 +536,7 @@ function CostoLoteCard({ costos, lote }: { costos: CostosLote | undefined; lote:
             <div><span className="text-gray-500">Alevinos</span><div className="font-semibold">$ {nd(costos?.alevinos, 2)}</div></div>
             <div><span className="text-gray-500">Alimento</span><div className="font-semibold">$ {nd(costos?.alimento, 2)}</div></div>
             <div><span className="text-gray-500">Biofloc</span><div className="font-semibold">$ {nd(costos?.biofloc_insumos, 2)}</div></div>
-            <div><span className="text-gray-500">Costo/pez</span><div className="font-semibold">{costos?.costo_por_pez == null ? "N/D" : "$ " + nd(costos.costo_por_pez, 2)}</div></div>
+            <div><span className="text-gray-500">{modoOperativo ? "Costo/kg" : "Costo/pez"}</span><div className="font-semibold">{(modoOperativo ? costos?.costo_por_kg : costos?.costo_por_pez) == null ? "N/D" : "$ " + nd(modoOperativo ? costos?.costo_por_kg : costos?.costo_por_pez, 2)}</div></div>
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--bf-border)] pt-3">
