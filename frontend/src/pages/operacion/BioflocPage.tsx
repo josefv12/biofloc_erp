@@ -484,10 +484,15 @@ export function AplicacionesBioflocPanel({
             {
               key: "cant",
               header: "Cantidad",
-              render: (row) =>
-                row.cantidad == null
-                  ? "—"
-                  : `${formatNumber(row.cantidad, { maximumFractionDigits: 4 })}${row.unidad ? ` ${row.unidad}` : ""}`,
+              render: (row) => {
+                if (row.cantidad == null) return "—";
+                // Algunas aplicaciones históricas guardaron cantidad sin unidad.
+                // Mostrar la unidad base del producto evita dejar ambiguo el dato.
+                const unidad = row.unidad || (row.producto_id != null
+                  ? unidades.get(productos.get(row.producto_id)?.unidad_id ?? -1)?.simbolo
+                  : undefined);
+                return `${formatNumber(row.cantidad, { maximumFractionDigits: 4 })}${unidad ? ` ${unidad}` : ""}`;
+              },
             },
             { key: "obs", header: "Observaciones", render: (row) => row.observaciones || "—" },
           ]}
