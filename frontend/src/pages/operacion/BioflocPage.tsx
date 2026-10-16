@@ -17,6 +17,7 @@ import {
   listProductosActivos,
   listReferenciasBiofloc,
   listTiposAplicacionBiofloc,
+  listUnidades,
 } from "../../api/operations";
 import { getLote, listLotes } from "../../api/production";
 import { listUsuarios } from "../../api/users";
@@ -353,6 +354,7 @@ export function AplicacionesBioflocPanel({
     queryFn: () => listTiposAplicacionBiofloc(true),
   });
   const productosQuery = useQuery({ queryKey: ["productos-activos"], queryFn: listProductosActivos });
+  const unidadesQuery = useQuery({ queryKey: ["unidades"], queryFn: listUnidades });
   const query = useQuery({
     queryKey: ["aplicaciones-biofloc", loteId],
     queryFn: () => listAplicacionesBiofloc(loteId),
@@ -382,7 +384,16 @@ export function AplicacionesBioflocPanel({
   });
 
   const tipoAplicacionId = form.watch("tipo_aplicacion_id");
+  const productoIdSeleccionado = form.watch("producto_id");
   const tipoAplicacion = tipos.get(Number(tipoAplicacionId));
+  const productoSeleccionado = productos.get(Number(productoIdSeleccionado));
+  const unidades = useMemo(
+    () => new Map((unidadesQuery.data ?? []).map((row) => [row.id, row])),
+    [unidadesQuery.data],
+  );
+  const unidadInventario = productoSeleccionado
+    ? unidades.get(productoSeleccionado.unidad_id)?.simbolo ?? ""
+    : "";
   const productosBiofloc = useMemo(() => {
     const tipo = (tipoAplicacion?.nombre ?? "").toUpperCase();
     let patrones: RegExp[] = [];
@@ -500,7 +511,8 @@ export function AplicacionesBioflocPanel({
               producto_id: producto === "" ? null : Number(producto),
               fecha_hora: fechaHora,
               cantidad: cantidad === "" ? null : Number(cantidad),
-              unidad: values.unidad.trim() || null,
+              // Las salidas de inventario usan la unidad interna del producto.
+              unidad: unidadInventario || null,
               observaciones: values.observaciones.trim() || null,
             });
           })}
@@ -559,8 +571,11 @@ export function AplicacionesBioflocPanel({
               Si registra una cantidad mayor que 0, debe seleccionar un insumo.
             </p>
           </Field>
-          <Field label="Unidad (opcional, texto del API)">
-            <input className="bf-input" {...form.register("unidad")} />
+          <Field label="Unidad de inventario">
+            <input className="bf-input" value={unidadInventario} readOnly placeholder="Seleccione primero un producto" />
+            <p className="mt-1 text-xs text-[var(--bf-muted)]">
+              Registre la cantidad en esta unidad. Es la unidad base usada por el inventario y el costeo; no escriba gramos si aquí aparece kg.
+            </p>
           </Field>
           <Field label="Observaciones">
             <textarea className="bf-input min-h-20" {...form.register("observaciones")} />
