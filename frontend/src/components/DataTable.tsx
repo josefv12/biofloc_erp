@@ -30,8 +30,12 @@ export function DataTable<T>({
     return <EmptyState title={empty} />;
   }
 
-  const scrollVertical = maxVisibleRows != null && rows.length > maxVisibleRows;
-  const maxHeight = scrollVertical ? `calc(2.75rem + ${maxVisibleRows} * 2.85rem)` : undefined;
+  // Activar el scroll al llegar al límite, no una fila después.
+  const scrollVertical = maxVisibleRows != null && rows.length >= maxVisibleRows;
+  // Dejar visible aproximadamente una fila menos para que el scroll se note al alcanzar el límite.
+  const maxHeight = scrollVertical
+    ? `calc(2.75rem + ${Math.max(1, maxVisibleRows - 1)} * 2.85rem)`
+    : undefined;
 
   return (
     <div
