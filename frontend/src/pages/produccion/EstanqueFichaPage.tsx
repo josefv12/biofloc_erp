@@ -62,7 +62,7 @@ import { can } from "../../utils/rbac";
 import { listCategoriasInventario, listProductos } from "../../api/inventory";
 import { PATH_COMPARACION } from "./fichaPaths";
 import { LoteFichaWorkspace, parseLoteFichaTab, type LoteFichaTabId } from "./LoteFichaPage";
-import { AplicacionesBioflocPanel, MedicionesBioflocPanel } from "../operacion/BioflocPage";
+import { AplicacionesBioflocPanel } from "../operacion/BioflocPage";
 import type { Lote, LoteCreate, SiembraLoteCreate } from "../../types/production";
 import type { CostosLote } from "../../types/costos";
 import type { BiometriaCreate, CosechaCreate, MortalidadCreate } from "../../types/production";
@@ -441,13 +441,7 @@ export function EstanqueFichaPage() {
             <LoteFichaWorkspace lote={lote} tab={tab} onTab={setTab} mostrarGraficasResumen={false} modoOperativo />
 
             {tab === "biofloc" ? (
-              <div className="mx-6 mb-6 space-y-6">
-                <section className="rounded-2xl border border-[var(--bf-border)] bg-white p-4">
-                  <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
-                    Historial de mediciones Biofloc
-                  </h2>
-                  <MedicionesBioflocPanel loteId={lote.id} lotes={lotes} compact={false} />
-                </section>
+              <div className="mx-6 mb-6">
                 <section className="rounded-2xl border border-[var(--bf-border)] bg-white p-4">
                   <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
                     Historial de aplicaciones Biofloc
