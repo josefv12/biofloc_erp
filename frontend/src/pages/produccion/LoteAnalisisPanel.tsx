@@ -958,6 +958,7 @@ function SeccionBiofloc({ data, modoOperativo = false }: { data: AnalisisLote; m
         <DataTable
           rows={historialBiofloc}
           rowKey={(row) => row.id}
+          maxVisibleRows={10}
           empty="N/D — Sin medición."
           columns={[
             { key: "fecha", header: "Fecha", render: (row) => formatDateTime(row.fecha_hora) },
