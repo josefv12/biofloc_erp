@@ -26,6 +26,7 @@ def _registrar_auditoria(db: Session, usuario_id: int, accion: str, registro_id:
 def _conteos(db: Session) -> tuple[dict[int, int], dict[int, int]]:
     prod = dict(
         db.query(ReferenciaProduccion.especie_id, func.count(ReferenciaProduccion.id))
+        .filter(ReferenciaProduccion.activo.is_(True))
         .group_by(ReferenciaProduccion.especie_id)
         .all()
     )
