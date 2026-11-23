@@ -83,12 +83,12 @@ def test_obtener_fila_maestra_no_desplaza_a_semana_anterior():
 
 
 def test_ejemplo_semana_1_3500_peces_guia_peso_esperado():
-    """Guía de catálogo: 3500 peces × 1,5 g esperado × 10 % → 0,525 kg/día.
+    """Guía de catálogo: 3500 peces × 6 g esperado × 13,333 % → 2,800 kg/día.
 
     No es la ración operativa del lote (esa usa peso inicial / biometría).
     """
     fila = obtener_fila_maestra(1)
-    assert fila.peso_esperado_g == Decimal("1.5")
+    assert fila.peso_esperado_g == Decimal("6.0")
     assert fila.tasa_alimentacion_pct == Decimal("13.333")
     biomasa = calcular_biomasa_kg(3500, fila.peso_esperado_g)
     assert biomasa == Decimal("21.000")
@@ -138,7 +138,7 @@ def test_caso_a_3000_peces_semana_10():
 
 def test_caso_b_5000_peces_semana_10():
     biomasa, racion, por_racion = _racion_semana_10(5000)
-    assert biomasa == Decimal("375.000")
+    assert biomasa == Decimal("625.000")
     assert racion == Decimal("17.063")
     assert por_racion == Decimal("4.266")
 
@@ -171,7 +171,7 @@ def test_caso_biometria_82g_4800_peces_semana_10():
     assert racion == Decimal("10.745")
     assert por_racion == Decimal("2.686")
     fila = obtener_fila_maestra(10)
-    assert fila.peso_esperado_g == Decimal("75.0")
+    assert fila.peso_esperado_g == Decimal("125.0")
 
 
 def test_especie_usa_tabla_maestra_solo_tilapia_roja():
@@ -223,7 +223,7 @@ def test_resolver_tilapia_sin_bd_no_usa_python(_mock_ref):
 
 def test_rango_raciones_no_promedia():
     fila = obtener_fila_maestra(1)
-    assert fila.raciones_texto == "6–8"
+    assert fila.raciones_texto == "8"
     assert fila.numero_raciones_unico is None
 
 
@@ -245,8 +245,8 @@ def _params_semana_1() -> ParametrosReferenciaSemana:
     return ParametrosReferenciaSemana(
         semana=1,
         fase="Inicio",
-        peso_esperado_g=Decimal("1.5"),
-        tasa_alimentacion_pct=Decimal("10.0"),
+        peso_esperado_g=Decimal("6.0"),
+        tasa_alimentacion_pct=Decimal("13.333"),
         raciones_texto="8",
         raciones_min=8,
         raciones_max=8,
@@ -261,8 +261,8 @@ def _params_semana_10() -> ParametrosReferenciaSemana:
     return ParametrosReferenciaSemana(
         semana=10,
         fase="Levante",
-        peso_esperado_g=Decimal("75.0"),
-        tasa_alimentacion_pct=Decimal("4.0"),
+        peso_esperado_g=Decimal("125.0"),
+        tasa_alimentacion_pct=Decimal("2.730"),
         raciones_texto="4",
         raciones_min=4,
         raciones_max=4,
@@ -306,7 +306,7 @@ def test_caso_1_3500_sin_biometria_usa_peso_inicial(_mock_res, _mock_pob):
     assert resultado.racion_por_comida_max_g is None
     assert resultado.racion_por_comida_kg == Decimal("0.058")
     assert resultado.parametros is not None
-    assert resultado.parametros.raciones_texto == "6–8"
+    assert resultado.parametros.raciones_texto == "8"
     assert resultado.parametros.numero_raciones_diarias is None
     assert resultado.biomasa_esperada_kg == Decimal("21.000")
 
@@ -417,10 +417,10 @@ def test_caso_6_rango_6_8_no_promedia(_mock_res, _mock_pob):
     assert resultado.parametros is not None
     assert resultado.parametros.raciones_texto == "6–8"
     assert resultado.parametros.numero_raciones_diarias is None
-    assert resultado.racion_por_comida_kg is None
-    assert resultado.racion_por_comida_min_g != resultado.racion_por_comida_max_g
-    promedio = (resultado.racion_diaria_g or 0) / Decimal("7")
-    assert resultado.racion_por_comida_min_g != promedio.quantize(Decimal("0.01"))
+    assert resultado.racion_por_comida_kg == Decimal("0.058")
+    assert resultado.racion_por_comida_g == Decimal("58.3")
+    assert resultado.racion_por_comida_min_g is None
+    assert resultado.racion_por_comida_max_g is None
 
 
 @patch("app.services.alimentacion_referencia_service.obtener_poblacion_disponible", return_value=3479)
@@ -460,7 +460,7 @@ def test_racion_en_fecha_usa_peso_inicial_sin_biometria(mock_res):
         peso_real_hasta=None,
         peso_inicial_g=Decimal("1"),
     )
-    assert racion == Decimal("0.3479")
+    assert racion == Decimal("0.4639")
 
 
 def test_serie_comparativa_acepta_racion_operativa_4_decimales():
