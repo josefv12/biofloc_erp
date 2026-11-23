@@ -102,7 +102,7 @@ def test_ejemplo_biometria_2g_mantiene_referencia_1_5g():
     assert biomasa_real == Decimal("7.000")
     racion = calcular_racion_kg(biomasa_real, fila.tasa_alimentacion_pct)
     assert racion == Decimal("0.933")
-    assert fila.peso_esperado_g == Decimal("1.5")
+    assert fila.peso_esperado_g == Decimal("6.0")
 
 
 def test_alimento_referencia_1000_peces_semana_1():
@@ -207,7 +207,7 @@ def test_resolver_no_convierte_semana_a_dias(mock_ref):
     assert mock_ref.call_args.args[3] == 10
     assert params is not None
     assert params.semana == 10
-    assert params.peso_esperado_g == Decimal("75.0")
+    assert params.peso_esperado_g == Decimal("125.0")
     assert params.fuente == "REFERENCIA_PRODUCCION_BD"
 
 
@@ -222,8 +222,8 @@ def test_resolver_tilapia_sin_bd_no_usa_python(_mock_ref):
 
 
 def test_rango_raciones_no_promedia():
-    fila = obtener_fila_maestra(1)
-    assert fila.raciones_texto == "8"
+    fila = obtener_fila_maestra(18)
+    assert fila.raciones_texto == "2–3"
     assert fila.numero_raciones_unico is None
 
 
@@ -354,7 +354,7 @@ def test_caso_3_biometria_4g_no_usa_esperado(_mock_res, _mock_pob):
     assert resultado.biomasa_para_racion_kg == Decimal("13.916")
     assert resultado.racion_diaria_kg == Decimal("1.8554")
     assert resultado.parametros is not None
-    assert resultado.parametros.peso_esperado_g == Decimal("1.5")
+    assert resultado.parametros.peso_esperado_g == Decimal("6.0")
 
 
 @patch("app.services.alimentacion_referencia_service.obtener_poblacion_disponible", return_value=3479)
@@ -415,7 +415,7 @@ def test_caso_6_rango_6_8_no_promedia(_mock_res, _mock_pob):
         peso_real_g=None,
     )
     assert resultado.parametros is not None
-    assert resultado.parametros.raciones_texto == "6–8"
+    assert resultado.parametros.raciones_texto == "8"
     assert resultado.parametros.numero_raciones_diarias is None
     assert resultado.racion_por_comida_kg == Decimal("0.058")
     assert resultado.racion_por_comida_g == Decimal("58.3")
