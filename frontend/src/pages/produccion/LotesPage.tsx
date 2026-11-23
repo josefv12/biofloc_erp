@@ -445,3 +445,12 @@ export function LotesPage() {
     </div>
   );
 }
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block font-medium text-[var(--bf-ink)]">{label}</span>
+      {children}
+    </label>
+  );
+}
