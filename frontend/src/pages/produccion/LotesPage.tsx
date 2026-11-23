@@ -13,6 +13,7 @@ import { createLote, listEstadosLote, listEstanques, listEspecies, listEtapasPro
 import { pathFichaEstanque } from "./fichaPaths";
 import { apiErrorMessage } from "../../utils/apiError";
 import { formatDate, formatNumber } from "../../utils/format";
+import { fechaLocalISO, fechaMaximaCicloDesdeSiembra, SEMANAS_CICLO_REFERENCIA } from "../../utils/indicadoresProduccion";
 import { can } from "../../utils/rbac";
 import type { Lote, LoteCreate, LoteUpdate } from "../../types/production";
 
@@ -367,10 +368,10 @@ export function LotesPage() {
               <div className="rounded-lg border border-[var(--bf-border)] bg-[var(--bf-surface-muted)] p-3">
                 <div className="text-sm font-medium text-[var(--bf-ink)]">Fecha estimada de cosecha</div>
                 <div className="mt-1 text-lg font-semibold text-[var(--bf-accent)]">
-                  {formatDate(addMonths(fechaSiembra, 6))}
+                  {(() => { const fecha = fechaMaximaCicloDesdeSiembra(fechaSiembra); return fecha ? formatDate(fechaLocalISO(fecha)) : "N/D"; })()}
                 </div>
                 <div className="mt-1 text-xs text-[var(--bf-muted)]">
-                  Ciclo objetivo de 6 meses. Es una fecha estimada; la cosecha real se registra cuando ocurra.
+                  Ciclo objetivo de {SEMANAS_CICLO_REFERENCIA} semanas (140 días). Es una fecha estimada; la cosecha real se registra cuando ocurra.
                 </div>
               </div>
             ) : null}
@@ -442,24 +443,5 @@ export function LotesPage() {
         </form>
       </Modal>
     </div>
-  );
-}
-
-function addMonths(value: string, months: number): string {
-  const [year, month, day] = value.split("-").map(Number);
-  const index = month - 1 + months;
-  const targetYear = year + Math.floor(index / 12);
-  const targetMonth = (index % 12) + 1;
-  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
-  const targetDay = Math.min(day, lastDay);
-  return `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block text-sm">
-      <span className="mb-1 block font-medium text-[var(--bf-ink)]">{label}</span>
-      {children}
-    </label>
   );
 }
