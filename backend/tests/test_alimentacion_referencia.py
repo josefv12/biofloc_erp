@@ -22,11 +22,11 @@ from app.services.alimentacion_referencia_service import (
 from app.services.referencia_produccion_service import _precedencia, _resolver
 
 
-def test_tabla_tiene_24_semanas():
-    assert len(TABLA_ALIMENTACION_TILAPIA) == 24
+def test_tabla_tiene_20_semanas_ciclo_5_meses():
+    assert len(TABLA_ALIMENTACION_TILAPIA) == 20
     assert TABLA_ALIMENTACION_TILAPIA[0].semana == 1
-    assert TABLA_ALIMENTACION_TILAPIA[-1].semana == 24
-    assert TABLA_ALIMENTACION_TILAPIA[-1].peso_esperado_g == Decimal("500.0")
+    assert TABLA_ALIMENTACION_TILAPIA[-1].semana == 20
+    assert TABLA_ALIMENTACION_TILAPIA[-1].peso_esperado_g == Decimal("400.0")
 
 
 def test_semana_floor_dias_sobre_7_mas_1():
@@ -78,6 +78,7 @@ def test_referencias_python_semana_1_2_10():
 def test_obtener_fila_maestra_no_desplaza_a_semana_anterior():
     assert obtener_fila_maestra(10).semana == 10
     assert obtener_fila_maestra(3).semana == 3
+    assert obtener_fila_maestra(21) is None
     assert obtener_fila_maestra(25) is None
 
 
