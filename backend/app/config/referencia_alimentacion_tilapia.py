@@ -102,7 +102,7 @@ def semana_productiva_alimentacion(dias_cultivo: int) -> int:
 
 
 def obtener_fila_maestra(semana: int) -> FilaReferenciaAlimentacion | None:
-    """Fila exacta de la semana. No recorta a 24 ni reutiliza otra semana."""
+    """Fila exacta de la semana. No desplaza semanas sin referencia ni reutiliza la semana anterior."""
     return _MAPA_SEMANAS.get(int(semana))
 
 
