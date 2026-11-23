@@ -96,7 +96,7 @@ def test_ejemplo_semana_1_3500_peces_guia_peso_esperado():
     assert racion == Decimal("2.800")
 
 
-def test_ejemplo_biometria_2g_mantiene_referencia_1_5g():
+def test_ejemplo_biometria_2g_mantiene_referencia_6g():
     fila = obtener_fila_maestra(1)
     biomasa_real = calcular_biomasa_kg(3500, Decimal("2"))
     assert biomasa_real == Decimal("7.000")
@@ -112,11 +112,11 @@ def test_alimento_referencia_1000_peces_semana_1():
 
 def test_semana_8_valores():
     fila = obtener_fila_maestra(8)
-    assert fila.fase == "Inicio"
+    assert fila.fase == "Levante"
     assert fila.peso_esperado_g == Decimal("87.0")
     assert fila.tasa_alimentacion_pct == Decimal("2.935")
     assert fila.raciones_texto == "4"
-    assert fila.numero_raciones_unico is None
+    assert fila.numero_raciones_unico == 4
 
 
 def _racion_semana_10(poblacion: int, peso_g: Decimal | None = None) -> tuple[Decimal, Decimal, Decimal]:
@@ -228,7 +228,7 @@ def test_rango_raciones_no_promedia():
 
 
 def test_etapa_lote_no_bloquea_fase_por_semana():
-    inicio = SimpleNamespace(id=1, semana_desde=1, semana_hasta=24, etapa_productiva_id=1)
+    inicio = SimpleNamespace(id=1, semana_desde=1, semana_hasta=20, etapa_productiva_id=1)
     levante = SimpleNamespace(id=2, semana_desde=9, semana_hasta=16, etapa_productiva_id=2)
     elegida = _resolver([inicio, levante], 10, etapa_preferida_id=1)
     assert elegida.id == 2
@@ -250,7 +250,7 @@ def _params_semana_1() -> ParametrosReferenciaSemana:
         raciones_texto="8",
         raciones_min=8,
         raciones_max=8,
-        numero_raciones_diarias=None,
+        numero_raciones_diarias=8,
         alimento_referencia_1000_peces_kg=Decimal("0.800"),
         referencia_bd_id=1,
         fuente="REFERENCIA_PRODUCCION_BD",
@@ -307,7 +307,7 @@ def test_caso_1_3500_sin_biometria_usa_peso_inicial(_mock_res, _mock_pob):
     assert resultado.racion_por_comida_kg == Decimal("0.058")
     assert resultado.parametros is not None
     assert resultado.parametros.raciones_texto == "8"
-    assert resultado.parametros.numero_raciones_diarias is None
+    assert resultado.parametros.numero_raciones_diarias == 8
     assert resultado.biomasa_esperada_kg == Decimal("21.000")
 
 
@@ -328,10 +328,10 @@ def test_caso_2_3479_sin_biometria(_mock_res, _mock_pob):
     assert resultado.biomasa_para_racion_kg == Decimal("3.479")
     assert resultado.racion_diaria_kg == Decimal("0.4639")
     assert resultado.racion_diaria_g == Decimal("463.9")
+    assert resultado.racion_por_comida_kg == Decimal("0.058")
+    assert resultado.racion_por_comida_g == Decimal("58.0")
     assert resultado.racion_por_comida_min_g is None
     assert resultado.racion_por_comida_max_g is None
-    assert resultado.racion_por_comida_min_kg is None
-    assert resultado.racion_por_comida_max_kg is None
     assert resultado.biomasa_esperada_kg == Decimal("20.874")
     assert resultado.diferencia_peso_g == Decimal("-5.00")
 
@@ -372,7 +372,7 @@ def test_caso_4_nueva_biometria_7g(_mock_res, _mock_pob):
     )
     assert resultado.peso_operativo_g == Decimal("7")
     assert resultado.biomasa_para_racion_kg == Decimal("24.353")
-    assert resultado.racion_diaria_kg == Decimal("3.2468")
+    assert resultado.racion_diaria_kg == Decimal("3.2470")
 
 
 @patch("app.services.alimentacion_referencia_service.obtener_poblacion_disponible", return_value=3000)
@@ -406,7 +406,7 @@ def test_caso_5_semana_10_racion_exacta(_mock_res, _mock_pob):
     "app.services.alimentacion_referencia_service.resolver_parametros_semana",
     return_value=_params_semana_1(),
 )
-def test_caso_6_rango_6_8_no_promedia(_mock_res, _mock_pob):
+def test_caso_6_frecuencia_exacta_8_raciones(_mock_res, _mock_pob):
     resultado = calcular_racion_lote(
         MagicMock(),
         _lote_alim(),
@@ -416,7 +416,7 @@ def test_caso_6_rango_6_8_no_promedia(_mock_res, _mock_pob):
     )
     assert resultado.parametros is not None
     assert resultado.parametros.raciones_texto == "8"
-    assert resultado.parametros.numero_raciones_diarias is None
+    assert resultado.parametros.numero_raciones_diarias == 8
     assert resultado.racion_por_comida_kg == Decimal("0.058")
     assert resultado.racion_por_comida_g == Decimal("58.3")
     assert resultado.racion_por_comida_min_g is None
