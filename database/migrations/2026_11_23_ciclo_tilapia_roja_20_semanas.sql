@@ -6,6 +6,23 @@
 BEGIN;
 SET LOCAL search_path TO biofloc, public;
 
+DO $
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM especies
+        WHERE LOWER(BTRIM(nombre_comun)) = 'tilapia roja'
+    ) THEN
+        RAISE EXCEPTION 'No existe la especie Tilapia roja; se cancela la migración sin modificar referencias.';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM etapas_productivas WHERE nombre = 'Alevinaje')
+       OR NOT EXISTS (SELECT 1 FROM etapas_productivas WHERE nombre = 'Preengorde')
+       OR NOT EXISTS (SELECT 1 FROM etapas_productivas WHERE nombre = 'Engorde') THEN
+        RAISE EXCEPTION 'Faltan etapas Alevinaje, Preengorde o Engorde; se cancela la migración.';
+    END IF;
+END
+$;
+
 UPDATE referencias_produccion rp
 SET activo = FALSE,
     updated_at = NOW(),
