@@ -255,8 +255,13 @@ export function LotesPage() {
               header: "Cosecha estimada",
               render: (row) => (
                 <div>
-                  <div className="font-medium text-[var(--bf-ink)]">{formatDate(row.fecha_estimada_cosecha)}</div>
-                  <div className="text-xs text-[var(--bf-muted)]">{row.meses_ciclo_estimado} meses objetivo</div>
+                  <div className="font-medium text-[var(--bf-ink)]">
+                    {(() => {
+                      const fecha = fechaMaximaCicloDesdeSiembra(row.fecha_siembra);
+                      return fecha ? formatDate(fechaLocalISO(fecha)) : "N/D";
+                    })()}
+                  </div>
+                  <div className="text-xs text-[var(--bf-muted)]">{SEMANAS_CICLO_REFERENCIA} semanas objetivo</div>
                 </div>
               ),
             },
