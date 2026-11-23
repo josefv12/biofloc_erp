@@ -328,7 +328,7 @@ export function ProduccionDashboard({ data }: { data: AnalisisLote }) {
                 ? formatDate(fechaLocalISO(proyeccion.fechaMaximaCiclo))
                 : "N/D"
             }
-            sub="Calendario de 24 semanas. No es predicción de crecimiento."
+            sub="Calendario de 20 semanas. No es predicción de crecimiento."
           />
           <FichaMetric
             label="Cosecha estimada"
