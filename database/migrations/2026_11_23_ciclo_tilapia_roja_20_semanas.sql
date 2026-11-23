@@ -1,7 +1,6 @@
 -- Ciclo productivo de tilapia roja: 20 semanas (5 meses).
--- Solo modifica datos de referencias_produccion.
--- No crea, modifica ni elimina funciones, triggers ni procedimientos.
--- Conserva las referencias anteriores como historial inactivo.
+-- Crea un respaldo histórico de las referencias anteriores y actualiza referencias_produccion.
+-- No elimina registros ni crea, modifica o elimina funciones, triggers o procedimientos.
 
 BEGIN;
 SET LOCAL search_path TO biofloc, public;
@@ -22,6 +21,18 @@ BEGIN
     END IF;
 END;
 $preflight$;
+
+-- Respaldo idempotente: conserva los valores originales incluso cuando coinciden
+-- las claves únicas que la nueva curva necesita actualizar.
+CREATE TABLE IF NOT EXISTS biofloc.referencias_produccion_historial
+    (LIKE biofloc.referencias_produccion INCLUDING ALL);
+
+INSERT INTO biofloc.referencias_produccion_historial
+SELECT rp.*
+FROM biofloc.referencias_produccion rp
+JOIN biofloc.especies e ON e.id = rp.especie_id
+WHERE LOWER(BTRIM(e.nombre_comun)) = 'tilapia roja'
+ON CONFLICT (id) DO NOTHING;
 
 UPDATE referencias_produccion rp
 SET activo = FALSE,
