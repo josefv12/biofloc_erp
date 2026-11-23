@@ -65,16 +65,16 @@ WHERE rp.especie_id = e.especie_id
   AND rp.activo IS TRUE
   AND rp.semana_desde >= 21;
 
--- Desactivar únicamente filas activas de semanas 1-20 para reescribir
--- la curva oficial de una semana por registro sin tocar otras especies.
+-- Desactivar las referencias activas actuales de tilapia roja.
+-- Se conservan como historial; las 20 semanas oficiales se reactivan/upsert abajo.
 UPDATE referencias_produccion rp
 SET activo = FALSE,
     updated_at = NOW(),
     observaciones = CONCAT(COALESCE(rp.observaciones, ''), ' | Reemplazado por curva oficial de 20 semanas.')
-FROM especie_tilapia e
-WHERE rp.especie_id = e.especie_id
-  AND rp.activo IS TRUE
-  AND rp.semana_desde <= 20;
+FROM especies e
+WHERE rp.especie_id = e.id
+  AND LOWER(BTRIM(e.nombre_comun)) = 'tilapia roja'
+  AND rp.activo IS TRUE;
 
 INSERT INTO referencias_produccion (
     especie_id, etapa_productiva_id, semana_desde, semana_hasta,
@@ -94,6 +94,16 @@ SELECT
     'Curva oficial tilapia roja 20 semanas. Tasa derivada para que la ración diaria sobre biomasa de referencia reproduzca el alimento semanal de la tabla base.',
     TRUE
 FROM referencias r
-WHERE r.etapa_productiva_id IS NOT NULL;
+WHERE r.etapa_productiva_id IS NOT NULL
+ON CONFLICT (especie_id, etapa_productiva_id, semana_desde, semana_hasta)
+DO UPDATE SET
+    peso_esperado_g = EXCLUDED.peso_esperado_g,
+    tasa_alimentacion_pct = EXCLUDED.tasa_alimentacion_pct,
+    raciones_min = EXCLUDED.raciones_min,
+    raciones_max = EXCLUDED.raciones_max,
+    fase = EXCLUDED.fase,
+    observaciones = EXCLUDED.observaciones,
+    activo = TRUE,
+    updated_at = NOW();
 
 COMMIT;
