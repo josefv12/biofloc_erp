@@ -1,8 +1,9 @@
 import { toNumber } from "./series";
 import type { ApiDecimal } from "../types/analisis";
 
-export const PESO_OBJETIVO_COSECHA_G = 500;
-export const MESES_CICLO_REFERENCIA = 6;
+export const PESO_OBJETIVO_COSECHA_G = 400;
+export const SEMANAS_CICLO_REFERENCIA = 20;
+export const DIAS_CICLO_REFERENCIA = SEMANAS_CICLO_REFERENCIA * 7;
 
 export function num(value: ApiDecimal | null | undefined): number | null {
   return toNumber(value ?? null);
@@ -42,20 +43,16 @@ export type ProyeccionCosecha = {
   nota: string;
 };
 
-function addMonths(base: Date, months: number): Date {
-  const d = new Date(base);
-  const originalDay = d.getDate();
-  d.setDate(1);
-  d.setMonth(d.getMonth() + months);
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(originalDay, lastDay));
-  return d;
-}
-
 function addDays(base: Date, days: number): Date {
   const d = new Date(base);
   d.setDate(d.getDate() + days);
   return d;
+}
+
+export function fechaMaximaCicloDesdeSiembra(fechaSiembra: string): Date | null {
+  const siembra = new Date(`${fechaSiembra}T00:00:00`);
+  if (Number.isNaN(siembra.getTime())) return null;
+  return addDays(siembra, DIAS_CICLO_REFERENCIA);
 }
 
 export function fechaLocalISO(d: Date): string {
@@ -71,10 +68,8 @@ export function mensajeRestantesCosecha(restantes: number): string {
 }
 
 /**
- * El ciclo productivo de referencia es de 6 meses calendario desde la siembra.
- * La fecha máxima de ciclo se calcula sumando meses calendario, preservando el
- * día cuando existe en el mes destino. La predicción por crecimiento sigue
- * usando peso real + GPD hacia 500 g cuando esos datos están disponibles.
+ * El ciclo productivo de referencia es de 20 semanas (140 días) desde la siembra.
+ * La proyección por crecimiento usa peso real + GPD con objetivo de 400 g.
  */
 export function proyectarCosecha(params: {
   fechaSiembra: string;
@@ -85,7 +80,7 @@ export function proyectarCosecha(params: {
 }): ProyeccionCosecha {
   const siembra = new Date(`${params.fechaSiembra}T00:00:00`);
   const siembraValida = !Number.isNaN(siembra.getTime());
-  const fechaMaximaCiclo = siembraValida ? addMonths(siembra, MESES_CICLO_REFERENCIA) : null;
+  const fechaMaximaCiclo = siembraValida ? fechaMaximaCicloDesdeSiembra(params.fechaSiembra) : null;
 
   let diasRestantesCalendario: number | null = null;
   if (siembraValida && fechaMaximaCiclo) {
@@ -134,14 +129,14 @@ export function proyectarCosecha(params: {
   let nota: string;
   if (!usaPrediccionCrecimiento) {
     nota =
-      "Estimación de calendario (6 meses). No es una predicción de crecimiento real.";
+      `Estimación de calendario (${SEMANAS_CICLO_REFERENCIA} semanas). No es una predicción de crecimiento real.`;
   } else if (params.pesoActualG != null && params.pesoActualG >= PESO_OBJETIVO_COSECHA_G) {
     nota = `Objetivo comercial de ${PESO_OBJETIVO_COSECHA_G} g alcanzado.`;
   } else if (diasPorPeso != null && diasRestantesCalendario != null && diasPorPeso > diasRestantesCalendario) {
     nota =
-      "La predicción por GPD supera el ciclo de 6 meses; se usa la fecha máxima de ciclo como referencia.";
+      `La predicción por GPD supera el ciclo de ${SEMANAS_CICLO_REFERENCIA} semanas; se usa la fecha máxima de ciclo como referencia.`;
   } else {
-    nota = "Predicción de crecimiento con peso real y GPD hacia 500 g.";
+    nota = `Predicción de crecimiento con peso real y GPD hacia ${PESO_OBJETIVO_COSECHA_G} g.`;
   }
 
   return {
