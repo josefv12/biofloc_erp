@@ -154,8 +154,9 @@ def test_referencia_no_depende_de_cantidad_fija():
     _b3, r3, _ = _racion_semana_10(3000)
     _b5, r5, _ = _racion_semana_10(5000)
     _b10, r10, _ = _racion_semana_10(10000)
-    assert r5 / r3 == Decimal("5") / Decimal("3")
-    assert r10 / r3 == Decimal("10") / Decimal("3")
+    # La ración se redondea a 0.001 kg antes de comparar escalas de población.
+    assert abs(r5 - (r3 * Decimal("5") / Decimal("3"))) <= Decimal("0.001")
+    assert abs(r10 - (r3 * Decimal("10") / Decimal("3"))) <= Decimal("0.002")
 
 
 def test_caso_mortalidad_4800_peces_semana_10():
@@ -418,7 +419,7 @@ def test_caso_6_frecuencia_exacta_8_raciones(_mock_res, _mock_pob):
     assert resultado.parametros.raciones_texto == "8"
     assert resultado.parametros.numero_raciones_diarias == 8
     assert resultado.racion_por_comida_kg == Decimal("0.058")
-    assert resultado.racion_por_comida_g == Decimal("58.3")
+    assert resultado.racion_por_comida_g == Decimal("58.0")
     assert resultado.racion_por_comida_min_g is None
     assert resultado.racion_por_comida_max_g is None
 
