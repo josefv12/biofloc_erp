@@ -53,7 +53,7 @@ def test_calendario_siembra_19_agosto_2026():
         assert semana_productiva_alimentacion((fecha - siembra).days) == semana
 
 
-def test_semana_no_recorta_a_24():
+def test_semana_no_recorta_a_20():
     assert semana_productiva_alimentacion(200) == 200 // 7 + 1
 
 
@@ -68,10 +68,10 @@ def test_referencias_python_semana_1_2_10():
     s1 = obtener_fila_maestra(1)
     s2 = obtener_fila_maestra(2)
     s10 = obtener_fila_maestra(10)
-    assert s1 is not None and s1.peso_esperado_g == Decimal("1.5")
-    assert s2 is not None and s2.peso_esperado_g == Decimal("3.0")
-    assert s10 is not None and s10.peso_esperado_g == Decimal("75.0")
-    assert s10.tasa_alimentacion_pct == Decimal("4.0")
+    assert s1 is not None and s1.peso_esperado_g == Decimal("6.0")
+    assert s2 is not None and s2.peso_esperado_g == Decimal("12.0")
+    assert s10 is not None and s10.peso_esperado_g == Decimal("125.0")
+    assert s10.tasa_alimentacion_pct == Decimal("2.730")
     assert s10.numero_raciones_unico == 4
 
 
@@ -89,11 +89,11 @@ def test_ejemplo_semana_1_3500_peces_guia_peso_esperado():
     """
     fila = obtener_fila_maestra(1)
     assert fila.peso_esperado_g == Decimal("1.5")
-    assert fila.tasa_alimentacion_pct == Decimal("10.0")
+    assert fila.tasa_alimentacion_pct == Decimal("13.333")
     biomasa = calcular_biomasa_kg(3500, fila.peso_esperado_g)
-    assert biomasa == Decimal("5.250")
+    assert biomasa == Decimal("21.000")
     racion = calcular_racion_kg(biomasa, fila.tasa_alimentacion_pct)
-    assert racion == Decimal("0.525")
+    assert racion == Decimal("2.800")
 
 
 def test_ejemplo_biometria_2g_mantiene_referencia_1_5g():
@@ -101,21 +101,21 @@ def test_ejemplo_biometria_2g_mantiene_referencia_1_5g():
     biomasa_real = calcular_biomasa_kg(3500, Decimal("2"))
     assert biomasa_real == Decimal("7.000")
     racion = calcular_racion_kg(biomasa_real, fila.tasa_alimentacion_pct)
-    assert racion == Decimal("0.700")
+    assert racion == Decimal("0.933")
     assert fila.peso_esperado_g == Decimal("1.5")
 
 
 def test_alimento_referencia_1000_peces_semana_1():
     fila = obtener_fila_maestra(1)
-    assert fila.alimento_referencia_1000_peces_kg == Decimal("0.150")
+    assert fila.alimento_referencia_1000_peces_kg == Decimal("0.800")
 
 
 def test_semana_8_valores():
     fila = obtener_fila_maestra(8)
     assert fila.fase == "Inicio"
-    assert fila.peso_esperado_g == Decimal("45.0")
-    assert fila.tasa_alimentacion_pct == Decimal("5.0")
-    assert fila.raciones_texto == "4–5"
+    assert fila.peso_esperado_g == Decimal("87.0")
+    assert fila.tasa_alimentacion_pct == Decimal("2.935")
+    assert fila.raciones_texto == "4"
     assert fila.numero_raciones_unico is None
 
 
@@ -131,23 +131,23 @@ def _racion_semana_10(poblacion: int, peso_g: Decimal | None = None) -> tuple[De
 
 def test_caso_a_3000_peces_semana_10():
     biomasa, racion, por_racion = _racion_semana_10(3000)
-    assert biomasa == Decimal("225.000")
-    assert racion == Decimal("9.000")
-    assert por_racion == Decimal("2.250")
+    assert biomasa == Decimal("375.000")
+    assert racion == Decimal("10.238")
+    assert por_racion == Decimal("2.560")
 
 
 def test_caso_b_5000_peces_semana_10():
     biomasa, racion, por_racion = _racion_semana_10(5000)
     assert biomasa == Decimal("375.000")
-    assert racion == Decimal("15.000")
-    assert por_racion == Decimal("3.750")
+    assert racion == Decimal("17.063")
+    assert por_racion == Decimal("4.266")
 
 
 def test_caso_c_10000_peces_semana_10():
     biomasa, racion, por_racion = _racion_semana_10(10000)
-    assert biomasa == Decimal("750.000")
-    assert racion == Decimal("30.000")
-    assert por_racion == Decimal("7.500")
+    assert biomasa == Decimal("1250.000")
+    assert racion == Decimal("34.125")
+    assert por_racion == Decimal("8.531")
 
 
 def test_referencia_no_depende_de_cantidad_fija():
@@ -160,16 +160,16 @@ def test_referencia_no_depende_de_cantidad_fija():
 
 def test_caso_mortalidad_4800_peces_semana_10():
     biomasa, racion, por_racion = _racion_semana_10(4800)
-    assert biomasa == Decimal("360.000")
-    assert racion == Decimal("14.400")
-    assert por_racion == Decimal("3.600")
+    assert biomasa == Decimal("600.000")
+    assert racion == Decimal("16.380")
+    assert por_racion == Decimal("4.095")
 
 
 def test_caso_biometria_82g_4800_peces_semana_10():
     biomasa, racion, por_racion = _racion_semana_10(4800, Decimal("82"))
     assert biomasa == Decimal("393.600")
-    assert racion == Decimal("15.744")
-    assert por_racion == Decimal("3.936")
+    assert racion == Decimal("10.745")
+    assert por_racion == Decimal("2.686")
     fila = obtener_fila_maestra(10)
     assert fila.peso_esperado_g == Decimal("75.0")
 
@@ -196,8 +196,8 @@ def test_resolver_no_convierte_semana_a_dias(mock_ref):
     """Semana 10 debe pedir fila 10, no 9. Solo PostgreSQL."""
     mock_ref.return_value = SimpleNamespace(
         id=10,
-        peso_esperado_g=Decimal("75.0"),
-        tasa_alimentacion_pct=Decimal("4.0"),
+        peso_esperado_g=Decimal("125.0"),
+        tasa_alimentacion_pct=Decimal("2.730"),
         raciones_min=4,
         raciones_max=4,
         fase="Levante",
@@ -247,11 +247,11 @@ def _params_semana_1() -> ParametrosReferenciaSemana:
         fase="Inicio",
         peso_esperado_g=Decimal("1.5"),
         tasa_alimentacion_pct=Decimal("10.0"),
-        raciones_texto="6–8",
-        raciones_min=6,
+        raciones_texto="8",
+        raciones_min=8,
         raciones_max=8,
         numero_raciones_diarias=None,
-        alimento_referencia_1000_peces_kg=Decimal("0.150"),
+        alimento_referencia_1000_peces_kg=Decimal("0.800"),
         referencia_bd_id=1,
         fuente="REFERENCIA_PRODUCCION_BD",
     )
@@ -267,7 +267,7 @@ def _params_semana_10() -> ParametrosReferenciaSemana:
         raciones_min=4,
         raciones_max=4,
         numero_raciones_diarias=4,
-        alimento_referencia_1000_peces_kg=Decimal("3.000"),
+        alimento_referencia_1000_peces_kg=Decimal("3.413"),
         referencia_bd_id=10,
         fuente="REFERENCIA_PRODUCCION_BD",
     )
@@ -300,15 +300,15 @@ def test_caso_1_3500_sin_biometria_usa_peso_inicial(_mock_res, _mock_pob):
     assert resultado.peso_operativo_g == Decimal("1")
     assert resultado.peso_utilizado == "inicial"
     assert resultado.biomasa_para_racion_kg == Decimal("3.500")
-    assert resultado.racion_diaria_kg == Decimal("0.3500")
-    assert resultado.racion_diaria_g == Decimal("350.0")
-    assert resultado.racion_por_comida_min_g == Decimal("43.75")
-    assert resultado.racion_por_comida_max_g == Decimal("58.33")
-    assert resultado.racion_por_comida_kg is None
+    assert resultado.racion_diaria_kg == Decimal("0.4667")
+    assert resultado.racion_diaria_g == Decimal("466.7")
+    assert resultado.racion_por_comida_min_g is None
+    assert resultado.racion_por_comida_max_g is None
+    assert resultado.racion_por_comida_kg == Decimal("0.058")
     assert resultado.parametros is not None
     assert resultado.parametros.raciones_texto == "6–8"
     assert resultado.parametros.numero_raciones_diarias is None
-    assert resultado.biomasa_esperada_kg == Decimal("5.250")
+    assert resultado.biomasa_esperada_kg == Decimal("21.000")
 
 
 @patch("app.services.alimentacion_referencia_service.obtener_poblacion_disponible", return_value=3479)
@@ -326,14 +326,14 @@ def test_caso_2_3479_sin_biometria(_mock_res, _mock_pob):
     )
     assert resultado.peso_operativo_g == Decimal("1")
     assert resultado.biomasa_para_racion_kg == Decimal("3.479")
-    assert resultado.racion_diaria_kg == Decimal("0.3479")
-    assert resultado.racion_diaria_g == Decimal("347.9")
-    assert resultado.racion_por_comida_min_g == Decimal("43.49")
-    assert resultado.racion_por_comida_max_g == Decimal("57.98")
-    assert resultado.racion_por_comida_min_kg == Decimal("0.0435")
-    assert resultado.racion_por_comida_max_kg == Decimal("0.0580")
-    assert resultado.biomasa_esperada_kg == Decimal("5.219")
-    assert resultado.diferencia_peso_g == Decimal("-0.50")
+    assert resultado.racion_diaria_kg == Decimal("0.4639")
+    assert resultado.racion_diaria_g == Decimal("463.9")
+    assert resultado.racion_por_comida_min_g is None
+    assert resultado.racion_por_comida_max_g is None
+    assert resultado.racion_por_comida_min_kg is None
+    assert resultado.racion_por_comida_max_kg is None
+    assert resultado.biomasa_esperada_kg == Decimal("20.874")
+    assert resultado.diferencia_peso_g == Decimal("-5.00")
 
 
 @patch("app.services.alimentacion_referencia_service.obtener_poblacion_disponible", return_value=3479)
@@ -352,7 +352,7 @@ def test_caso_3_biometria_4g_no_usa_esperado(_mock_res, _mock_pob):
     assert resultado.peso_operativo_g == Decimal("4")
     assert resultado.peso_utilizado == "real"
     assert resultado.biomasa_para_racion_kg == Decimal("13.916")
-    assert resultado.racion_diaria_kg == Decimal("1.3916")
+    assert resultado.racion_diaria_kg == Decimal("1.8554")
     assert resultado.parametros is not None
     assert resultado.parametros.peso_esperado_g == Decimal("1.5")
 
@@ -372,7 +372,7 @@ def test_caso_4_nueva_biometria_7g(_mock_res, _mock_pob):
     )
     assert resultado.peso_operativo_g == Decimal("7")
     assert resultado.biomasa_para_racion_kg == Decimal("24.353")
-    assert resultado.racion_diaria_kg == Decimal("2.4353")
+    assert resultado.racion_diaria_kg == Decimal("3.2468")
 
 
 @patch("app.services.alimentacion_referencia_service.obtener_poblacion_disponible", return_value=3000)
@@ -391,10 +391,10 @@ def test_caso_5_semana_10_racion_exacta(_mock_res, _mock_pob):
     assert resultado.semana_productiva == 10
     assert resultado.peso_operativo_g == Decimal("75")
     assert resultado.biomasa_para_racion_kg == Decimal("225.000")
-    assert resultado.racion_diaria_kg == Decimal("9.0000")
-    assert resultado.racion_diaria_g == Decimal("9000.0")
-    assert resultado.racion_por_comida_kg == Decimal("2.250")
-    assert resultado.racion_por_comida_g == Decimal("2250.0")
+    assert resultado.racion_diaria_kg == Decimal("6.1425")
+    assert resultado.racion_diaria_g == Decimal("6142.5")
+    assert resultado.racion_por_comida_kg == Decimal("1.536")
+    assert resultado.racion_por_comida_g == Decimal("1535.6")
     assert resultado.racion_por_comida_min_g is None
     assert resultado.parametros is not None
     assert resultado.parametros.numero_raciones_diarias == 4
