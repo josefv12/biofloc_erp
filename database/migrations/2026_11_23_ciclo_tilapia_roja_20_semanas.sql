@@ -6,7 +6,7 @@
 BEGIN;
 SET LOCAL search_path TO biofloc, public;
 
-DO $
+DO $preflight$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM especies
@@ -21,7 +21,7 @@ BEGIN
         RAISE EXCEPTION 'Faltan etapas Alevinaje, Preengorde o Engorde; se cancela la migración.';
     END IF;
 END
-$;
+$preflight$;
 
 UPDATE referencias_produccion rp
 SET activo = FALSE,
