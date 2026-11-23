@@ -1,5 +1,5 @@
 """
-Tabla histórica de alimentación — tilapia roja Biofloc (24 semanas).
+Tabla histórica de alimentación — tilapia roja Biofloc (20 semanas / 5 meses).
 
 El catálogo oficial en runtime es `referencias_produccion` (Etapa 6C).
 Este archivo NO es fallback del resolver. Se conserva para calendario
@@ -13,10 +13,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable
 
-VERSION = "2026-08-19-tilapia-roja-24s"
+VERSION = "2026-11-23-tilapia-roja-20s"
 ESPECIE_REFERENCIA = "Tilapia roja"
 SEMANA_MIN = 1
-SEMANA_MAX = 24
+SEMANA_MAX = 20
 BASE_PECES_REFERENCIA = 1000
 
 
@@ -66,30 +66,26 @@ def _fila(
 
 
 TABLA_ALIMENTACION_TILAPIA: tuple[FilaReferenciaAlimentacion, ...] = (
-    _fila(1, "Inicio", "1.5", "10.0", "6-8"),
-    _fila(2, "Inicio", "3.0", "9.0", "6-8"),
-    _fila(3, "Inicio", "6.0", "8.0", "6-8"),
-    _fila(4, "Inicio", "11.5", "7.0", "6-8"),
-    _fila(5, "Inicio", "18.5", "6.5", "6"),
-    _fila(6, "Inicio", "26.0", "6.0", "6"),
-    _fila(7, "Inicio", "35.0", "5.5", "5"),
-    _fila(8, "Inicio", "45.0", "5.0", "4-5"),
-    _fila(9, "Levante", "57.5", "4.5", "4"),
-    _fila(10, "Levante", "75.0", "4.0", "4"),
-    _fila(11, "Levante", "95.0", "3.5", "3-4"),
-    _fila(12, "Levante", "117.5", "3.2", "3-4"),
-    _fila(13, "Levante", "142.5", "3.0", "3-4"),
-    _fila(14, "Levante", "170.0", "2.8", "3"),
-    _fila(15, "Levante", "200.0", "2.6", "3"),
-    _fila(16, "Levante", "232.5", "2.5", "3"),
-    _fila(17, "Engorde", "265.0", "2.3", "2-3"),
-    _fila(18, "Engorde", "297.5", "2.1", "2-3"),
-    _fila(19, "Engorde", "332.5", "1.9", "2-3"),
-    _fila(20, "Engorde", "367.5", "1.7", "2"),
-    _fila(21, "Engorde", "402.5", "1.5", "2"),
-    _fila(22, "Engorde", "437.5", "1.3", "2"),
-    _fila(23, "Engorde", "470.0", "1.1", "2"),
-    _fila(24, "Engorde", "500.0", "1.0", "2"),
+    _fila(1, "Inicio", "6.0", "13.333", "8"),
+    _fila(2, "Inicio", "12.0", "9.217", "7"),
+    _fila(3, "Inicio", "22.0", "7.143", "6"),
+    _fila(4, "Inicio", "34.0", "5.583", "6"),
+    _fila(5, "Levante", "45.0", "4.261", "5"),
+    _fila(6, "Levante", "58.0", "3.596", "5"),
+    _fila(7, "Levante", "72.0", "3.218", "4"),
+    _fila(8, "Levante", "87.0", "2.935", "4"),
+    _fila(9, "Levante", "105.0", "2.868", "4"),
+    _fila(10, "Levante", "125.0", "2.730", "4"),
+    _fila(11, "Engorde", "150.0", "2.774", "3"),
+    _fila(12, "Engorde", "175.0", "2.452", "3"),
+    _fila(13, "Engorde", "202.0", "2.187", "3"),
+    _fila(14, "Engorde", "228.0", "1.990", "3"),
+    _fila(15, "Engorde", "256.0", "1.800", "3"),
+    _fila(16, "Engorde", "283.0", "1.673", "3"),
+    _fila(17, "Engorde", "312.0", "1.558", "3"),
+    _fila(18, "Engorde", "341.0", "1.446", "2-3"),
+    _fila(19, "Engorde", "370.0", "1.367", "2-3"),
+    _fila(20, "Engorde", "400.0", "1.283", "2"),
 )
 
 _MAPA_SEMANAS = {fila.semana: fila for fila in TABLA_ALIMENTACION_TILAPIA}
@@ -99,14 +95,14 @@ def semana_productiva_alimentacion(dias_cultivo: int) -> int:
     """Edad del lote en semanas desde la siembra. No es semana ISO.
 
     Día 0–6 → semana 1; día 7–13 → semana 2; día 14 → semana 3.
-    semana = floor(días_cultivo / 7) + 1. Sin tope: si no hay referencia, N/D.
+    semana = floor(días_cultivo / 7) + 1. Sin tope: después de la semana 20 no hay referencia del ciclo y debe mostrarse N/D.
     """
     dias = max(0, int(dias_cultivo))
     return dias // 7 + 1
 
 
 def obtener_fila_maestra(semana: int) -> FilaReferenciaAlimentacion | None:
-    """Fila exacta de la semana. No recorta a 24 ni reutiliza otra semana."""
+    """Fila exacta de la semana. No desplaza semanas sin referencia ni reutiliza la semana anterior."""
     return _MAPA_SEMANAS.get(int(semana))
 
 
