@@ -285,7 +285,7 @@ export function EstanqueFichaPage() {
                 proyeccion
                   ? proyeccion.usaPrediccionCrecimiento
                     ? `Fecha máxima de ciclo: ${proyeccion.fechaMaximaCiclo ? formatDate(fechaLocalISO(proyeccion.fechaMaximaCiclo)) : "N/D"} · Objetivo de peso: ${PESO_OBJETIVO_COSECHA_G} g`
-                    : `Estimación de calendario (24 semanas), no predicción de crecimiento. Objetivo de peso: ${PESO_OBJETIVO_COSECHA_G} g`
+                    : `Estimación de calendario (20 semanas), no predicción de crecimiento. Objetivo de peso: ${PESO_OBJETIVO_COSECHA_G} g`
                   : undefined
               }
             />
