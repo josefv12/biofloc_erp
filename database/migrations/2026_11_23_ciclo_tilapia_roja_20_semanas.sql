@@ -20,7 +20,7 @@ BEGIN
        OR NOT EXISTS (SELECT 1 FROM etapas_productivas WHERE nombre = 'Engorde') THEN
         RAISE EXCEPTION 'Faltan etapas Alevinaje, Preengorde o Engorde; se cancela la migración.';
     END IF;
-END
+END;
 $preflight$;
 
 UPDATE referencias_produccion rp
