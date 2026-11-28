@@ -187,7 +187,29 @@ function ContextoOperativoBiofloc({ loteId }: { loteId: number }) {
             {lote.peso_inicial_promedio_g == null ? "N/D" : `${formatNumber(lote.peso_inicial_promedio_g, { maximumFractionDigits: 2 })} g`}
           </p>
         </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Ciclo estimado</p>
+          <p className="font-medium text-[var(--bf-ink)]">{lote.meses_ciclo_estimado} meses</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Cosecha estimada</p>
+          <p className="font-medium text-[var(--bf-ink)]">{lote.fecha_estimada_cosecha.slice(0, 10)}</p>
+        </div>
       </div>
+      {dias != null ? (
+        <div className="mt-4">
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="text-[var(--bf-muted)]">Avance calendario del ciclo</span>
+            <span className="font-medium text-[var(--bf-ink)]">{Math.min(100, Math.round((dias / Math.max(1, Math.ceil((new Date(lote.fecha_estimada_cosecha).getTime() - new Date(lote.fecha_siembra).getTime()) / 86400000))) * 100))}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--bf-bg)]">
+            <div
+              className="h-full rounded-full bg-[var(--bf-accent)]"
+              style={{ width: `${Math.min(100, Math.max(0, Math.round((dias / Math.max(1, Math.ceil((new Date(lote.fecha_estimada_cosecha).getTime() - new Date(lote.fecha_siembra).getTime()) / 86400000))) * 100))}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="mt-4 border-t border-[var(--bf-border)] pt-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
           Últimas mediciones de calidad de agua
