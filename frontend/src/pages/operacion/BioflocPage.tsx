@@ -8,6 +8,7 @@ import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
+import { getAnalisisLote } from "../../api/analisis";
 import { StatusBadge } from "../../components/StatusBadge";
 import {
   createAplicacionBiofloc,
@@ -464,6 +465,13 @@ export function MedicionesBioflocPanel({
           })}
         >
           {formError ? <ErrorAlert message={formError} /> : null}
+          <RecomendacionTecnicaBiofloc
+            tipo={tipoAplicacion?.nombre ?? ""}
+            producto={productoSeleccionado?.nombre ?? ""}
+            analisis={analisisBioflocQuery.data}
+            loading={analisisBioflocQuery.isLoading}
+            error={analisisBioflocQuery.error}
+          />
           {loteId ? (
             <input type="hidden" {...form.register("lote_id", { valueAsNumber: true })} />
           ) : (
@@ -562,6 +570,13 @@ export function AplicacionesBioflocPanel({
   const productoIdSeleccionado = form.watch("producto_id");
   const tipoAplicacion = tipos.get(Number(tipoAplicacionId));
   const productoSeleccionado = productos.get(Number(productoIdSeleccionado));
+  const loteRecomendacionId = Number(loteFormId) || 0;
+  const analisisBioflocQuery = useQuery({
+    queryKey: ["recomendacion-biofloc", loteRecomendacionId],
+    queryFn: () => getAnalisisLote(loteRecomendacionId),
+    enabled: open && loteRecomendacionId > 0,
+    staleTime: 60_000,
+  });
   const unidades = useMemo(
     () => new Map((unidadesQuery.data ?? []).map((row) => [row.id, row])),
     [unidadesQuery.data],
@@ -773,6 +788,123 @@ export function AplicacionesBioflocPanel({
         </form>
       </Modal>
     </div>
+  );
+}
+
+
+function RecomendacionTecnicaBiofloc({
+  tipo,
+  producto,
+  analisis,
+  loading,
+  error,
+}: {
+  tipo: string;
+  producto: string;
+  analisis?: import("../../types/analisis").AnalisisLote;
+  loading: boolean;
+  error: unknown;
+}) {
+  const tipoNormalizado = `${tipo} ${producto}`.toLocaleLowerCase();
+  const esBicarbonato = /bicarbonato/.test(tipoNormalizado);
+  const esMelaza = /melaza|fuente.?carbono/.test(tipoNormalizado);
+  const esSal = /sal marina|salinidad|cloruro/.test(tipoNormalizado);
+  const esProbiotico = /probi[oó]tico/.test(tipoNormalizado);
+
+  const medicionAlcalinidad = analisis?.agua.find((item) =>
+    /alcalinidad/.test(item.parametro.toLocaleLowerCase()),
+  );
+  const biomasa = analisis?.indicadores.biomasa_actual_kg;
+  const alimentoAcumulado = analisis?.indicadores.alimento_real_acumulado_kg;
+  const ultimaBiofloc = analisis?.biofloc;
+
+  let titulo = "Seleccione un producto para evaluar sus requisitos";
+  let motivo = "La recomendación se determina según el producto y los datos disponibles del lote.";
+  let formula = "";
+  let faltantes: string[] = [];
+
+  if (esBicarbonato) {
+    titulo = "Bicarbonato de sodio · corrección de alcalinidad";
+    motivo = medicionAlcalinidad
+      ? `Última alcalinidad registrada: ${formatNumber(medicionAlcalinidad.valor, { maximumFractionDigits: 3 })} ${medicionAlcalinidad.unidad}, el ${formatDateTime(medicionAlcalinidad.fecha_hora)}.`
+      : "No existe una medición identificable de alcalinidad para este lote.";
+    formula = "g de NaHCO₃ = ((alcalinidad objetivo − alcalinidad actual) × volumen de agua en L × 1,68) / 1000. Ajustar por la fracción de pureza del producto.";
+    if (!medicionAlcalinidad) faltantes.push("Medición vigente de alcalinidad (mg/L como CaCO₃).");
+    faltantes.push("Alcalinidad objetivo aprobada para este cultivo y protocolo.");
+    faltantes.push("Volumen real de agua en litros (no solo dimensiones nominales del estanque).");
+    faltantes.push("Pureza o concentración de NaHCO₃ indicada en la ficha técnica.");
+  } else if (esMelaza) {
+    titulo = "Melaza · aporte de carbono";
+    motivo = alimentoAcumulado == null
+      ? "El API no dispone de alimento acumulado convertible a kg."
+      : `Alimento acumulado registrado por el API: ${formatNumber(alimentoAcumulado, { maximumFractionDigits: 3 })} kg. Es un acumulado del ciclo, no una tasa diaria de nitrógeno.`;
+    formula = "El cálculo requiere estimar N a partir del alimento suministrado y su fracción proteica; después, C requerido según la relación C:N objetivo y conversión a melaza según su fracción de carbono disponible.";
+    faltantes.push("Alimento suministrado por intervalo de cálculo y porcentaje de proteína del alimento usado.");
+    faltantes.push("Criterio C:N objetivo definido por el protocolo técnico.");
+    faltantes.push("Contenido de carbono utilizable de esta melaza (ficha o análisis del lote).");
+  } else if (esSal) {
+    titulo = "Sal marina · ajuste de salinidad";
+    motivo = "No se calcula una cantidad sin salinidad medida y objetivo definido.";
+    formula = "Masa de sal = diferencia de concentración requerida × volumen real de agua, ajustada por la fracción efectiva de sales del producto y sus unidades.";
+    faltantes.push("Medición vigente de salinidad o cloruros con unidad identificada.");
+    faltantes.push("Objetivo de salinidad/cloruros definido por el protocolo del cultivo.");
+    faltantes.push("Volumen real de agua y composición de la sal marina.");
+  } else if (esProbiotico) {
+    titulo = "Probiótico · aplicación según fabricante";
+    motivo = "No se puede convertir una dosis comercial a cantidad de producto sin conocer concentración y ficha técnica.";
+    formula = "Cantidad de producto = dosis del fabricante por unidad de volumen × volumen tratado, convirtiendo según la concentración (UFC/g o UFC/mL) y las instrucciones del fabricante.";
+    faltantes.push("Cepas y concentración viable (UFC/g o UFC/mL) del producto seleccionado.");
+    faltantes.push("Dosis, frecuencia, vía y condiciones de uso de la ficha técnica.");
+    faltantes.push("Volumen real de agua a tratar.");
+  } else {
+    titulo = "Recomendación técnica no disponible para este tipo";
+    motivo = "No hay una regla de cálculo validada asociada al tipo/producto seleccionado.";
+    faltantes.push("Regla técnica aprobada y datos de entrada documentados para este producto.");
+  }
+
+  return (
+    <section className="rounded-xl border border-[var(--bf-border)] bg-[var(--bf-surface)] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-accent)]">
+          Recomendación técnica Biofloc
+        </p>
+        <span className="rounded-full border border-amber-300 px-2 py-1 text-[11px] font-medium text-amber-800">
+          Sin dosis validada
+        </span>
+      </div>
+      <h3 className="mt-2 text-sm font-semibold text-[var(--bf-ink)]">{titulo}</h3>
+      {loading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Consultando análisis del lote…</p> : null}
+      {error ? <p className="mt-2 text-xs text-red-700">No fue posible consultar el análisis del lote.</p> : null}
+      {analisis ? (
+        <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+          <div><dt className="text-[var(--bf-muted)]">Lote</dt><dd className="font-medium">{analisis.lote.codigo}</dd></div>
+          <div><dt className="text-[var(--bf-muted)]">Especie / etapa</dt><dd className="font-medium">{analisis.especie.nombre_comun} · {analisis.etapa.nombre}</dd></div>
+          <div><dt className="text-[var(--bf-muted)]">Semana de cultivo</dt><dd className="font-medium">{analisis.indicadores.semana_cultivo}</dd></div>
+          <div><dt className="text-[var(--bf-muted)]">Biomasa actual</dt><dd className="font-medium">{biomasa == null ? "N/D — requiere biometría" : `${formatNumber(biomasa, { maximumFractionDigits: 3 })} kg`}</dd></div>
+          {esBicarbonato ? (
+            <div><dt className="text-[var(--bf-muted)]">Alcalinidad actual</dt><dd className="font-medium">{medicionAlcalinidad ? `${formatNumber(medicionAlcalinidad.valor, { maximumFractionDigits: 3 })} ${medicionAlcalinidad.unidad} · ${formatDateTime(medicionAlcalinidad.fecha_hora)}` : "Sin medición identificada"}</dd></div>
+          ) : null}
+          {esMelaza ? (
+            <div><dt className="text-[var(--bf-muted)]">Alimento acumulado del ciclo</dt><dd className="font-medium">{alimentoAcumulado == null ? "N/D" : `${formatNumber(alimentoAcumulado, { maximumFractionDigits: 3 })} kg`}</dd></div>
+          ) : null}
+          <div><dt className="text-[var(--bf-muted)]">Última medición de sólidos</dt><dd className="font-medium">{ultimaBiofloc ? `${formatNumber(ultimaBiofloc.volumen_sedimentable, { maximumFractionDigits: 2 })} ${ultimaBiofloc.unidad} · ${formatDateTime(ultimaBiofloc.fecha_hora)}` : "Sin registro"}</dd></div>
+        </dl>
+      ) : null}
+      <div className="mt-3 rounded-lg bg-white p-3">
+        <p className="text-xs font-semibold text-[var(--bf-ink)]">Fórmula / criterio aplicable</p>
+        <p className="mt-1 text-xs text-[var(--bf-muted)]">{formula || "Se mostrará cuando seleccione el producto."}</p>
+        <p className="mt-3 text-xs font-semibold text-[var(--bf-ink)]">Datos pendientes para calcular</p>
+        <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-[var(--bf-muted)]">
+          {faltantes.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      </div>
+      <p className="mt-2 text-xs font-medium text-[var(--bf-ink)]">
+        {motivo}
+      </p>
+      <p className="mt-2 text-[11px] text-[var(--bf-muted)]">
+        No se autocompleta cantidad ni se selecciona una dosis. El registro real y su salida automática de inventario conservan el funcionamiento actual.
+      </p>
+    </section>
   );
 }
 
