@@ -235,6 +235,24 @@ function ContextoOperativoBiofloc({ loteId }: { loteId: number }) {
           </div>
         ) : null}
       </div>
+      <div className="mt-3 rounded-lg border border-[var(--bf-border)] p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
+          Verificación previa a aplicaciones
+        </p>
+        <p className="text-xs text-[var(--bf-muted)]">
+          Las mediciones siguientes son registros históricos, no necesariamente condiciones actuales del estanque.
+          Confirme fecha y vigencia antes de decidir cualquier aplicación.
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[var(--bf-ink)]">
+          <li>Volumen sedimentable: {ultimaBiofloc ? `última lectura ${formatDateTime(ultimaBiofloc.fecha_hora)}` : "sin registro para este lote"}.</li>
+          <li>Calidad del agua: {ultimasAgua.length ? `${ultimasAgua.length} parámetros con historial; revisar fechas individuales` : "sin registros para este lote"}.</li>
+          <li>Biomasa y población actualizadas: no verificadas en este panel.</li>
+          <li>Salinidad/cloruros y fichas técnicas de insumos: no verificados en este panel.</li>
+        </ul>
+        <p className="mt-2 text-xs font-medium text-[var(--bf-ink)]">
+          Estado: información insuficiente para calcular o validar dosis automáticamente.
+        </p>
+      </div>
       <div className="mt-3 text-xs text-[var(--bf-muted)]">
         Último volumen sedimentable: {ultimaBiofloc
           ? `${formatNumber(ultimaBiofloc.volumen_sedimentable, { maximumFractionDigits: 2 })} ${ultimaBiofloc.unidad} · ${formatDateTime(ultimaBiofloc.fecha_hora)}`
