@@ -465,13 +465,6 @@ export function MedicionesBioflocPanel({
           })}
         >
           {formError ? <ErrorAlert message={formError} /> : null}
-          <RecomendacionTecnicaBiofloc
-            tipo={tipoAplicacion?.nombre ?? ""}
-            producto={productoSeleccionado?.nombre ?? ""}
-            analisis={analisisBioflocQuery.data}
-            loading={analisisBioflocQuery.isLoading}
-            error={analisisBioflocQuery.error}
-          />
           {loteId ? (
             <input type="hidden" {...form.register("lote_id", { valueAsNumber: true })} />
           ) : (
@@ -727,6 +720,13 @@ export function AplicacionesBioflocPanel({
               </select>
             </Field>
           )}
+          <RecomendacionTecnicaBiofloc
+            tipo={tipoAplicacion?.nombre ?? ""}
+            producto={productoSeleccionado?.nombre ?? ""}
+            analisis={analisisBioflocQuery.data}
+            loading={analisisBioflocQuery.isLoading}
+            error={analisisBioflocQuery.error}
+          />
           <Field label="Tipo de aplicación">
             <select
               className="bf-input"
