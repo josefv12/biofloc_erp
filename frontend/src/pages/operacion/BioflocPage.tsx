@@ -13,7 +13,9 @@ import {
   createAplicacionBiofloc,
   createMedicionBiofloc,
   listAplicacionesBiofloc,
+  listMedicionesAgua,
   listMedicionesBiofloc,
+  listParametrosAgua,
   listProductosActivos,
   listReferenciasBiofloc,
   listTiposAplicacionBiofloc,
@@ -84,6 +86,7 @@ export function BioflocPage() {
           ))}
         </select>
       </label>
+      {loteId ? <ContextoOperativoBiofloc loteId={loteId} /> : null}
       <div className="mb-4 flex gap-1 border-b border-[var(--bf-border)]">
         <TabButton active={tab === "mediciones"} onClick={() => setTab("mediciones")}>
           Mediciones
@@ -98,6 +101,128 @@ export function BioflocPage() {
         <AplicacionesBioflocPanel loteId={loteId} lotes={lotesQuery.data ?? []} compact={false} />
       )}
     </div>
+  );
+}
+
+
+function ContextoOperativoBiofloc({ loteId }: { loteId: number }) {
+  const loteQuery = useQuery({
+    queryKey: ["lote", loteId],
+    queryFn: () => getLote(loteId),
+  });
+  const aguaQuery = useQuery({
+    queryKey: ["mediciones-agua", loteId],
+    queryFn: () => listMedicionesAgua({ lote_id: loteId }),
+  });
+  const parametrosQuery = useQuery({
+    queryKey: ["parametros-agua"],
+    queryFn: () => listParametrosAgua(true),
+  });
+  const bioflocQuery = useQuery({
+    queryKey: ["mediciones-biofloc", loteId],
+    queryFn: () => listMedicionesBiofloc(loteId),
+  });
+
+  const lote = loteQuery.data;
+  const dias = useMemo(() => {
+    if (!lote?.fecha_siembra) return null;
+    const [year, month, day] = lote.fecha_siembra.slice(0, 10).split("-").map(Number);
+    const siembra = Date.UTC(year, month - 1, day);
+    const hoy = new Date();
+    const hoyUtc = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return Math.max(0, Math.floor((hoyUtc - siembra) / 86400000));
+  }, [lote?.fecha_siembra]);
+  const semana = dias == null ? null : Math.floor(dias / 7) + 1;
+  const parametros = useMemo(
+    () => new Map((parametrosQuery.data ?? []).map((item) => [item.id, item])),
+    [parametrosQuery.data],
+  );
+  const ultimasAgua = useMemo(() => {
+    const ordenadas = [...(aguaQuery.data ?? [])].sort((a, b) =>
+      b.fecha_hora.localeCompare(a.fecha_hora),
+    );
+    const vistos = new Set<number>();
+    return ordenadas.filter((item) => {
+      if (vistos.has(item.parametro_id)) return false;
+      vistos.add(item.parametro_id);
+      return true;
+    });
+  }, [aguaQuery.data]);
+  const ultimaBiofloc = [...(bioflocQuery.data ?? [])].sort((a, b) =>
+    b.fecha_hora.localeCompare(a.fecha_hora),
+  )[0];
+
+  if (loteQuery.isLoading) return <div className="mb-4"><LoadingState /></div>;
+  if (loteQuery.isError || !lote) {
+    return <div className="mb-4"><ErrorAlert message={apiErrorMessage(loteQuery.error)} /></div>;
+  }
+
+  return (
+    <section className="mb-5 rounded-xl border border-[var(--bf-border)] bg-[var(--bf-surface)] p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-display text-base font-semibold text-[var(--bf-ink)]">
+            Contexto del lote · {lote.codigo}
+          </h2>
+          <p className="text-xs text-[var(--bf-muted)]">
+            {lote.especie.nombre_comun} · {lote.etapa_productiva.nombre} · {lote.estado.nombre}
+          </p>
+        </div>
+        <span className="rounded-full border border-[var(--bf-border)] px-3 py-1 text-xs text-[var(--bf-muted)]">
+          {dias == null ? "Siembra N/D" : `Día ${dias} · Semana ${semana}`}
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Fecha de siembra</p>
+          <p className="font-medium text-[var(--bf-ink)]">{lote.fecha_siembra.slice(0, 10)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Peces sembrados</p>
+          <p className="font-medium text-[var(--bf-ink)]">{formatNumber(lote.cantidad_sembrada)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Peso inicial promedio</p>
+          <p className="font-medium text-[var(--bf-ink)]">
+            {lote.peso_inicial_promedio_g == null ? "N/D" : `${formatNumber(lote.peso_inicial_promedio_g, { maximumFractionDigits: 2 })} g`}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 border-t border-[var(--bf-border)] pt-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
+          Últimas mediciones de calidad de agua
+        </p>
+        {aguaQuery.isLoading ? <p className="text-sm text-[var(--bf-muted)]">Cargando mediciones…</p> : null}
+        {aguaQuery.isError ? <ErrorAlert message={apiErrorMessage(aguaQuery.error)} /> : null}
+        {!aguaQuery.isLoading && !aguaQuery.isError && ultimasAgua.length === 0 ? (
+          <p className="text-sm text-[var(--bf-muted)]">No hay mediciones de agua registradas para este lote.</p>
+        ) : null}
+        {ultimasAgua.length > 0 ? (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {ultimasAgua.map((item) => (
+              <div key={item.parametro_id} className="rounded-lg bg-[var(--bf-bg)] p-2">
+                <p className="text-xs text-[var(--bf-muted)]">
+                  {parametros.get(item.parametro_id)?.nombre ?? `Parámetro #${item.parametro_id}`}
+                </p>
+                <p className="font-medium text-[var(--bf-ink)]">
+                  {formatNumber(item.valor, { maximumFractionDigits: 3 })} {parametros.get(item.parametro_id)?.unidad ?? ""}
+                </p>
+                <p className="text-[11px] text-[var(--bf-muted)]">{formatDateTime(item.fecha_hora)}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 text-xs text-[var(--bf-muted)]">
+        Último volumen sedimentable: {ultimaBiofloc
+          ? `${formatNumber(ultimaBiofloc.volumen_sedimentable, { maximumFractionDigits: 2 })} ${ultimaBiofloc.unidad} · ${formatDateTime(ultimaBiofloc.fecha_hora)}`
+          : "Sin registro"}.
+      </div>
+      <p className="mt-3 rounded-lg border border-amber-300/50 bg-amber-50/50 px-3 py-2 text-xs text-amber-900">
+        El número de semana es un cálculo calendario desde la siembra. No constituye una dosis recomendada.
+        Las cantidades presupuestales de insumos deben contrastarse con mediciones actuales, biomasa y fichas técnicas antes de aplicar.
+      </p>
+    </section>
   );
 }
 
