@@ -568,6 +568,7 @@ export function AplicacionesBioflocPanel({
 
   const tipoAplicacionId = form.watch("tipo_aplicacion_id");
   const productoIdSeleccionado = form.watch("producto_id");
+  const loteFormId = form.watch("lote_id");
   const tipoAplicacion = tipos.get(Number(tipoAplicacionId));
   const productoSeleccionado = productos.get(Number(productoIdSeleccionado));
   const loteRecomendacionId = Number(loteFormId) || 0;
