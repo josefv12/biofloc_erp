@@ -152,6 +152,16 @@ function ContextoOperativoBiofloc({ loteId }: { loteId: number }) {
     b.fecha_hora.localeCompare(a.fecha_hora),
   )[0];
 
+  const diasCiclo = Math.max(
+    1,
+    Math.ceil(
+      (new Date(lote?.fecha_estimada_cosecha ?? "").getTime() -
+        new Date(lote?.fecha_siembra ?? "").getTime()) / 86400000,
+    ),
+  );
+  const avanceCalendario =
+    dias == null ? 0 : Math.min(100, Math.max(0, Math.round((dias / diasCiclo) * 100)));
+
   if (loteQuery.isLoading) return <div className="mb-4"><LoadingState /></div>;
   if (loteQuery.isError || !lote) {
     return <div className="mb-4"><ErrorAlert message={apiErrorMessage(loteQuery.error)} /></div>;
@@ -200,12 +210,12 @@ function ContextoOperativoBiofloc({ loteId }: { loteId: number }) {
         <div className="mt-4">
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="text-[var(--bf-muted)]">Avance calendario del ciclo</span>
-            <span className="font-medium text-[var(--bf-ink)]">{Math.min(100, Math.round((dias / Math.max(1, Math.ceil((new Date(lote.fecha_estimada_cosecha).getTime() - new Date(lote.fecha_siembra).getTime()) / 86400000))) * 100))}%</span>
+            <span className="font-medium text-[var(--bf-ink)]">{avanceCalendario}%</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-[var(--bf-bg)]">
             <div
               className="h-full rounded-full bg-[var(--bf-accent)]"
-              style={{ width: `${Math.min(100, Math.max(0, Math.round((dias / Math.max(1, Math.ceil((new Date(lote.fecha_estimada_cosecha).getTime() - new Date(lote.fecha_siembra).getTime()) / 86400000))) * 100))}%` }}
+              style={{ width: `${avanceCalendario}%` }}
             />
           </div>
         </div>
