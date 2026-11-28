@@ -793,7 +793,7 @@ export function AplicacionesBioflocPanel({
 }
 
 
-function RecomendacionTecnicaBiofloc({
+export function RecomendacionTecnicaBiofloc({
   tipo,
   producto,
   analisis,

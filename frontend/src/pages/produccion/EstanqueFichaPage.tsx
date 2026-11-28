@@ -62,7 +62,7 @@ import { can } from "../../utils/rbac";
 import { listCategoriasInventario, listProductos } from "../../api/inventory";
 import { PATH_COMPARACION } from "./fichaPaths";
 import { LoteFichaWorkspace, parseLoteFichaTab, type LoteFichaTabId } from "./LoteFichaPage";
-import { AplicacionesBioflocPanel } from "../operacion/BioflocPage";
+import { AplicacionesBioflocPanel, RecomendacionTecnicaBiofloc } from "../operacion/BioflocPage";
 import type { Lote, LoteCreate, SiembraLoteCreate } from "../../types/production";
 import type { CostosLote } from "../../types/costos";
 import type { BiometriaCreate, CosechaCreate, MortalidadCreate } from "../../types/production";
@@ -1062,6 +1062,14 @@ function BioflocModal({
   });
 
   const productos = productosQuery.data ?? [];
+  const productoIdSeleccionado = form.watch("producto_id");
+  const productoSeleccionado = productos.find((row) => row.id === Number(productoIdSeleccionado));
+  const analisisBioflocQuery = useQuery({
+    queryKey: ["recomendacion-biofloc", loteId],
+    queryFn: () => getAnalisisLote(loteId),
+    enabled: open && modo === "aplicacion" && Boolean(loteId),
+    staleTime: 60_000,
+  });
   const tipoAplicacionId = form.watch("tipo_aplicacion_id");
   const tipoAplicacion = tipos.find((row) => row.id === Number(tipoAplicacionId));
   const productosBiofloc = useMemo(() => {
@@ -1104,6 +1112,13 @@ function BioflocModal({
             });
           })}>
             {formErrorAplicacion ? <ErrorAlert message={formErrorAplicacion} /> : null}
+            <RecomendacionTecnicaBiofloc
+              tipo={tipoAplicacion?.nombre ?? ""}
+              producto={productoSeleccionado?.nombre ?? ""}
+              analisis={analisisBioflocQuery.data}
+              loading={analisisBioflocQuery.isLoading}
+              error={analisisBioflocQuery.error}
+            />
             {tiposQuery.isLoading || productosQuery.isLoading ? <LoadingState label="Cargando catálogos…" /> : null}
             <Field label="Tipo de aplicación">
               <select className="bf-input" {...form.register("tipo_aplicacion_id", { valueAsNumber: true, required: true, onChange: () => form.setValue("producto_id", "") })}>
