@@ -30,6 +30,7 @@ import { ChartCard } from "../../components/charts/ChartCard";
 import { TimeSeriesChart } from "../../components/charts/TimeSeriesChart";
 import { AguaMedicionesPanel } from "../operacion/AguaPage";
 import { AplicacionesBioflocPanel, MedicionesBioflocPanel } from "../operacion/BioflocPage";
+import { ReferenciaSemanalBioflocPanel } from "./ReferenciaSemanalBioflocPanel";
 import { AlimentacionPanel } from "../operacion/AlimentacionPage";
 import { PATH_COMPARACION, pathFichaEstanque } from "./fichaPaths";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -1179,6 +1180,7 @@ function AguaTab({ lote }: { lote: Lote }) {
 function BioflocTab({ lote }: { lote: Lote }) {
   return (
     <div className="space-y-8">
+      <ReferenciaSemanalBioflocPanel lote={lote} />
       <MedicionesBioflocPanel loteId={lote.id} lotes={[lote]} compact />
       <AplicacionesBioflocPanel loteId={lote.id} lotes={[lote]} compact />
     </div>
