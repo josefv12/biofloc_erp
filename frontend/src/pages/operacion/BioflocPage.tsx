@@ -8,12 +8,15 @@ import { LoadingState } from "../../components/LoadingState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthProvider";
+import { getAnalisisLote } from "../../api/analisis";
 import { StatusBadge } from "../../components/StatusBadge";
 import {
   createAplicacionBiofloc,
   createMedicionBiofloc,
   listAplicacionesBiofloc,
+  listMedicionesAgua,
   listMedicionesBiofloc,
+  listParametrosAgua,
   listProductosActivos,
   listReferenciasBiofloc,
   listTiposAplicacionBiofloc,
@@ -84,6 +87,7 @@ export function BioflocPage() {
           ))}
         </select>
       </label>
+      {loteId ? <ContextoOperativoBiofloc loteId={loteId} /> : null}
       <div className="mb-4 flex gap-1 border-b border-[var(--bf-border)]">
         <TabButton active={tab === "mediciones"} onClick={() => setTab("mediciones")}>
           Mediciones
@@ -98,6 +102,178 @@ export function BioflocPage() {
         <AplicacionesBioflocPanel loteId={loteId} lotes={lotesQuery.data ?? []} compact={false} />
       )}
     </div>
+  );
+}
+
+
+function ContextoOperativoBiofloc({ loteId }: { loteId: number }) {
+  const loteQuery = useQuery({
+    queryKey: ["lote", loteId],
+    queryFn: () => getLote(loteId),
+  });
+  const aguaQuery = useQuery({
+    queryKey: ["mediciones-agua", loteId],
+    queryFn: () => listMedicionesAgua({ lote_id: loteId }),
+  });
+  const parametrosQuery = useQuery({
+    queryKey: ["parametros-agua"],
+    queryFn: () => listParametrosAgua(true),
+  });
+  const bioflocQuery = useQuery({
+    queryKey: ["mediciones-biofloc", loteId],
+    queryFn: () => listMedicionesBiofloc(loteId),
+  });
+
+  const lote = loteQuery.data;
+  const dias = useMemo(() => {
+    if (!lote?.fecha_siembra) return null;
+    const [year, month, day] = lote.fecha_siembra.slice(0, 10).split("-").map(Number);
+    const siembra = Date.UTC(year, month - 1, day);
+    const hoy = new Date();
+    const hoyUtc = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return Math.max(0, Math.floor((hoyUtc - siembra) / 86400000));
+  }, [lote?.fecha_siembra]);
+  const semana = dias == null ? null : Math.floor(dias / 7) + 1;
+  const parametros = useMemo(
+    () => new Map((parametrosQuery.data ?? []).map((item) => [item.id, item])),
+    [parametrosQuery.data],
+  );
+  const ultimasAgua = useMemo(() => {
+    const ordenadas = [...(aguaQuery.data ?? [])].sort((a, b) =>
+      b.fecha_hora.localeCompare(a.fecha_hora),
+    );
+    const vistos = new Set<number>();
+    return ordenadas.filter((item) => {
+      if (vistos.has(item.parametro_id)) return false;
+      vistos.add(item.parametro_id);
+      return true;
+    });
+  }, [aguaQuery.data]);
+  const ultimaBiofloc = [...(bioflocQuery.data ?? [])].sort((a, b) =>
+    b.fecha_hora.localeCompare(a.fecha_hora),
+  )[0];
+
+  const diasCiclo = Math.max(
+    1,
+    Math.ceil(
+      (new Date(lote?.fecha_estimada_cosecha ?? "").getTime() -
+        new Date(lote?.fecha_siembra ?? "").getTime()) / 86400000,
+    ),
+  );
+  const avanceCalendario =
+    dias == null ? 0 : Math.min(100, Math.max(0, Math.round((dias / diasCiclo) * 100)));
+
+  if (loteQuery.isLoading) return <div className="mb-4"><LoadingState /></div>;
+  if (loteQuery.isError || !lote) {
+    return <div className="mb-4"><ErrorAlert message={apiErrorMessage(loteQuery.error)} /></div>;
+  }
+
+  return (
+    <section className="mb-5 rounded-xl border border-[var(--bf-border)] bg-[var(--bf-surface)] p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-display text-base font-semibold text-[var(--bf-ink)]">
+            Contexto del lote · {lote.codigo}
+          </h2>
+          <p className="text-xs text-[var(--bf-muted)]">
+            {lote.especie.nombre_comun} · {lote.etapa_productiva.nombre} · {lote.estado.nombre}
+          </p>
+        </div>
+        <span className="rounded-full border border-[var(--bf-border)] px-3 py-1 text-xs text-[var(--bf-muted)]">
+          {dias == null ? "Siembra N/D" : `Día ${dias} · Semana ${semana}`}
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Fecha de siembra</p>
+          <p className="font-medium text-[var(--bf-ink)]">{lote.fecha_siembra.slice(0, 10)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Peces sembrados</p>
+          <p className="font-medium text-[var(--bf-ink)]">{formatNumber(lote.cantidad_sembrada)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Peso inicial promedio</p>
+          <p className="font-medium text-[var(--bf-ink)]">
+            {lote.peso_inicial_promedio_g == null ? "N/D" : `${formatNumber(lote.peso_inicial_promedio_g, { maximumFractionDigits: 2 })} g`}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Ciclo estimado</p>
+          <p className="font-medium text-[var(--bf-ink)]">{lote.meses_ciclo_estimado} meses</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--bf-muted)]">Cosecha estimada</p>
+          <p className="font-medium text-[var(--bf-ink)]">{lote.fecha_estimada_cosecha.slice(0, 10)}</p>
+        </div>
+      </div>
+      {dias != null ? (
+        <div className="mt-4">
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="text-[var(--bf-muted)]">Avance calendario del ciclo</span>
+            <span className="font-medium text-[var(--bf-ink)]">{avanceCalendario}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--bf-bg)]">
+            <div
+              className="h-full rounded-full bg-[var(--bf-accent)]"
+              style={{ width: `${avanceCalendario}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-4 border-t border-[var(--bf-border)] pt-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
+          Últimas mediciones de calidad de agua
+        </p>
+        {aguaQuery.isLoading ? <p className="text-sm text-[var(--bf-muted)]">Cargando mediciones…</p> : null}
+        {aguaQuery.isError ? <ErrorAlert message={apiErrorMessage(aguaQuery.error)} /> : null}
+        {!aguaQuery.isLoading && !aguaQuery.isError && ultimasAgua.length === 0 ? (
+          <p className="text-sm text-[var(--bf-muted)]">No hay mediciones de agua registradas para este lote.</p>
+        ) : null}
+        {ultimasAgua.length > 0 ? (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {ultimasAgua.map((item) => (
+              <div key={item.parametro_id} className="rounded-lg bg-[var(--bf-bg)] p-2">
+                <p className="text-xs text-[var(--bf-muted)]">
+                  {parametros.get(item.parametro_id)?.nombre ?? `Parámetro #${item.parametro_id}`}
+                </p>
+                <p className="font-medium text-[var(--bf-ink)]">
+                  {formatNumber(item.valor, { maximumFractionDigits: 3 })} {parametros.get(item.parametro_id)?.unidad ?? ""}
+                </p>
+                <p className="text-[11px] text-[var(--bf-muted)]">{formatDateTime(item.fecha_hora)}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 rounded-lg border border-[var(--bf-border)] p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bf-muted)]">
+          Verificación previa a aplicaciones
+        </p>
+        <p className="text-xs text-[var(--bf-muted)]">
+          Las mediciones siguientes son registros históricos, no necesariamente condiciones actuales del estanque.
+          Confirme fecha y vigencia antes de decidir cualquier aplicación.
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[var(--bf-ink)]">
+          <li>Volumen sedimentable: {ultimaBiofloc ? `última lectura ${formatDateTime(ultimaBiofloc.fecha_hora)}` : "sin registro para este lote"}.</li>
+          <li>Calidad del agua: {ultimasAgua.length ? `${ultimasAgua.length} parámetros con historial; revisar fechas individuales` : "sin registros para este lote"}.</li>
+          <li>Biomasa y población actualizadas: no verificadas en este panel.</li>
+          <li>Salinidad/cloruros y fichas técnicas de insumos: no verificados en este panel.</li>
+        </ul>
+        <p className="mt-2 text-xs font-medium text-[var(--bf-ink)]">
+          Estado: información insuficiente para calcular o validar dosis automáticamente.
+        </p>
+      </div>
+      <div className="mt-3 text-xs text-[var(--bf-muted)]">
+        Último volumen sedimentable: {ultimaBiofloc
+          ? `${formatNumber(ultimaBiofloc.volumen_sedimentable, { maximumFractionDigits: 2 })} ${ultimaBiofloc.unidad} · ${formatDateTime(ultimaBiofloc.fecha_hora)}`
+          : "Sin registro"}.
+      </div>
+      <p className="mt-3 rounded-lg border border-amber-300/50 bg-amber-50/50 px-3 py-2 text-xs text-amber-900">
+        El número de semana es un cálculo calendario desde la siembra. No constituye una dosis recomendada.
+        Las cantidades presupuestales de insumos deben contrastarse con mediciones actuales, biomasa y fichas técnicas antes de aplicar.
+      </p>
+    </section>
   );
 }
 
@@ -385,8 +561,16 @@ export function AplicacionesBioflocPanel({
 
   const tipoAplicacionId = form.watch("tipo_aplicacion_id");
   const productoIdSeleccionado = form.watch("producto_id");
+  const loteFormId = form.watch("lote_id");
   const tipoAplicacion = tipos.get(Number(tipoAplicacionId));
   const productoSeleccionado = productos.get(Number(productoIdSeleccionado));
+  const loteRecomendacionId = Number(loteFormId) || 0;
+  const analisisBioflocQuery = useQuery({
+    queryKey: ["recomendacion-biofloc", loteRecomendacionId],
+    queryFn: () => getAnalisisLote(loteRecomendacionId),
+    enabled: open && loteRecomendacionId > 0,
+    staleTime: 60_000,
+  });
   const unidades = useMemo(
     () => new Map((unidadesQuery.data ?? []).map((row) => [row.id, row])),
     [unidadesQuery.data],
@@ -536,6 +720,13 @@ export function AplicacionesBioflocPanel({
               </select>
             </Field>
           )}
+          <RecomendacionTecnicaBiofloc
+            tipo={tipoAplicacion?.nombre ?? ""}
+            producto={productoSeleccionado?.nombre ?? ""}
+            analisis={analisisBioflocQuery.data}
+            loading={analisisBioflocQuery.isLoading}
+            error={analisisBioflocQuery.error}
+          />
           <Field label="Tipo de aplicación">
             <select
               className="bf-input"
@@ -598,6 +789,123 @@ export function AplicacionesBioflocPanel({
         </form>
       </Modal>
     </div>
+  );
+}
+
+
+function RecomendacionTecnicaBiofloc({
+  tipo,
+  producto,
+  analisis,
+  loading,
+  error,
+}: {
+  tipo: string;
+  producto: string;
+  analisis?: import("../../types/analisis").AnalisisLote;
+  loading: boolean;
+  error: unknown;
+}) {
+  const tipoNormalizado = `${tipo} ${producto}`.toLocaleLowerCase();
+  const esBicarbonato = /bicarbonato/.test(tipoNormalizado);
+  const esMelaza = /melaza|fuente.?carbono/.test(tipoNormalizado);
+  const esSal = /sal marina|salinidad|cloruro/.test(tipoNormalizado);
+  const esProbiotico = /probi[oó]tico/.test(tipoNormalizado);
+
+  const medicionAlcalinidad = analisis?.agua.find((item) =>
+    /alcalinidad/.test(item.parametro.toLocaleLowerCase()),
+  );
+  const biomasa = analisis?.indicadores.biomasa_actual_kg;
+  const alimentoAcumulado = analisis?.indicadores.alimento_real_acumulado_kg;
+  const ultimaBiofloc = analisis?.biofloc;
+
+  let titulo = "Seleccione un producto para evaluar sus requisitos";
+  let motivo = "La recomendación se determina según el producto y los datos disponibles del lote.";
+  let formula = "";
+  let faltantes: string[] = [];
+
+  if (esBicarbonato) {
+    titulo = "Bicarbonato de sodio · corrección de alcalinidad";
+    motivo = medicionAlcalinidad
+      ? `Última alcalinidad registrada: ${formatNumber(medicionAlcalinidad.valor, { maximumFractionDigits: 3 })} ${medicionAlcalinidad.unidad}, el ${formatDateTime(medicionAlcalinidad.fecha_hora)}.`
+      : "No existe una medición identificable de alcalinidad para este lote.";
+    formula = "g de NaHCO₃ = ((alcalinidad objetivo − alcalinidad actual) × volumen de agua en L × 1,68) / 1000. Ajustar por la fracción de pureza del producto.";
+    if (!medicionAlcalinidad) faltantes.push("Medición vigente de alcalinidad (mg/L como CaCO₃).");
+    faltantes.push("Alcalinidad objetivo aprobada para este cultivo y protocolo.");
+    faltantes.push("Volumen real de agua en litros (no solo dimensiones nominales del estanque).");
+    faltantes.push("Pureza o concentración de NaHCO₃ indicada en la ficha técnica.");
+  } else if (esMelaza) {
+    titulo = "Melaza · aporte de carbono";
+    motivo = alimentoAcumulado == null
+      ? "El API no dispone de alimento acumulado convertible a kg."
+      : `Alimento acumulado registrado por el API: ${formatNumber(alimentoAcumulado, { maximumFractionDigits: 3 })} kg. Es un acumulado del ciclo, no una tasa diaria de nitrógeno.`;
+    formula = "El cálculo requiere estimar N a partir del alimento suministrado y su fracción proteica; después, C requerido según la relación C:N objetivo y conversión a melaza según su fracción de carbono disponible.";
+    faltantes.push("Alimento suministrado por intervalo de cálculo y porcentaje de proteína del alimento usado.");
+    faltantes.push("Criterio C:N objetivo definido por el protocolo técnico.");
+    faltantes.push("Contenido de carbono utilizable de esta melaza (ficha o análisis del lote).");
+  } else if (esSal) {
+    titulo = "Sal marina · ajuste de salinidad";
+    motivo = "No se calcula una cantidad sin salinidad medida y objetivo definido.";
+    formula = "Masa de sal = diferencia de concentración requerida × volumen real de agua, ajustada por la fracción efectiva de sales del producto y sus unidades.";
+    faltantes.push("Medición vigente de salinidad o cloruros con unidad identificada.");
+    faltantes.push("Objetivo de salinidad/cloruros definido por el protocolo del cultivo.");
+    faltantes.push("Volumen real de agua y composición de la sal marina.");
+  } else if (esProbiotico) {
+    titulo = "Probiótico · aplicación según fabricante";
+    motivo = "No se puede convertir una dosis comercial a cantidad de producto sin conocer concentración y ficha técnica.";
+    formula = "Cantidad de producto = dosis del fabricante por unidad de volumen × volumen tratado, convirtiendo según la concentración (UFC/g o UFC/mL) y las instrucciones del fabricante.";
+    faltantes.push("Cepas y concentración viable (UFC/g o UFC/mL) del producto seleccionado.");
+    faltantes.push("Dosis, frecuencia, vía y condiciones de uso de la ficha técnica.");
+    faltantes.push("Volumen real de agua a tratar.");
+  } else {
+    titulo = "Recomendación técnica no disponible para este tipo";
+    motivo = "No hay una regla de cálculo validada asociada al tipo/producto seleccionado.";
+    faltantes.push("Regla técnica aprobada y datos de entrada documentados para este producto.");
+  }
+
+  return (
+    <section className="rounded-xl border border-[var(--bf-border)] bg-[var(--bf-surface)] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--bf-accent)]">
+          Recomendación técnica Biofloc
+        </p>
+        <span className="rounded-full border border-amber-300 px-2 py-1 text-[11px] font-medium text-amber-800">
+          Sin dosis validada
+        </span>
+      </div>
+      <h3 className="mt-2 text-sm font-semibold text-[var(--bf-ink)]">{titulo}</h3>
+      {loading ? <p className="mt-2 text-xs text-[var(--bf-muted)]">Consultando análisis del lote…</p> : null}
+      {error ? <p className="mt-2 text-xs text-red-700">No fue posible consultar el análisis del lote.</p> : null}
+      {analisis ? (
+        <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+          <div><dt className="text-[var(--bf-muted)]">Lote</dt><dd className="font-medium">{analisis.lote.codigo}</dd></div>
+          <div><dt className="text-[var(--bf-muted)]">Especie / etapa</dt><dd className="font-medium">{analisis.especie.nombre_comun} · {analisis.etapa.nombre}</dd></div>
+          <div><dt className="text-[var(--bf-muted)]">Semana de cultivo</dt><dd className="font-medium">{analisis.indicadores.semana_cultivo}</dd></div>
+          <div><dt className="text-[var(--bf-muted)]">Biomasa actual</dt><dd className="font-medium">{biomasa == null ? "N/D — requiere biometría" : `${formatNumber(biomasa, { maximumFractionDigits: 3 })} kg`}</dd></div>
+          {esBicarbonato ? (
+            <div><dt className="text-[var(--bf-muted)]">Alcalinidad actual</dt><dd className="font-medium">{medicionAlcalinidad ? `${formatNumber(medicionAlcalinidad.valor, { maximumFractionDigits: 3 })} ${medicionAlcalinidad.unidad} · ${formatDateTime(medicionAlcalinidad.fecha_hora)}` : "Sin medición identificada"}</dd></div>
+          ) : null}
+          {esMelaza ? (
+            <div><dt className="text-[var(--bf-muted)]">Alimento acumulado del ciclo</dt><dd className="font-medium">{alimentoAcumulado == null ? "N/D" : `${formatNumber(alimentoAcumulado, { maximumFractionDigits: 3 })} kg`}</dd></div>
+          ) : null}
+          <div><dt className="text-[var(--bf-muted)]">Última medición de sólidos</dt><dd className="font-medium">{ultimaBiofloc ? `${formatNumber(ultimaBiofloc.volumen_sedimentable, { maximumFractionDigits: 2 })} ${ultimaBiofloc.unidad} · ${formatDateTime(ultimaBiofloc.fecha_hora)}` : "Sin registro"}</dd></div>
+        </dl>
+      ) : null}
+      <div className="mt-3 rounded-lg bg-white p-3">
+        <p className="text-xs font-semibold text-[var(--bf-ink)]">Fórmula / criterio aplicable</p>
+        <p className="mt-1 text-xs text-[var(--bf-muted)]">{formula || "Se mostrará cuando seleccione el producto."}</p>
+        <p className="mt-3 text-xs font-semibold text-[var(--bf-ink)]">Datos pendientes para calcular</p>
+        <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-[var(--bf-muted)]">
+          {faltantes.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      </div>
+      <p className="mt-2 text-xs font-medium text-[var(--bf-ink)]">
+        {motivo}
+      </p>
+      <p className="mt-2 text-[11px] text-[var(--bf-muted)]">
+        No se autocompleta cantidad ni se selecciona una dosis. El registro real y su salida automática de inventario conservan el funcionamiento actual.
+      </p>
+    </section>
   );
 }
 
